@@ -16,7 +16,7 @@ def draw_points(points_list):
             glEnd()
         return
 
-def draw_line(points_list):
+def draw_lines(points_list):
     for i in range(int(len(points_list)/2)):
         p1 = points_list[2*i]
         p2 = points_list[2*i+1]

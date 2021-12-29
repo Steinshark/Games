@@ -25,7 +25,17 @@ class Block:
         self.allPoints = list([[self.coords[location].x,self.coords[location].y,self.coords[location].z,]\
                                 for location in self.coords])
 
+        self.wireframe = self.buildWireframe()
 
+    def buildWireframe(self):
+        wireframe_pairs = []
+        listp1 = [[self.coords[p1].x,self.coords[p1].y,self.coords[p1].z] for p1 in ['ful','ful','fur','rur',    'fll','fll','flr','rlr',    'ful','fur','rur','rul' ]]
+        listp2 = [[self.coords[p2].x,self.coords[p2].y,self.coords[p2].z] for p2 in ['fur','rul','rur','rul',    'flr','rll','rlr','rll',    'fll','rur','rlr','rll' ]]
+
+        for p1,p2 in zip(listp1,listp2):
+            wireframe_pairs.append(p1)
+            wireframe_pairs.append(p2)
+        return wireframe_pairs
     def buildCoordinatesFromFLL(fll):
         CoordinateDictionary =  {
                                     'fll' : fll,
