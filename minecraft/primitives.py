@@ -8,7 +8,7 @@ def set_color(colorRGB):
     r,g,b = colorRGB.colors
     glColor3f(r,g,b)
 
-def draw_point(points_list):
+def draw_points(points_list):
         for p in points_list:
             glBegin(GL_POINTS)
             x,y,z = p

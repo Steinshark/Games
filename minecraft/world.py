@@ -1,0 +1,49 @@
+import pyglet
+import random
+import math
+from makeTopoMap import *
+
+class World:
+    def __init__(self):
+        pass
+
+
+class Chunk:
+    def __init__(self):
+        pass
+
+
+class Block:
+    def __init__(self, coordinate, blockType):
+        self.type = blockType
+        self.fll = coordinate
+        self.coords = Block.buildCoordinatesFromFLL(self.fll)
+        self.TopSurface = list([self.coords[location].x,
+                                self.coords[location].y,
+                                self.coords[location].z,
+                                ] for location in ['ful','fur','rul','rur'])
+        self.allPoints = list([[self.coords[location].x,self.coords[location].y,self.coords[location].z,]\
+                                for location in self.coords])
+
+
+    def buildCoordinatesFromFLL(fll):
+        CoordinateDictionary =  {
+                                    'fll' : fll,
+                                    'flr' : fll + Coordinate(1,0,0),
+                                    'ful' : fll + Coordinate(0,1,0),
+                                    'fur' : fll + Coordinate(1,1,0),
+                                    'rll' : fll + Coordinate(0,0,-1),
+                                    'rlr' : fll + Coordinate(1,0,-1),
+                                    'rul' : fll + Coordinate(0,1,-1),
+                                    'rur' : fll + Coordinate(1,1,-1)
+                                }
+        return CoordinateDictionary
+
+class Coordinate:
+    def __init__(self,x,y,z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __add__(self,c2):
+        return Coordinate(self.x + c2.x, self.y + c2.y, + self.z + c2.z)
