@@ -1,20 +1,26 @@
 #local dependencies
-from world import *
-from primitives import draw_line_loop, draw_lines, draw_points, draw_triangle_fan
+from world              import *
+from primitives         import draw_line_loop, draw_lines, draw_points, draw_triangle_fan, GL_POINTS
 
 #mechanics dependencies
-from random import randint, uniform
-from time import time
-from math import cos, sin, sqrt, pi
+from random             import randint, uniform
+from time               import time
+from math               import cos, sin, sqrt, pi
+from ctypes             import pointer, sizeof
+from array import array
 
 #Graphical dependencies
 import pyglet
-from pyglet.window import mouse, key
-from pyglet.clock import tick
-from pyglet.gl import   GL_PROJECTION, glClear, GL_MODELVIEW, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_BLEND, GL_COLOR_BUFFER_BIT,\
+from pyglet.window      import mouse, key
+from pyglet.clock       import tick
+from pyglet.window.key  import *
+from pyglet.gl          import   GL_PROJECTION, glClear, GL_MODELVIEW, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_BLEND, GL_COLOR_BUFFER_BIT,\
                         glLoadIdentity, glViewport, glEnableClientState, GL_VERTEX_ARRAY, glMatrixMode, gluPerspective, glEnable, glBlendFunc,\
-                        glFrustum, GL_DEPTH_BUFFER_BIT, gluLookAt, glTranslatef, glRotatef
-from pyglet.window.key import *
+                        glFrustum, GL_DEPTH_BUFFER_BIT, gluLookAt, glTranslatef, glRotatef, GLuint, glGenBuffers, glBindBuffer, glBufferData,\
+                        GL_ARRAY_BUFFER, GL_STATIC_DRAW, GLfloat, glDrawArrays, glVertexPointer, GL_FLOAT, GL_LINES
+
+
+
 
 class Game:
     # Scheduled methods must be declared first
@@ -65,7 +71,7 @@ class Game:
             }
             # Contains the gameplay component variables
             self.game_settings          =   {
-                "dimension"         : 50,
+                "dimension"         : 100,
                 "time"              : 0.0,
                 "start_time"        : 0.0,
                 "frame_time"        : 0.0,
@@ -73,12 +79,17 @@ class Game:
             }
             # Contains the gameplay items that will be instantiated
             self.game_components        =   {
-                "blocks"            : None
+                "blocks"            :   None
             }
             # Contians al inputs the game is currently tracking
             self.input                  =   {
                 "keyboard"          : {}
             }
+            self.graphics               =   {
+                "GLUint"            :   GLuint()
+            }
+
+
         ########################################################################
         ######################### GRAPHICAL SETUP WORK ### #####################
         ########################################################################
@@ -93,7 +104,7 @@ class Game:
 
 
         ########################################################################
-        ###################### GAME ENVIRONEMNT CREATION  ######################
+        ####################### 3D ENVIRONEMNT CREATION  #######################
         ########################################################################
             # Create a 3D dict of blocks referenced by xyz coordinate
             self.game_components['blocks'] = {x : {y : {z : Block(Coordinate(x,y,z),"grass") for z in range(self.game_settings["dimension"])} for y in range(1)} for x in range(self.game_settings["dimension"])}
@@ -102,6 +113,28 @@ class Game:
                 pyglet.clock.schedule_interval(function_call, self.scheduled_functions[function_call])
             # Start the world clocks
             self.game_settings['start_time'] = time()
+            # Create the list of vertices of the initial blocks
+            self.build_vertex_list()
+            # Create the VBO
+            buffer_data = []
+            for three_tuple in self.draw:
+                buffer_data.append(three_tuple[0])
+                buffer_data.append(three_tuple[1])
+                buffer_data.append(three_tuple[2])
+
+            buffer_data = array('f',buffer_data)
+            import pprint
+            pprint.pp(buffer_data)
+            
+            buffer_data = (GLfloat * len(buffer_data))(*buffer_data)
+
+            self.buffer = glGenBuffers(1,pointer(self.graphics['GLUint']))
+
+            glBindBuffer(GL_ARRAY_BUFFER, self.graphics['GLUint'])
+            glBufferData(GL_ARRAY_BUFFER, len(buffer_data),buffer_data,GL_STATIC_DRAW)
+            print("done")
+
+
 
 
         ########################################################################
@@ -116,17 +149,22 @@ class Game:
                 gluPerspective(60.0,self.settings['width']/self.settings['height'],self.camera['near'],self.camera['far']);
                 gluLookAt(  self.camera['eye']['x'],self.camera['eye']['y'],self.camera['eye']['z'],
                             self.camera['center']['x'],self.camera['center']['y'],self.camera['center']['z'],
-                            self.camera['up']['x'],self.camera['up']['y'],self.camera['up']['z'])
+                                self.camera['up']['x'],self.camera['up']['y'],self.camera['up']['z'])
 
                 # Handle everything else
                 self.movement()
-                self.draw_world()
+                #self.draw_world()
 
-                #try:
-                print(f"CAMERA: x:{self.camera['eye']['x']} y: {self.camera['eye']['y']} z: {self.camera['eye']['z']}\nCENTER: x:{self.camera['center']['x']} y: {self.camera['center']['y']} z: {self.camera['center']['z']}\n")
+                ##try:
+                #print(f"CAMERA: x:{self.camera['eye']['x']} y: {self.camera['eye']['y']} z: {self.camera['eye']['z']}\nCENTER: x:{self.camera['center']['x']} y: {self.camera['center']['y']} z: {self.camera['center']['z']}\n")
                 #print(f"Frametime: {self.game_settings['frame_time']}\nFramerate: {1.0/self.game_settings['frame_time']}\n")
-                #except ZeroDivisionError:
-                    #pass
+                ##except ZeroDivisionError:
+                #glTranslatef(1.0,1.01,1.0)
+                print("reached")
+                glEnableClientState(GL_VERTEX_ARRAY)
+                print("out")
+                glVertexPointer(3, GL_FLOAT, 0, 0)
+                glDrawArrays(GL_LINES, 0, 3*len(self.draw))
 
             @self.window.event
             def on_key_press(symbol,modifyer):
@@ -154,7 +192,7 @@ class Game:
 
                 self.compute_camera_angle()
 
-    def draw_world(self):
+    def build_vertex_list(self):
         point_pairs = {None}
         final_points_to_draw = {None}
         counter = 0
@@ -166,20 +204,21 @@ class Game:
                     # FOR WIREFRAME
                     block_points = block.Wireframe
                     for i in range(int(len(block_points)/2)):
-                        new_tup = (block_points[2*i], block_points[2*i + 1])
-                        point_pairs.add(new_tup)
+                        tup1 = block_points[2*i]
+                        tup2 = block_points[2*i + 1]
+                        package = (tup1, tup2)
+                        point_pairs.add(package)
 
                     #
-
         final_points_to_draw.remove(None)
-        draw = []
+        self.draw = []
         point_pairs.remove(None)
         for pair in point_pairs:
-            draw.append(list(pair[0]))
-            draw.append(list(pair[1]))
+            self.draw.append(list(pair[0]))
+            self.draw.append(list(pair[1]))
 
-        print(len(draw))
-        draw_points(draw)
+        print(len(self.draw))
+        draw_lines(self.draw)
 
     def run_game(self):
         pyglet.app.run()
@@ -214,7 +253,7 @@ class Game:
         if SPACE in self.input['keyboard']:
             self.camera['eye']['y'] += movement_step
             self.camera['center']['y'] += movement_step
-        elif LCTRL in self.input['keyboard']:
+        elif LSHIFT in self.input['keyboard']:
             self.camera['eye']['y'] -= movement_step
             self.camera['center']['y'] -= movement_step
 
