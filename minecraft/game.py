@@ -16,8 +16,6 @@ from pyglet.gl import   GL_PROJECTION, glClear, GL_MODELVIEW, GL_SRC_ALPHA, GL_O
                         glFrustum, GL_DEPTH_BUFFER_BIT, gluLookAt, glTranslatef, glRotatef
 from pyglet.window.key import *
 
-
-
 class Game:
     # Scheduled methods must be declared first
     def update(self,dt):
@@ -157,12 +155,31 @@ class Game:
                 self.compute_camera_angle()
 
     def draw_world(self):
+        point_pairs = {None}
+        final_points_to_draw = {None}
+        counter = 0
         for x in self.game_components['blocks']:
             for y in self.game_components['blocks'][x]:
                 for z in self.game_components['blocks'][x][y]:
                     block = self.game_components['blocks'][x][y][z]
-                    block_points = block.TopSurface
-                    draw_lines(block_points)
+
+                    # FOR WIREFRAME
+                    block_points = block.Wireframe
+                    for i in range(int(len(block_points)/2)):
+                        new_tup = (block_points[2*i], block_points[2*i + 1])
+                        point_pairs.add(new_tup)
+
+                    #
+
+        final_points_to_draw.remove(None)
+        draw = []
+        point_pairs.remove(None)
+        for pair in point_pairs:
+            draw.append(list(pair[0]))
+            draw.append(list(pair[1]))
+
+        print(len(draw))
+        draw_points(draw)
 
     def run_game(self):
         pyglet.app.run()

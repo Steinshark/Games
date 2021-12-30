@@ -7,25 +7,23 @@ class World:
     def __init__(self):
         pass
 
-
 class Chunk:
     def __init__(self):
         pass
-
 
 class Block:
     def __init__(self, coordinate, blockType):
         self.type = blockType
         self.fll = coordinate
         self.coords = Block.buildCoordinatesFromFLL(self.fll)
-        self.TopSurface = list([self.coords[location].x,
+        self.TopSurface = list((self.coords[location].x,
                                 self.coords[location].y,
                                 self.coords[location].z,
-                                ] for location in ['ful','fur','rul','rur'])
-        self.allPoints = list([[self.coords[location].x,self.coords[location].y,self.coords[location].z,]\
-                                for location in self.coords])
+                                ) for location in ['ful','fur','rul','rur'])
+        self.AllPoints = [ (self.coords[location].x,self.coords[location].y,self.coords[location].z)
+                                for location in self.coords]
 
-        self.wireframe = self.buildWireframe()
+        self.Wireframe = self.buildWireframe()
 
     def buildWireframe(self):
         wireframe_pairs = []
@@ -33,8 +31,8 @@ class Block:
         listp2 = [[self.coords[p2].x,self.coords[p2].y,self.coords[p2].z] for p2 in ['fur','rul','rur','rul',    'flr','rll','rlr','rll',    'fll','rur','rlr','rll' ]]
 
         for p1,p2 in zip(listp1,listp2):
-            wireframe_pairs.append(p1)
-            wireframe_pairs.append(p2)
+            wireframe_pairs.append(tuple(p1))
+            wireframe_pairs.append(tuple(p2))
         return wireframe_pairs
     def buildCoordinatesFromFLL(fll):
         CoordinateDictionary =  {

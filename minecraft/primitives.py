@@ -1,5 +1,6 @@
 import pyglet
-from pyglet.gl import *
+from pyglet.gl import   glBegin, glVertex3f, GL_LINES, GL_POINTS, GL_LINE_LOOP, GL_LINE_STRIP,\
+                        GL_TRIANGLES, GL_TRIANGLE_FAN, GL_TRIANGLE_STRIP, glEnd
 import math
 import sys
 import numpy
