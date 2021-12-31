@@ -1,7 +1,7 @@
 #local dependencies
 from world              import *
-from primitives         import draw_line_loop, draw_lines, draw_points, draw_triangle_fan, GL_POINTS
-
+from primitives         import draw_line_loop, draw_lines, draw_points, draw_triangle_fan, GL_POINTS, GL_TRIANGLE_FAN
+from makeTopoMap        import get_matrix
 #mechanics dependencies
 from random             import randint, uniform
 from time               import time
@@ -17,7 +17,7 @@ from pyglet.window.key  import *
 from pyglet.gl          import   GL_PROJECTION, glClear, GL_MODELVIEW, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_BLEND, GL_COLOR_BUFFER_BIT,\
                         glLoadIdentity, glViewport, glEnableClientState, GL_VERTEX_ARRAY, glMatrixMode, gluPerspective, glEnable, glBlendFunc,\
                         glFrustum, GL_DEPTH_BUFFER_BIT, gluLookAt, glTranslatef, glRotatef, GLuint, glGenBuffers, glBindBuffer, glBufferData,\
-                        GL_ARRAY_BUFFER, GL_STATIC_DRAW, GLfloat, glDrawArrays, glVertexPointer, GL_FLOAT, GL_LINES
+                        GL_ARRAY_BUFFER, GL_STATIC_DRAW, GLfloat, glDrawArrays, glVertexPointer, GL_FLOAT, GL_LINES, GLdouble
 
 
 
@@ -32,7 +32,6 @@ class Game:
 
 
     def __init__(self):
-            pyglet.gl.ERROR_CHECKING = False
         ########################################################################
         ##################### GAME ENVIRONEMNT DECLARATIONS ####################
         ########################################################################
@@ -45,11 +44,11 @@ class Game:
                 }
             # Create a collection of coordinates to point the camera
             self.camera                 =   {
-                "eye"               :   {'x': 0.0, 'y' : 0.0, 'z' : 0.0},
+                "eye"               :   {'x': 0.0, 'y' : 0.0, 'z' : -10},
                 "center"            :   {'x': 0.0, 'y' : 0.0, 'z' : 10.0},
                 "up"                :   {'x': 0.0, 'y' : 1.0, 'z' : 0.0},
                 "near"              :   1,
-                "far"               :   100
+                "far"               :   1000
                 }
             # Contains camera math components
             self.camera_vector          =   {
@@ -62,7 +61,7 @@ class Game:
             self.mechanics              =   {
                 "clock"             : 0,
                 "fps"               : 60,
-                "player_step"       : .1
+                "player_step"       : .2
             }
             # Contains all methods that will be called mapped to their calling interval
             self.scheduled_functions    =   {
@@ -71,22 +70,26 @@ class Game:
             }
             # Contains the gameplay component variables
             self.game_settings          =   {
-                "dimension"         : 100,
+                "dimension"         : 1000,
                 "time"              : 0.0,
                 "start_time"        : 0.0,
                 "frame_time"        : 0.0,
-                "keyboard"          : {}
+                "keyboard"          : {},
+                "topo_map"          :None
             }
             # Contains the gameplay items that will be instantiated
             self.game_components        =   {
                 "blocks"            :   None
             }
-            # Contians al inputs the game is currently tracking
+            # Contians all inputs the game is currently tracking
             self.input                  =   {
                 "keyboard"          : {}
             }
+            # Contians graphical settings
             self.graphics               =   {
-                "GLUint"            :   GLuint()
+                "GLUint"            :   GLuint(),
+                "buffer_data"       : [],
+                "buffer_size"       : 0
             }
 
 
@@ -106,35 +109,39 @@ class Game:
         ########################################################################
         ####################### 3D ENVIRONEMNT CREATION  #######################
         ########################################################################
+            self.game_settings['topo_map'] = get_matrix(seed=int(time()), rows = self.game_settings["dimension"],cols = self.game_settings["dimension"], delta = 1, maxval = 25)
             # Create a 3D dict of blocks referenced by xyz coordinate
-            self.game_components['blocks'] = {x : {y : {z : Block(Coordinate(x,y,z),"grass") for z in range(self.game_settings["dimension"])} for y in range(1)} for x in range(self.game_settings["dimension"])}
+            self.game_components['blocks'] = {x : {y : {z : Block(Coordinate(x,self.game_settings['topo_map'][x,z],z),"grass") for z in range(self.game_settings["dimension"])} for y in range(1)} for x in range(self.game_settings["dimension"])}
             # Schedule all automatic method calls
             for function_call in self.scheduled_functions:
                 pyglet.clock.schedule_interval(function_call, self.scheduled_functions[function_call])
             # Start the world clocks
             self.game_settings['start_time'] = time()
+
+
+
+
+
+
+
+
+
             # Create the list of vertices of the initial blocks
-            self.build_vertex_list()
-            # Create the VBO
-            buffer_data = []
-            for three_tuple in self.draw:
-                buffer_data.append(three_tuple[0])
-                buffer_data.append(three_tuple[1])
-                buffer_data.append(three_tuple[2])
-
-            buffer_data = array('f',buffer_data)
-            import pprint
-            pprint.pp(buffer_data)
-            
-            buffer_data = (GLfloat * len(buffer_data))(*buffer_data)
-
-            self.buffer = glGenBuffers(1,pointer(self.graphics['GLUint']))
-
+            self.graphics['buffer_data'] = self.build_vertex_list()
+            # Set the size of the buffer, which is 4 bytes PER item
+            self.graphics['buffer_size'] = len(self.graphics['buffer_data']) * 4
+            # Cast the raw float array into a C-like array
+            self.graphics['buffer_data'] = array('f',self.graphics['buffer_data'])
+            # Cast the data to a GL-accepted format
+            self.graphics['buffer_data'] = (GLfloat * len(self.graphics['buffer_data']))(*self.graphics['buffer_data'])
+            # Turn thge buffer on
+            glEnableClientState(GL_VERTEX_ARRAY)
+            # Create the vertex buffer
+            glGenBuffers(1,pointer(self.graphics['GLUint']))
+            # Bind the buffer
             glBindBuffer(GL_ARRAY_BUFFER, self.graphics['GLUint'])
-            glBufferData(GL_ARRAY_BUFFER, len(buffer_data),buffer_data,GL_STATIC_DRAW)
-            print("done")
-
-
+            # Fill the data into the buffer
+            glBufferData(GL_ARRAY_BUFFER, self.graphics['buffer_size'],self.graphics['buffer_data'],GL_STATIC_DRAW)
 
 
         ########################################################################
@@ -151,20 +158,19 @@ class Game:
                             self.camera['center']['x'],self.camera['center']['y'],self.camera['center']['z'],
                                 self.camera['up']['x'],self.camera['up']['y'],self.camera['up']['z'])
 
-                # Handle everything else
+                # Handle camera and player movement
                 self.movement()
-                #self.draw_world()
 
-                ##try:
-                #print(f"CAMERA: x:{self.camera['eye']['x']} y: {self.camera['eye']['y']} z: {self.camera['eye']['z']}\nCENTER: x:{self.camera['center']['x']} y: {self.camera['center']['y']} z: {self.camera['center']['z']}\n")
-                #print(f"Frametime: {self.game_settings['frame_time']}\nFramerate: {1.0/self.game_settings['frame_time']}\n")
-                ##except ZeroDivisionError:
-                #glTranslatef(1.0,1.01,1.0)
-                print("reached")
+                # DEBUG
+                print(f"CAMERA: x:{self.camera['eye']['x']} y: {self.camera['eye']['y']} z: {self.camera['eye']['z']}\nCENTER: x:{self.camera['center']['x']} y: {self.camera['center']['y']} z: {self.camera['center']['z']}\n")
+                print(f"Frametime: {self.game_settings['frame_time']}\nFramerate: {1.0/self.game_settings['frame_time']}\n")
+
+                # Enable the VBO
                 glEnableClientState(GL_VERTEX_ARRAY)
-                print("out")
+                # Ascribe the right properties
                 glVertexPointer(3, GL_FLOAT, 0, 0)
-                glDrawArrays(GL_LINES, 0, 3*len(self.draw))
+                # Draw the   Buffer
+                glDrawArrays(GL_POINTS, 0, self.graphics['buffer_size'])
 
             @self.window.event
             def on_key_press(symbol,modifyer):
@@ -193,39 +199,28 @@ class Game:
                 self.compute_camera_angle()
 
     def build_vertex_list(self):
-        point_pairs = {None}
-        final_points_to_draw = {None}
-        counter = 0
+        points = []
         for x in self.game_components['blocks']:
             for y in self.game_components['blocks'][x]:
                 for z in self.game_components['blocks'][x][y]:
                     block = self.game_components['blocks'][x][y][z]
-
-                    # FOR WIREFRAME
-                    block_points = block.Wireframe
-                    for i in range(int(len(block_points)/2)):
-                        tup1 = block_points[2*i]
-                        tup2 = block_points[2*i + 1]
-                        package = (tup1, tup2)
-                        point_pairs.add(package)
-
-                    #
-        final_points_to_draw.remove(None)
-        self.draw = []
-        point_pairs.remove(None)
-        for pair in point_pairs:
-            self.draw.append(list(pair[0]))
-            self.draw.append(list(pair[1]))
-
-        print(len(self.draw))
-        draw_lines(self.draw)
-
+                    for item in self.wireframe_to_points(block.TopSurface):
+                        points.append(item)
+        return points
+    def wireframe_to_points(self,wireframe_list):
+        vert_array = []
+        for tri_tuple in wireframe_list:
+            x,y,z = (tri_tuple[0],tri_tuple[1],tri_tuple[2])
+            vert_array.append(x)
+            vert_array.append(y)
+            vert_array.append(z)
+        return vert_array
     def run_game(self):
         pyglet.app.run()
 
 
     def movement(self):
-        movement_step = self.mechanics['player_step']                       + .1 * (LALT in self.input['keyboard'])
+        movement_step = self.mechanics['player_step']                       + .5 * (LALT in self.input['keyboard'])
         if W in self.input['keyboard']:
             self.camera['eye']['z']     += movement_step     * sin(self.camera_vector['angle_horizontal'])
             self.camera['center']['z']  += movement_step     * sin(self.camera_vector['angle_horizontal'])
