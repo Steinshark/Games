@@ -4,7 +4,7 @@ import time
 import math
 import sys
 import numpy
-
+import random
 import tensorflow as tf 
 from tensorflow import keras
 from tensorflow.keras.layers import Dense 
@@ -27,7 +27,33 @@ class ChessGame:
         return str(self.moves[random.randint(0,sample_size-1)])
 
     def get_legal_moves(self):
-        return [self.board.lan(move)[-5:] for move in iter(self.board.legal_moves)]
+        return [self.board.uci(move)[-5:] for move in iter(self.board.legal_moves)]
+
+    def push_move(self,move):
+        fr = move[:2]
+        to = move[3:]
+
+        moves = get_legal_moves()
+        if move in moves:
+            self.board.push_san(move)
+        #Takes in the move 
+        elif f"{fr}x{to}":                  
+            self.board.push_san(f"{fr}x{to}")
+        #Check in the move 
+        elif f"{move}+" in moves:
+            self.board.push_san(f"{fr}x{to}")
+        #Mate in the move 
+        elif f"{move}#" in moves:
+            self.board.push_san(f"{move}#")
+        #Takes with check 
+        elif f"{fr}x{to}+" in moves:
+            self.board.push_san(f"{fr}x{to}+")
+        #Takes with mate 
+        elif f"{fr}x{to}#" in moves:
+            self.board.push_san(f"{fr}x{to}#")
+
+        else:
+            input(f"move: {move} not covered in\n{moves}")
 
     def get_state_vector(self):
         pieces = {"p":0,"r":1,"b":2,"n":3,"q":4,"k":5,"P":6,"R":7,"B":8,"N":9,"Q":10,"K":11}
@@ -86,7 +112,9 @@ class ChessGame:
             self.board = chess.Board(chess.STARTING_FEN)
             self.game_over = False
             while not self.game_over:
-                move = self.random_move()
+                print(self.board)
+                print(f"{self.get_legal_moves()}")
+                move = input("mv: ")
                 self.board.push_san(move)
                 self.check_game()
             res = self.board.outcome()
@@ -139,13 +167,13 @@ class QLearning:
         #Our output vector is [each square to every other square] U [castleTypes]
         # Size 4036
         self.output_key = [f"{fr}-{to}" for fr in self.squares for to in self.squares if not fr == to]
-        self.output_key += [f"{pawn}-{sq}={pi}" for pawn in ["a7","b7","c7","d7","d7","e7","f7","g7"] for sq in ["a8","b8","c8","d8","d8","e8","f8","g8"] for pi in ["Q","R","B","N"]]
-        self.output_key += [f"{pawn}-{sq}={pi}" for pawn in ["a2","b2","c2","d2","d2","e2","f2","g2"] for sq in ["a1","b1","c1","d1","d1","e1","f1","g1"] for pi in ["q","r","b","n"]]
-        self.output_key += ["OO","OOO"]
+        self.output_key += [f"{pawn}{sq}{pi}" for pawn in ["a7","b7","c7","d7","d7","e7","f7","g7"] for sq in ["a8","b8","c8","d8","d8","e8","f8","g8"] for pi in ["q","r","b","n"]]
+        self.output_key += [f"{pawn}{sq}{pi}" for pawn in ["a2","b2","c2","d2","d2","e2","f2","g2"] for sq in ["a1","b1","c1","d1","d1","e1","f1","g1"] for pi in ["q","r","b","n"]]
         
 
         print(f"input: size: {len(self.input_key)}")
         print(f"output: size: {len(self.output_key)}")
+        self.build_model()
 
     def build_model(self):
         self.learning_model = keras.Sequential([
@@ -167,31 +195,42 @@ class QLearning:
         # used for experience replay 
         self.experiences = {}
 
-        #Get a new game
-        game = ChessGame()
+
+
         for i in range(iterations):
 
-            #Make the move according to the model
-            given_move = self.target_model.predict(game.get_state_vector())[0][2]
-            print(f"move: {given_move}")
-
-
-
-            #Get the move's reward
-            if not game.board.outcome() is None:
-                reward = game.get_terminal_reward()
-                print(f"game ended with {reward}")
+            for _ in range(self.exp_replay_step):
+                #Get a new game
                 game = ChessGame()
-            
+                
+                # Loss is mse of v and z from this game
+                loss_vectors = self.monte_carlo_search(game)
+                
+                
+    def monte_carlo_search(self,game):
+        
+        odds = {"sample" : .035} #Sample every 30 moves or so
+
+        #In our monteCarlo, only expected outcomes are predicted with 
+        # the neural net. Thus, no π vector is produced. 
+        this_game_experiences = {}
+
+        while game.board.outcome() is None:
+
+            if random.uniform(0,1) < odds["sample"]:
+                for i, expected_outcome in enumerate(self.target_model.predict([s])):
+                    v_vector = list(self.target_model.predict([s]))
+                    z_vector = search_till_end(self,game,i)
             else:
+                print("not sampling")
 
-                #get reward of newest state 
-                reward = game.get_this_move_reward() + self.discount_factor * self.target_model.predict(game.state_vector)
-                self.experiences.append(reward)
+    def search_till_end(self,game_state,given_move):
+        ordered_moves = list(np.argsort(self.target_model.predict(game_state.get_state_vector())))
+        input(f"ordered moves are{ordered_moves[:5]}") 
+    def translate_move(self,i):
+        pass
 
-            #Check for experience 
 
 if __name__ == "__main__":
-    model = QLearning()
-    model.build_model()
-    model.train_model(10)
+    q = QLearning()
+    q.train_model(10)
