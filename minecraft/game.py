@@ -61,7 +61,7 @@ class Game:
             self.mechanics              =   {
                 "clock"             : 0,
                 "fps"               : 60,
-                "player_step"       : .2
+                "player_step"       : 1
             }
             # Contains all methods that will be called mapped to their calling interval
             self.scheduled_functions    =   {
@@ -125,7 +125,7 @@ class Game:
 
 
 
-
+            print(f'building vertex list')
             # Create the list of vertices of the initial blocks
             self.graphics['buffer_data'] = self.build_vertex_list()
             # Set the size of the buffer, which is 4 bytes PER item
@@ -134,6 +134,7 @@ class Game:
             self.graphics['buffer_data'] = array('f',self.graphics['buffer_data'])
             # Cast the data to a GL-accepted format
             self.graphics['buffer_data'] = (GLfloat * len(self.graphics['buffer_data']))(*self.graphics['buffer_data'])
+            
             # Turn thge buffer on
             glEnableClientState(GL_VERTEX_ARRAY)
             # Create the vertex buffer
@@ -141,6 +142,8 @@ class Game:
             # Bind the buffer
             glBindBuffer(GL_ARRAY_BUFFER, self.graphics['GLUint'])
             # Fill the data into the buffer
+            print(f'loading buffer')
+
             glBufferData(GL_ARRAY_BUFFER, self.graphics['buffer_size'],self.graphics['buffer_data'],GL_STATIC_DRAW)
 
 
@@ -170,7 +173,7 @@ class Game:
                 # Ascribe the right properties
                 glVertexPointer(3, GL_FLOAT, 0, 0)
                 # Draw the   Buffer
-                glDrawArrays(GL_POINTS, 0, self.graphics['buffer_size'])
+                glDrawArrays(GL_LINES, 0, self.graphics['buffer_size'])
 
             @self.window.event
             def on_key_press(symbol,modifyer):
@@ -200,12 +203,15 @@ class Game:
 
     def build_vertex_list(self):
         points = []
+        i = 1
         for x in self.game_components['blocks']:
             for y in self.game_components['blocks'][x]:
                 for z in self.game_components['blocks'][x][y]:
                     block = self.game_components['blocks'][x][y][z]
-                    for item in self.wireframe_to_points(block.TopSurface):
+                    for item in self.wireframe_to_points(block.Wireframe):
                         points.append(item)
+            print(f"loaded {i} / {len(self.game_components['blocks'])} chunks")
+            i += 1
         return points
     def wireframe_to_points(self,wireframe_list):
         vert_array = []
@@ -220,7 +226,8 @@ class Game:
 
 
     def movement(self):
-        movement_step = self.mechanics['player_step']                       + .5 * (LALT in self.input['keyboard'])
+        movement_step = self.mechanics['player_step'] + .5*(LALT in self.input['keyboard'])
+        
         if W in self.input['keyboard']:
             self.camera['eye']['z']     += movement_step     * sin(self.camera_vector['angle_horizontal'])
             self.camera['center']['z']  += movement_step     * sin(self.camera_vector['angle_horizontal'])
