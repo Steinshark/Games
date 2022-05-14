@@ -1,6 +1,7 @@
 import chess
 import random
 import time
+from matplotlib import pyplot as plt 
 import math
 import sys
 import numpy
@@ -182,37 +183,42 @@ class QLearning:
         self.squares = [f"{file}{rank}" for file in ['a','b','c','d','e','f','g','h'] for rank in range(1,9)]
         # Two networks, one to learn, one as the target output 
         self.learning_model = None 
-        self.target_model   = None 
 
         #Our input vector is [boolean for piece in square] for each square 
         # size 768  
         self.input_key = [f"{piece}_on_{square}" for piece in self.pieces for square in self.squares] + ["Wmove","Bmove"]
         self.input_key += ["Wcastlesk","Wcastlesq","Bcastlesk","Bcastlesq"]
         
-        #Our output vector is [each square to every other square] U [castleTypes]
-        # Size 4036
-        self.output_key = [f"{fr}{to}" for fr in self.squares for to in self.squares if not fr == to]
-        self.output_key += [f"{pawn}{sq}{pi}" for pawn in ["a7","b7","c7","d7","d7","e7","f7","g7","h7"] for sq in ["a8","b8","c8","d8","d8","e8","f8","g8","h8"] for pi in ["q","r","b","n"]]
-        self.output_key += [f"{pawn}{sq}{pi}" for pawn in ["a2","b2","c2","d2","d2","e2","f2","g2","h2"] for sq in ["a1","b1","c1","d1","d1","e1","f1","g1","h1"] for pi in ["q","r","b","n"]]
+        self.output_key = []
+        for color in [chess.BLACK,chess.WHITE]:
+            for p in [chess.QUEEN,chess.KING,chess.BISHOP,chess.KNIGHT,chess.ROOK,chess.PAWN]:
+                piece = chess.Piece(p,color)
+                for square in chess.SquareSet(chess.BB_ALL):
+                    board = chess.Board()
+                    board.clear()
+                    board.turn = piece.color
+                    board.set_piece_at(square,piece)
+                    for p in (board.legal_moves):
+                        if not board.uci(p) in self.output_key:
+                            self.output_key.append(board.uci(p))
+        #white pawn promotions
+        self.output_key += ["a7b8q","a7b8r","a7b8b","a7b8n","b7a8q","b7a8r","b7a8b","b7a8n","b7c8q","b7c8r","b7c8b","b7c8n","c7b8q","c7b8r","c7b8b","c7b8n","c7d8q","c7d8r","c7d8b","c7d8n","d7c8q","d7c8r","d7c8b","d7c8n","d7e8q","d7e8r","d7e8b","d7e8n","e7d8q","e7d8r","e7d8b","e7d8n","e7f8q","e7f8r","e7f8b","e7f8n","f7e8q","f7e8r","f7e8b","f7e8n","f7g8q","f7g8r","f7g8b","f7g8n","g7f8q","g7f8r","g7f8b","g7f8n","g7h8q","g7h8r","g7h8b","g7h8n","h7g8q","h7g8r","h7g8b","h7g8n",]
+        #black pawn promotions
+        self.output_key += ["a2b1q","a2b1r","a2b1b","a2b1n","b2a1q","b2a1r","b2a1b","b2a1n","b2c1q","b2c1r","b2c1b","b2c1n","c2b1q","c2b1r","c2b1b","c2b1n","c2d1q","c2d1r","c2d1b","c2d1n","d2c1q","d2c1r","d2c1b","d2c1n","d2e1q","d2e1r","d2e1b","d2e1n","e2d1q","e2d1r","e2d1b","e2d1n","e2f1q","e2f1r","e2f1b","e2f1n","f2e1q","f2e1r","f2e1b","f2e1n","f2g1q","f2g1r","f2g1b","f2g1n","g2f1q","g2f1r","g2f1b","g2f1n","g2h1q","g2h1r","g2h1b","g2h1n","h2g1q","h2g1r","h2g1b","h2g1n",]
         self.build_model()
 
     def build_model(self):
-        self.learning_model = tensorflow.keras.models.Sequential([
-            tensorflow.keras.Input(shape=(len(self.input_key),)),
-            Dense(1024,activation="relu"),
-            Dense(512,activation="relu"),
-            Dense(512,activation="relu"),
-            Dense(len(self.output_key))])
 
-        self.target_model = tensorflow.keras.models.Sequential([
-            tensorflow.keras.Input(shape=(len(self.input_key),)),
-            Dense(1024,activation="relu"),
+        self.times = []
+        self.moves = 0
+        self.learning_model = tensorflow.keras.models.Sequential([
+            tensorflow.keras.layers.InputLayer(input_shape=(len(self.input_key),)),
             Dense(512,activation="relu"),
             Dense(512,activation="relu"),
             Dense(len(self.output_key))])
 
         self.learning_model.compile(loss="huber",optimizer="adam")
-        self.target_model.compile(loss="huber",optimizer="adam")
+        self.learning_model.summary()
 
     def train_model(self,iterations,exp_replay=1,discount_factor=.7,simul=10):
         self.exp_replay_step = exp_replay
@@ -220,14 +226,16 @@ class QLearning:
         simul_games = simul
         # used for experience replay 
         self.experiences =[]
-        for i in range(iterations):
-
-            for j in range(simul_games):                
-                # Loss is mse of v and z from this game
+        times = []
+        st = time.time()
+        for iters in range(iterations):
+            for j in range(exp_replay): 
                 t1 = time.time()
-                self.experiences += self.monte_carlo_plural([ChessGame() for k in range(j)])
-                print(f"FINISHED MCTS size {j} - {time.time()-t1} ")
-                              
+                print("starting new game set")
+                self.experiences += self.monte_carlo_plural([ChessGame() for k in range(simul)])
+                print(f"FINISHED {exp_replay} games in {time.time()-t1}")
+
+                print(f"\tdatapoints size: {len(self.experiences)} in {(time.time()-t1):.4f}s")          
     def monte_carlo_search(self,game):
         
         odds = {"sample" : .035,#Sample every 30 moves or so
@@ -257,7 +265,7 @@ class QLearning:
                     played_move = game.random_move()
                     game.board.push_san(played_move)
                 else:
-                    ordered_moves = numpy.argsort(self.target_model.predict([state_vector])[0])
+                    ordered_moves = numpy.argsort(self.learning_model.predict([state_vector])[0])
 
                     for top_move_index in ordered_moves:
                         if ChessGame.check_move_from_board(game.board,self.output_key[top_move_index]):
@@ -272,7 +280,7 @@ class QLearning:
                 val = -1 
         else:
             val = 0       
-        v_vector = list(self.target_model.predict([state_vector]))[0]
+        v_vector = list(self.learning_model.predict([state_vector]))[0]
         z_vector = [0 for _ in v_vector]
         z_vector[self.output_key.index(played_move)] = val
 
@@ -281,7 +289,7 @@ class QLearning:
         return this_game_experiences
 
     def evaluate_moves_from_here(self,game,state_vector):
-        v_vector = list(self.target_model.predict([state_vector])[0])
+        v_vector = list(self.learning_model(tensorflow.constant([state_vector])))
         z_vector = [0 for _ in self.output_key]
         times = 0
         z = 0 
@@ -309,7 +317,7 @@ class QLearning:
             move_indices = [self.output_key.index(m) for m in possible_moves]
             
             state_vect = ChessGame.get_state_vector_static(game_state)
-            vals = self.target_model([tensorflow.constant(state_vect,shape=[1,774])],training=False)[0]
+            vals = self.learning_model([tensorflow.constant(state_vect,shape=[1,774])],training=False)[0]
             move_values = {t: vals[t] for t in move_indices}
             max_val = max(move_values,key=move_values.get)
             game_state.push_san(self.output_key[max_val])
@@ -350,7 +358,7 @@ class QLearning:
         move_indices = [self.output_key.index(m) for m in possible_moves]
         
         state_vect = ChessGame.get_state_vector_static(game_state)
-        vals = self.target_model.predict([state_vect],batch_size=1)[0]
+        vals = self.learning_model.predict([state_vect],batch_size=1)[0]
         move_values = {t: vals[t] for t in move_indices}
         max_val = max(move_values,key=move_values.get)
         game_state.push_san(self.output_key[max_val])
@@ -367,20 +375,24 @@ class QLearning:
         games_playing = [g for g in games]
         games_closed = [0 for g in games]
         moves = 0
+
+
+        self.global_predictions = 0
         while games_playing:
             state_vectors = [g.get_state_vector() for g in games_playing]
 
             mark_remove = []
             if random.uniform(0,1) < odds['sample']:
+                print(f"sampling after {moves} moves")
                 t1 = time.time()
                 score_tups = self.evaluate_moves_from_here_plual(games_playing,state_vectors)
+                print(f'\tran for {(time.time()-t1):.3f}s')
                 for i,t in enumerate(score_tups):
                     v,z = t
                     this_game_experiences.append([state_vectors[i],v,z])
             
             #Or play move from here without analysis 
             else:
-                moves += 1
                 if random.uniform(0,1) < odds["experiment"]:
                     for i,game in enumerate(games_playing):
                         played_move = game.random_move()
@@ -390,18 +402,18 @@ class QLearning:
                         if not result is None:
                             if not result.winner == None: 
                                 game.board.pop() 
-                                v,z = self.evaluate_moves_from_here(game,state_vectors[i])
+                            v,z = self.evaluate_moves_from_here(game,state_vectors[i])
 
                             this_game_experiences.append([state_vectors[i],v,z])
                             mark_remove.append(i)
                     for i in mark_remove:
-                        games_playing.pop(i)
+                        games_playing.remove(games_playing[i])
                 else:
                     games_moves = [[g.board.uci(move)[-5:] for move in iter(g.board.legal_moves)] for g in games_playing]
                     move_indices = [[self.output_key.index(m) for m in g] for g in games_moves]
                     
                     #Try using this, and predict also
-                    vals = self.target_model.predict(state_vectors)
+                    vals = self.learning_model(tensorflow.constant(state_vectors),training=False)
 
                     move_predictions = [[vals[i][index] for index in move_indices[i]] for i in range(len(move_indices))]
                     top_indices = [move_indices[i][mv.index(max(mv))] for i,mv in enumerate(move_predictions)]
@@ -413,7 +425,6 @@ class QLearning:
 
                         result = game.board.outcome()
                         if not result is None:
-                            print("removing")
                             game.board.pop() 
                             v,z = self.evaluate_moves_from_here(game,state_vectors[i])
 
@@ -421,14 +432,15 @@ class QLearning:
                             mark_remove.append(i)
                     for i in mark_remove:
                         games_playing.pop(i)
+            moves += 1
+
         return this_game_experiences
     
     def evaluate_moves_from_here_plual(self,games,state_vectors):
-        v_vectors = self.target_model.predict(state_vectors)
+        v_vectors = self.learning_model.predict(state_vectors)
         z_vectors = [[0 for i in self.output_key] for g in games]
         
         play_from_positions = [dict() for g in games]
-
         for i,game in enumerate(games):
             for move in [game.board.uci(move)[-5:] for move in iter(game.board.legal_moves)]:
                 exploration_node = game.board.copy()
@@ -442,7 +454,6 @@ class QLearning:
                             z_vectors[i][self.output_key.index(move)] = -1
                 else:
                     play_from_positions[i][self.output_key.index(move)] = {"state":exploration_node,"turn" :was_turn_of,"score":None}
-        
         self.play_multiple_to_end(play_from_positions, z_vectors)
         return zip(v_vectors, [numpy.array(z) for z in z_vectors])
     
@@ -452,20 +463,20 @@ class QLearning:
         for game in range(len(play_positions)):
             for spawn_move in play_positions[game]:
                 games[game,spawn_move] = play_positions[game][spawn_move]
-
+        moves = 0 
+        t1 = time.time()
         while None in [g['score'] for g in games.values()]:    
             games_moves = [[g['state'].uci(move)[-5:] for move in iter(g['state'].legal_moves)] for g in games.values()]
             move_indices = [[self.output_key.index(m) for m in g] for g in games_moves]
-            state_vectors = [ChessGame.get_state_vector_static(g['state']) for g in games.values()]
+            state_vectors = tensorflow.constant([ChessGame.get_state_vector_static(g['state']) for g in games.values()])
             #Try using this, and predict also
-            vals = self.target_model.predict(state_vectors)
+            vals = self.learning_model.predict(state_vectors,batch_size=len(games))
 
 
             move_predictions = [[vals[i][index] for index in move_indices[i]] for i in range(len(move_indices))]
             top_indices = [move_indices[i][mv.index(max(mv))] for i,mv in enumerate(move_predictions)]
             top_moves = [self.output_key[ti] for ti in top_indices]
             
-            moves = 0 
             mark_del = []
             for i,g in enumerate(games):
                 game_state = games[g]['state']
@@ -474,7 +485,7 @@ class QLearning:
 
                 if not result is None:
                     if not result.winner is None:
-                        games[g]['score'] = self.discount_factor**moves + (-1 + 2*int(games[g]['turn'] == result.winner))
+                        games[g]['score'] = (self.discount_factor**(moves/10)) * (-1 + 2*int(games[g]['turn'] == result.winner))
                     else:
                         games[g]['score'] = 0
                     z_vectors[g[0]][g[1]] = games[g]['score']
@@ -487,4 +498,4 @@ class QLearning:
         
 if __name__ == "__main__":
     q = QLearning()
-    q.train_model(2)
+    q.train_model(4,discount_factor=.9,simul=20)
