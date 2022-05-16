@@ -210,14 +210,15 @@ class QLearning:
 
     def build_model(self):
 
-        self.times = []
-        self.moves = 0
-        self.learning_model = tensorflow.keras.models.Sequential([
-            tensorflow.keras.layers.InputLayer(input_shape=(len(self.input_key),)),
-            Dense(2048,activation='relu'),
-            Dense(512,activation="relu"),
-            Dense(512,activation="relu"),
-            Dense(len(self.output_key))])
+        if os.path.isfile("model"):
+            self.learning_model = tensorflow.keras.models.load_model("model")
+        else:
+            self.learning_model = tensorflow.keras.models.Sequential([
+                tensorflow.keras.layers.InputLayer(input_shape=(len(self.input_key),)),
+                Dense(2048,activation='relu'),
+                Dense(512,activation="relu"),
+                Dense(512,activation="relu"),
+                Dense(len(self.output_key))])
 
         self.learning_model.compile(loss="huber",optimizer="adam")
 
@@ -267,6 +268,7 @@ class QLearning:
             print(y_train.shape)
             self.learning_model.fit(x_train,y_train)
             print(f"\ttrained model on experience set")
+        self.learning_model.save("model")
 
     def evaluate_moves_from_here(self,game,state_vector):
         v_vector = list(self.learning_model(tensorflow.constant([state_vector])))
