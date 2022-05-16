@@ -388,9 +388,9 @@ class QLearning:
                             game.board.pop() 
                             v,z = self.evaluate_moves_from_here(game,state_vectors[i])
                             this_game_experiences.append([state_vectors[i],v,z])
-                            mark_remove.append(i)
+                            mark_remove.append(games_playing[i])
                     for i in mark_remove:
-                        games_playing.remove(games_playing[i])
+                        games_playing.remove(i)
             moves += 1
 
         return this_game_experiences
