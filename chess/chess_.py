@@ -233,11 +233,11 @@ class QLearning:
         for iters in range(iterations):
             
             self.experiences = []
-            print(f"Begin training seq {iters}\{iterations}")
+            print(f"Begin training seq {iters+1}/{iterations}")
             for j in range(exp_replay):
                 t1 = time.time()
                 self.experiences += self.monte_carlo_plural([ChessGame() for k in range(simul)])
-                print(f"\tCollection {j}/{exp_replay}\t{simul} games in {(time.time()-t1):.2f}")
+                print(f"\tCollection {j+1}/{exp_replay}\t{simul} games in {(time.time()-t1):.2f}")
 
             print(f"\ttraining on dataset size {len(self.experiences):.3f}")
 
@@ -252,6 +252,12 @@ class QLearning:
             #Then train on the batch
             x_train = [x[0] for x in self.experiences]
             y_train = [x[1] for x in self.experiences]
+
+            input(type(x_train[0]))
+            input(x_train[0])
+
+            input(type(y_train[0]))
+            input(y_train[0])
             self.learning_model.fit(x_train,y_train)
             print(f"\ttrained model on experience set")
 
@@ -462,4 +468,4 @@ class QLearning:
 
 if __name__ == "__main__":
     q = QLearning()
-    q.train_model(4,exp_replay=2,discount_factor=.9,simul=20)
+    q.train_model(int(input("iters: ")),exp_replay=int(input("exp_replay: ")),discount_factor=.9,simul=int(input("simul: ")))
