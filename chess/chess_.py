@@ -256,7 +256,8 @@ class QLearning:
             for tup in writing:
                 x_item = numpy.array(tup[0])
                 y_item = tup[1]
-                print(f"type x: {type(x_item)}-{x_item.shape}\ntype y: {type(y_item)}-{y_item.shape}")
+                print(f"type x: {type(x_item)}-{x_item.shape}")
+                print(f"type y: {type(y_item)}-{y_item.shape}")
                 x_train.append(x_item)
                 y_train.append(y_item)
 
@@ -377,7 +378,7 @@ class QLearning:
                         if not result is None:
                             if not result.winner == None:
                                 game.board.pop()
-                            v,z = self.evaluate_moves_from_here(game,state_vectors[i])
+                            v,z = self.evaluate_moves_from_here_plual([game],[state_vectors[i]])
 
                             this_game_experiences.append([state_vectors[i],v,z])
                             mark_remove.append(games_playing[i])
@@ -401,7 +402,7 @@ class QLearning:
                         result = game.board.outcome()
                         if not result is None:
                             game.board.pop()
-                            v,z = self.evaluate_moves_from_here(game,state_vectors[i])
+                            v,z = self.evaluate_moves_from_here_plual([game],[state_vectors[i]])
                             this_game_experiences.append([state_vectors[i],v,z])
                             mark_remove.append(games_playing[i])
                     for i in mark_remove:
