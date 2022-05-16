@@ -255,12 +255,14 @@ class QLearning:
             y_train = []
             for tup in writing:
                 x_item = numpy.array(tup[0])
-                y_item = numpy.array(tup[1])
+                y_item = tup[1]
                 print(f"type x: {type(x_item)}-{x_item.shape}")
                 print(f"type y: {type(y_item)}-{y_item.shape}")
                 x_train.append(x_item)
                 y_train.append(y_item)
 
+            x_train = numpy.array(x_train)
+            y_train = numpy.array(y_train)
             print(x_train.shape)
             print(y_train.shape)
             self.learning_model.fit(x_train,y_train)
