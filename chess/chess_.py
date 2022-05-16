@@ -18,10 +18,6 @@ from tensorflow.keras.layers import Dense, Input
 import json
 from pprint import pp
 
-#Pytorch modules
-import torch.nn as nn
-import torch.nn.functional as F 
-
 
 class ChessGame:
     def __init__(self):
