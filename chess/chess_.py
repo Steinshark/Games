@@ -19,7 +19,9 @@ import json
 from pprint import pp
 
 #Pytorch modules
-from pytorch.nn import Sequential
+import torch.nn as nn
+import torch.nn.functional as F 
+
 
 class ChessGame:
     def __init__(self):
@@ -221,35 +223,41 @@ class QLearning:
             Dense(512,activation="relu"),
             Dense(len(self.output_key))])
 
-        #self.learning_model.compile(loss="huber",optimizer="adam")
-        #self.learning_model.summary()
+        self.learning_model.compile(loss="huber",optimizer="adam")
 
     def train_model(self,iterations,exp_replay=1,discount_factor=.7,simul=10):
         self.exp_replay_step = exp_replay
         self.discount_factor = discount_factor
         simul_games = simul
         # used for experience replay
-        self.experiences =[]
         times = []
         st = time.time()
 
         t0 = time.time()
         for iters in range(iterations):
+            
+            self.experiences = []
+            print(f"Begin training seq {iters}\{iterations}")
             for j in range(exp_replay):
                 t1 = time.time()
-                print("starting new game set")
                 self.experiences += self.monte_carlo_plural([ChessGame() for k in range(simul)])
-                print(f"FINISHED training step in {(time.time()-t1):.2f}")
+                print(f"\tCollection {j}/{exp_replay}\t{simul} games in {(time.time()-t1):.2f}")
 
-                print(f"\tdatapoints size: {len(self.experiences)} in {(time.time()-t0):.2f}s")
+            print(f"\ttraining on dataset size {len(self.experiences):.3f}")
+
+            #Save the experiences
             writing = []
             for exp in self.experiences:
                 a,z,v = exp
 
                 writing.append((numpy.array(a),z,v))
-            print(f"saving experiences {iters+1}/{iterations}")
             numpy.save(f"experiences{len(self.experiences)}",numpy.array(writing,dtype=object))
 
+            #Then train on the batch
+            x_train = [x[0] for x in self.experiences]
+            y_train = [x[1] for x in self.experiences]
+            self.learning_model.fit(x_train,y_train)
+            print(f"\ttrained model on experience set")
 
     def evaluate_moves_from_here(self,game,state_vector):
         v_vector = list(self.learning_model(tensorflow.constant([state_vector])))
@@ -346,10 +354,8 @@ class QLearning:
 
             mark_remove = []
             if random.uniform(0,1) < odds['sample']:
-                print(f"sampling after {moves} moves")
                 t1 = time.time()
                 score_tups = self.evaluate_moves_from_here_plual(games_playing,state_vectors)
-                print(f'\tran for {(time.time()-t1):.3f}s')
                 for i,t in enumerate(score_tups):
                     v,z = t
                     this_game_experiences.append([state_vectors[i],v,z])
