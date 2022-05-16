@@ -284,7 +284,7 @@ class QLearning:
             t1 = time.time()
             z_vector[i] = self.search_till_end(exploration_node,was_turn_of,i)
             times += (time.time()-t1)
-        return v_vector,z_vector
+        return v_vector,numpy.array(z_vector)
 
     #None recursive
     def search_till_end(self,game_state,playing_as,gamenum):
