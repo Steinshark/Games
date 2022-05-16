@@ -383,9 +383,9 @@ class QLearning:
                             if not result.winner == None:
                                 game.board.pop()
                             score_tups = self.evaluate_moves_from_here_plual([game],[state_vectors[i]])
-                            for i,t in enumerate(score_tups):
+                            for e,t in enumerate(score_tups):
                                 v,z = t
-                                this_game_experiences.append([state_vectors[i],v,z])
+                                this_game_experiences.append([state_vectors[e],v,z])
 
                             mark_remove.append(games_playing[i])
                     for i in mark_remove:
@@ -409,9 +409,9 @@ class QLearning:
                         if not result is None:
                             game.board.pop()
                             score_tups = self.evaluate_moves_from_here_plual([game],[state_vectors[i]])
-                            for i,t in enumerate(score_tups):
+                            for e,t in enumerate(score_tups):
                                 v,z = t
-                                this_game_experiences.append([state_vectors[i],v,z])
+                                this_game_experiences.append([state_vectors[e],v,z])
                             mark_remove.append(games_playing[i])
                     for i in mark_remove:
                         games_playing.remove(i)
