@@ -251,7 +251,7 @@ class QLearning:
 
             #Then train on the batch
             x_train = numpy.array([numpy.array(x[0]) for x in self.experiences])
-            y_train = ([x[1] for x in self.experiences])
+            y_train = numpy.array([x[1] for x in self.experiences])
 
             input(x_train.shape)
             input(y_train.shape)
