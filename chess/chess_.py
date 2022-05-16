@@ -250,7 +250,7 @@ class QLearning:
             numpy.save(f"experiences{len(self.experiences)}",numpy.array(writing,dtype=object))
 
             #Then train on the batch
-            x_train = [x[0] for x in self.experiences]
+            x_train = [numpy.array(x[0]) for x in self.experiences]
             y_train = [x[1] for x in self.experiences]
 
             input(type(x_train[0]))
