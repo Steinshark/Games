@@ -254,9 +254,9 @@ class QLearning:
             x_train = []
             y_train = []
             for tup in writing:
-                x_item = tup[0]
+                x_item = numpy.array(tup[0])
                 y_item = tup[1]
-                input(f"type x: {type(x_item)}\ntype y: {type(y_item)}")
+                input(f"type x: {type(x_item)}-{x_item.shape}\ntype y: {type(y_item)}-{y_item.shape}")
                 x_train.append(x_item)
                 y_train.append(y_item)
 
