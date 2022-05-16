@@ -466,4 +466,4 @@ class QLearning:
 
 if __name__ == "__main__":
     q = QLearning()
-    q.train_model(4,discount_factor=.9,simul=100)
+    q.train_model(4,exp_replay=2,discount_factor=.9,simul=20)
