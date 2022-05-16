@@ -17,7 +17,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Input
 import json
 from pprint import pp
-
+import tkinter as tk 
 
 class ChessGame:
     def __init__(self):
@@ -240,7 +240,7 @@ class QLearning:
                 self.experiences += self.monte_carlo_plural([ChessGame() for k in range(simul)])
                 print(f"\tCollection {j+1}/{exp_replay}\t{simul} games in {(time.time()-t1):.2f}")
 
-            print(f"\ttraining on dataset size {len(self.experiences):.3f}")
+            print(f"\ttraining on dataset size {len(self.experiences)}")
 
             #Save the experiences
             writing = []
@@ -257,8 +257,6 @@ class QLearning:
             for tup in writing:
                 x_item = numpy.array(tup[0])
                 y_item = tup[1]
-                print(f"type x: {type(x_item)}-{x_item.shape}")
-                print(f"type y: {type(y_item)}-{y_item.shape}")
                 x_train.append(x_item)
                 y_train.append(y_item)
 
@@ -480,5 +478,49 @@ class QLearning:
 
 
 if __name__ == "__main__":
+
+    window = tk.Tk()
+    mainframe = tk.frame(window)
+
+    #Train params
+    train_label = tk.Label(mainframe,text="Training Dashboard")
+    
+    iter_label = tk.Label(mainframe,text="iters:") 
+    iter_entry = tk.Entry(mainframe)
+
+    exp_label = tk.Label(mainframe,text="experience:") 
+    exp_entry = tk.Entry(mainframe)
+
+    simul_label = tk.Label(mainframe,text="simul:") 
+    simul_entry = tk.Entry(mainframe)
+
+    train_button = tk.Button(mainframe,text='Train!')
+
+
+    #Output 
+    out_label = tk.Label(mainframe,text="Program Out")
+    output_view = tk.scrolledtext.ScrolledText(mainframe)
+
+
+    #Packing
+    iter_label.grid(row=1,col=0)
+    iter_entrygrid(row=1,col=1)
+
+    exp_label.grid(row=2,col=0)
+    exp_entry.grid(row=2,col=1)
+
+    simul_label .grid(row=3,col=0)
+    simul_entry.grid(row=3,col=1)
+
+    train_button.grid(row=4,col=1,columnspan=2)
+
+    window.mainloop()
+
+
+    input("wainting")
+
+
+    
+
     q = QLearning()
     q.train_model(int(input("iters: ")),exp_replay=int(input("exp_replay: ")),discount_factor=.9,simul=int(input("simul: ")))
