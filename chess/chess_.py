@@ -549,7 +549,8 @@ class QLearning:
         try:
             self.play_board.push_uci(self.move_entry.get())
         except ValueError:
-            self.play_move()
+            self.move_entry.text = 'Bad move!'
+            return
 
         #Engine move 
         moves = [self.play_board.uci(move)[-5:] for move in iter(self.play_board.legal_moves)]
