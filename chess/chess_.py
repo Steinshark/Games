@@ -590,6 +590,17 @@ class QLearning:
         top_move = self.output_key[top_index]
         self.play_board.push_uci(top_move)
 
+        if not self.play_board.outcome() is None:
+            winner = self.play_board.outcome().winner
+            if winner == chess.WHITE:
+                self.end_res["text"] = "White wins"
+            elif winner == chess.BLACK:
+                self.end_res["text"] = "Black wins"
+            else:
+                self.end_res['text'] = f"{self.play_board.outcome().termination}"
+            self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
+            return
+            
         self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
 
     def reset_game(self):
@@ -597,9 +608,8 @@ class QLearning:
         self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
 
     def run_model(self,i,e,s,output=None):
-        t = threading.Thread(target=self.train_model,args=[i,e,s],kwargs={"output":output})
+        t = threading.Thread(target=self.train_model,args=[i],kwargs={"exp_replay":e,"simul":10,"output":output})
         t.start()
 if __name__ == "__main__":  
     q = QLearning()
     q.run_as_ui()
-    #q.train_model(int(input("iters: ")),exp_replay=int(input("exp_replay: ")),discount_factor=.9,simul=int(input("simul: ")))
