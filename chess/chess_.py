@@ -544,10 +544,25 @@ class QLearning:
         return self.img
 
     def play_move(self):
+
+        #My move
         try:
             self.play_board.push_uci(self.move_entry.get())
         except ValueError:
-            return
+            self.play_move()
+
+        #Engine move 
+        moves = [self.play_board.uci(move)[-5:] for move in iter(self.play_board.legal_moves)]
+        move_indices = [self.output_key.index(m) for m in moves]
+
+        #Try using this, and predict also
+        vals = self.learning_model(tensorflow.constant([ChessGame.get_state_vector_static(self.play_board)]),training=False)[0]
+
+        move_predictions = [vals[i] for i in move_indices]
+        top_index = move_indices[move_predictions.index(max(move_predictions))]
+        top_move = self.output_key[top_index]
+        self.play_board.push_uci(top_move)
+
         self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),
             anchor="nw")
 if __name__ == "__main__":  
