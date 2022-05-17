@@ -1,24 +1,36 @@
+#Chess related
 import chess
+import chess.svg 
+
+#Utility related 
 import random
 import time
-from matplotlib import pyplot as plt
 import math
+import json
+from cairosvg import svg2png
+
+#System related 
 import sys
-import numpy
-import random
-import tensorflow
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 #os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
-import time
-import sys
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Input
-import json
+import threading
+
+#Debug related 
+from matplotlib import pyplot as plt
 from pprint import pp
 import tkinter as tk 
+from tkinter.scrolledtext import ScrolledText
 
+#Computation related
+import tensorflow
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Input
+import numpy
+print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
+
+
+#Class responsible for playing the chess game and interfacing with TF 
 class ChessGame:
     def __init__(self):
         self.board = chess.Board()
@@ -33,6 +45,7 @@ class ChessGame:
         return str(self.moves[random.randint(0,sample_size-1)])
 
     def get_legal_moves(self):
+        #return all moves as UCI (a4b6)
         return [self.board.uci(move)[-5:] for move in iter(self.board.legal_moves)]
 
     def push_move(self,move):
@@ -147,6 +160,7 @@ class ChessGame:
             print(res)
 
     def check_move_from_board(board,move):
+        #is move legal?
         return move in [board.uci(move)[-5:] for move in iter(board.legal_moves)]
 
     def check_game(self):
@@ -155,6 +169,7 @@ class ChessGame:
         else:
             self.game_over = True
 
+#Class responsible for doing the learning and training and data collection
 class QLearning:
 
     def __init__(self):
@@ -289,7 +304,6 @@ class QLearning:
             times += (time.time()-t1)
         return v_vector,numpy.array(z_vector)
 
-    #None recursive
     def search_till_end(self,game_state,playing_as,gamenum):
         moves = 0
         while game_state.outcome() == None:
@@ -314,35 +328,6 @@ class QLearning:
                     val = -1
             else:val = 0
         return val * self.discount_factor**moves
-
-    #Recursive
-    def search_till_end2(self,game_state,playing_as,gamenum):
-
-        # Either return the actual outcome score
-        result = game_state.outcome()
-        if not result is None:
-            val = 0
-            if not result.winner == None:
-                if result.winner == playing_as:
-                    val = 1
-                    print("somebody won!")
-                else:
-                    print("somebody won!")
-                    val = -1
-            else:
-                val = 0
-            return val
-
-        # Or keep playing top move (as legal)
-        possible_moves = [game_state.uci(move)[-5:] for move in iter(game_state.legal_moves)]
-        move_indices = [self.output_key.index(m) for m in possible_moves]
-
-        state_vect = ChessGame.get_state_vector_static(game_state)
-        vals = self.learning_model.predict([state_vect],batch_size=1)[0]
-        move_values = {t: vals[t] for t in move_indices}
-        max_val = max(move_values,key=move_values.get)
-        game_state.push_san(self.output_key[max_val])
-        return self.discount_factor * self.search_till_end2(game_state,playing_as,gamenum)
 
     def monte_carlo_plural(self,games):
 
@@ -476,51 +461,96 @@ class QLearning:
 
             moves += 1
 
+    def run_as_ui(self):
+        window = tk.Tk()
+        mainframe = tk.Frame(window)
 
-if __name__ == "__main__":
+        #TrainingBox 
+        training_box = tk.Frame(window)
 
-    window = tk.Tk()
-    mainframe = tk.frame(window)
+        train_label = tk.Label(training_box,text="Training Dashboard")
+        train_label.grid(row=0,column=0,columnspan=2,sticky='ew')
 
-    #Train params
-    train_label = tk.Label(mainframe,text="Training Dashboard")
-    
-    iter_label = tk.Label(mainframe,text="iters:") 
-    iter_entry = tk.Entry(mainframe)
+        iter_label = tk.Label(training_box,text="iters:") 
+        exp_label = tk.Label(training_box,text="experience:") 
+        simul_label = tk.Label(training_box,text="simul:") 
+        
+        iter_entry = tk.Entry(training_box)
+        exp_entry = tk.Entry(training_box)
+        simul_entry = tk.Entry(training_box)
 
-    exp_label = tk.Label(mainframe,text="experience:") 
-    exp_entry = tk.Entry(mainframe)
+        iter_label. grid(row=1,column=0,sticky="ew")
+        exp_label.  grid(row=2,column=0,sticky="ew")
+        simul_label.grid(row=3,column=0,sticky="ew")
 
-    simul_label = tk.Label(mainframe,text="simul:") 
-    simul_entry = tk.Entry(mainframe)
-
-    train_button = tk.Button(mainframe,text='Train!')
-
-
-    #Output 
-    out_label = tk.Label(mainframe,text="Program Out")
-    output_view = tk.scrolledtext.ScrolledText(mainframe)
-
-
-    #Packing
-    iter_label.grid(row=1,col=0)
-    iter_entrygrid(row=1,col=1)
-
-    exp_label.grid(row=2,col=0)
-    exp_entry.grid(row=2,col=1)
-
-    simul_label .grid(row=3,col=0)
-    simul_entry.grid(row=3,col=1)
-
-    train_button.grid(row=4,col=1,columnspan=2)
-
-    window.mainloop()
+        iter_entry. grid(row=1,column=1,stick="ew")
+        exp_entry.  grid(row=2,column=1,sticky="ew")
+        simul_entry.grid(row=3,column=1,sticky="ew")
 
 
-    input("wainting")
+        train_button = tk.Button(training_box,text='Train!')
+        train_button.grid(row=4,column=0,columnspan=2,sticky="ew")
+        
+        training_box.grid(row=0,column=0)
+
+        #train output
+        out_box = tk.Frame(window)
+
+        out_label = tk.Label(out_box,text="Program Out")
+        output_view = ScrolledText(out_box)
+        out_label.grid(row=0,column=0,stick="ew")
+        output_view.grid(row=1,column=0,stick="ew")
+
+        out_box.grid(row=1,column=0)
+
+        #Playing Box 
+        play_box = tk.Frame(window)
+
+        play_label = tk.Label(play_box,text="Game Dashboard")
+        self.move_entry = tk.Entry(play_box)
+        game_play   = tk.Button(play_box,text='Play',command = lambda: self.play_move())
+
+        play_label.grid(row=0,column=0,columnspan=2)
+        game_play.grid(row=1,column=0,sticky="ew")
+        self.move_entry.grid(row=1,column=1,sticky="ew")
+        play_box.grid(row=0,column=1)
 
 
-    
+        #Game out 
+        game_out = tk.Frame(window)
 
+        self.game_canvas = tk.Canvas(game_out,height=500,width=500)
+        self.game_canvas.grid(row=0,column=0,sticky="ew")
+
+        game_out.grid(row=1,column=1)
+
+
+        self.play_board = chess.Board()
+        self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
+        #Finish up and run
+
+        mainframe.columnconfigure(0,weight=1)
+        mainframe.columnconfigure(1,weight=1)
+
+        mainframe.rowconfigure(0,weight=1)
+        mainframe.rowconfigure(1,weight=1)
+        mainframe.grid(row=0,column=0)
+        window.mainloop()
+
+    def chess_png(self,board):
+        svg_raw =  chess.svg.board(board)
+        png_file = svg2png(bytestring=svg_raw,write_to="current_board.png")
+        self.img = tk.PhotoImage(file="current_board.png")
+        return self.img
+
+    def play_move(self):
+        try:
+            self.play_board.push_uci(self.move_entry.get())
+        except ValueError:
+            return
+        self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),
+            anchor="nw")
+if __name__ == "__main__":  
     q = QLearning()
-    q.train_model(int(input("iters: ")),exp_replay=int(input("exp_replay: ")),discount_factor=.9,simul=int(input("simul: ")))
+    q.run_as_ui()
+    #q.train_model(int(input("iters: ")),exp_replay=int(input("exp_replay: ")),discount_factor=.9,simul=int(input("simul: ")))
