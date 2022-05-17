@@ -225,7 +225,7 @@ class QLearning:
 
     def build_model(self):
 
-        if os.path.isfile("model"):
+        if os.path.exists("model"):
             self.learning_model = tensorflow.keras.models.load_model("model")
         else:
             self.learning_model = tensorflow.keras.models.Sequential([
@@ -235,7 +235,7 @@ class QLearning:
                 Dense(512,activation="relu"),
                 Dense(len(self.output_key))])
 
-        self.learning_model.compile(loss="huber",optimizer="adam")
+        self.learning_model.compile(loss="adam",optimizer="adam")
 
     def train_model(self,iterations,exp_replay=1,discount_factor=.7,simul=10,output=None):
         self.exp_replay_step = exp_replay
@@ -600,7 +600,7 @@ class QLearning:
                 self.end_res['text'] = f"{self.play_board.outcome().termination}"
             self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
             return
-            
+
         self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
 
     def reset_game(self):
