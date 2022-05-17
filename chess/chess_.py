@@ -237,7 +237,7 @@ class QLearning:
 
         self.learning_model.compile(loss="huber",optimizer="adam")
 
-    def train_model(self,iterations,exp_replay=1,discount_factor=.7,simul=10):
+    def train_model(self,iterations,exp_replay=1,discount_factor=.7,simul=10,output=None):
         self.exp_replay_step = exp_replay
         self.discount_factor = discount_factor
         simul_games = simul
@@ -249,13 +249,22 @@ class QLearning:
         for iters in range(iterations):
             
             self.experiences = []
-            print(f"Begin training seq {iters+1}/{iterations}")
+            if not output is None:
+                output.insert(tk.END,f"Begin training seq {iters+1}/{iterations}\n")
+            else:
+                print(f"Begin training seq {iters+1}/{iterations}")
             for j in range(exp_replay):
                 t1 = time.time()
                 self.experiences += self.monte_carlo_plural([ChessGame() for k in range(simul)])
-                print(f"\tCollection {j+1}/{exp_replay}\t{simul} games in {(time.time()-t1):.2f}")
-
-            print(f"\ttraining on dataset size {len(self.experiences)}")
+                if not output is None:
+                    output.insert(tk.END,f"\tCollection {j+1}/{exp_replay}\t{simul} games in {(time.time()-t1):.2f}\n")
+                else:
+                    print(f"\tCollection {j+1}/{exp_replay}\t{simul} games in {(time.time()-t1):.2f}")
+           
+            if not output is None:
+                output.insert(tk.END,f"\ttraining on dataset size {len(self.experiences)}\n")
+            else:
+                print(f"\ttraining on dataset size {len(self.experiences)}")
 
             #Save the experiences
             writing = []
@@ -280,7 +289,10 @@ class QLearning:
             print(x_train.shape)
             print(y_train.shape)
             self.learning_model.fit(x_train,y_train)
-            print(f"\ttrained model on experience set")
+            if not output is None:
+                output.insert(tk.END,f"\ttrained model on experience set\n")
+            else:
+                print(f"\ttrained model on experience set")
         self.learning_model.save("model")
 
     def evaluate_moves_from_here(self,game,state_vector):
@@ -486,18 +498,16 @@ class QLearning:
         iter_entry. grid(row=1,column=1,stick="ew")
         exp_entry.  grid(row=2,column=1,sticky="ew")
         simul_entry.grid(row=3,column=1,sticky="ew")
+        out_box = tk.Frame(window)
+        output_view = ScrolledText(out_box)
 
-
-        train_button = tk.Button(training_box,text='Train!')
+        train_button = tk.Button(training_box,text='Train!',command=lambda:self.run_model(int(iter_entry.get()),int(exp_entry.get()),int(simul_entry.get()),output=output_view))
         train_button.grid(row=4,column=0,columnspan=2,sticky="ew")
         
         training_box.grid(row=0,column=0)
 
         #train output
-        out_box = tk.Frame(window)
-
         out_label = tk.Label(out_box,text="Program Out")
-        output_view = ScrolledText(out_box)
         out_label.grid(row=0,column=0,stick="ew")
         output_view.grid(row=1,column=0,stick="ew")
 
@@ -508,11 +518,15 @@ class QLearning:
 
         play_label = tk.Label(play_box,text="Game Dashboard")
         self.move_entry = tk.Entry(play_box)
+        self.start_new = tk.Button(play_box,text='New Game',command=lambda: self.reset_game())
+        self.end_res = tk.Label(play_box,text="Game result")
         game_play   = tk.Button(play_box,text='Play',command = lambda: self.play_move())
 
         play_label.grid(row=0,column=0,columnspan=2)
         game_play.grid(row=1,column=0,sticky="ew")
         self.move_entry.grid(row=1,column=1,sticky="ew")
+        self.start_new.grid(row=2,column=0,sticky="ew")
+        self.end_res.grid(row=2,column=1,sticky="ew")
         play_box.grid(row=0,column=1)
 
 
@@ -552,6 +566,18 @@ class QLearning:
             self.move_entry.text = 'Bad move!'
             return
 
+        if not self.play_board.outcome() is None:
+            winner = self.play_board.outcome().winner
+            if winner == chess.WHITE:
+                self.end_res["text"] = "White wins"
+            elif winner == chess.BLACK:
+                self.end_res["text"] = "Black wins"
+            else:
+                self.end_res['text'] = f"{self.play_board.outcome().termination}"
+            self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
+            return
+
+
         #Engine move 
         moves = [self.play_board.uci(move)[-5:] for move in iter(self.play_board.legal_moves)]
         move_indices = [self.output_key.index(m) for m in moves]
@@ -564,8 +590,15 @@ class QLearning:
         top_move = self.output_key[top_index]
         self.play_board.push_uci(top_move)
 
-        self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),
-            anchor="nw")
+        self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
+
+    def reset_game(self):
+        self.play_board = chess.Board()
+        self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
+
+    def run_model(self,i,e,s,output=None):
+        t = threading.Thread(target=self.train_model,args=[i,e,s],kwargs={"output":output})
+        t.start()
 if __name__ == "__main__":  
     q = QLearning()
     q.run_as_ui()
