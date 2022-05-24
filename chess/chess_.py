@@ -235,7 +235,9 @@ class QLearning:
                 Dense(512,activation="relu"),
                 Dense(len(self.output_key))])
 
-        self.learning_model.compile(loss="adam",optimizer="adam")
+        self.learning_model.compile(
+                loss=tk.keras.losses.MeanSquaredError(),
+                optimizer=tensorflow.keras.optimizers.Adam(learning_rate=.003))
 
     def train_model(self,iterations,exp_replay=1,discount_factor=.7,simul=10,output=None):
         self.exp_replay_step = exp_replay
@@ -286,9 +288,7 @@ class QLearning:
 
             x_train = numpy.array(x_train)
             y_train = numpy.array(y_train)
-            print(x_train.shape)
-            print(y_train.shape)
-            self.learning_model.fit(x_train,y_train)
+            self.learning_model.fit(x_train,y_train,batch_size=8)
             if not output is None:
                 output.insert(tk.END,f"\ttrained model on experience set\n")
             else:
@@ -608,8 +608,20 @@ class QLearning:
         self.game_canvas.create_image(20,20,image=self.chess_png(self.play_board),anchor="nw")
 
     def run_model(self,i,e,s,output=None):
-        t = threading.Thread(target=self.train_model,args=[i],kwargs={"exp_replay":e,"simul":10,"output":output})
+        t = threading.Thread(target=self.train_model,args=[i],kwargs={"exp_replay":e,"simul":s,"output":output})
         t.start()
 if __name__ == "__main__":  
     q = QLearning()
-    q.run_as_ui()
+    #q.run_as_ui()
+    g = [1,5,10,15,20,25,30,50,75,100,125,150,175,200]
+    times = [[],[],[]] 
+
+    for g_i in g:
+        for i in [0,1,2]:
+            t1 = time.time()
+            q.train_model(iterations=1,exp_replay=1,simul=g_i)
+            times[i].append(time.time()-t1 )
+    plt.plot(g,times[0])
+    plt.plot(g,times[1])
+    plt.plot(g,times[2])
+    plt.show()
