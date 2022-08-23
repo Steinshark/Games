@@ -19,7 +19,7 @@ class Block:
         self.TopSurface = list((self.coords[location].x,
                                 self.coords[location].y,
                                 self.coords[location].z,
-                                ) for location in ['ful','fur','rul','rur'])
+                                ) for location in ['rul','rur','ful','fur'])
         self.AllPoints = [ (self.coords[location].x,self.coords[location].y,self.coords[location].z)
                                 for location in self.coords]
 
@@ -52,6 +52,6 @@ class Coordinate:
         self.x = x
         self.y = y
         self.z = z
-
+        self.tup = (x,y,z)
     def __add__(self,c2):
         return Coordinate(self.x + c2.x, self.y + c2.y, + self.z + c2.z)

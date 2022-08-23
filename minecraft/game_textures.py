@@ -17,7 +17,10 @@ from pyglet.window.key  import *
 from pyglet.gl          import   GL_PROJECTION, glClear, GL_MODELVIEW, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_BLEND, GL_COLOR_BUFFER_BIT,\
                         glLoadIdentity, glViewport, glEnableClientState, GL_VERTEX_ARRAY, glMatrixMode, gluPerspective, glEnable, glBlendFunc,\
                         glFrustum, GL_DEPTH_BUFFER_BIT, gluLookAt, glTranslatef, glRotatef, GLuint, glGenBuffers, glBindBuffer, glBufferData,\
-                        GL_ARRAY_BUFFER, GL_STATIC_DRAW, GLfloat, glDrawArrays, glVertexPointer, GL_FLOAT, GL_LINES, GLdouble
+                        GL_ARRAY_BUFFER, GL_STATIC_DRAW, GLfloat, glDrawArrays, glVertexPointer, GL_FLOAT, GL_LINES, GLdouble,glTexParameterf,\
+                        glShadeModel,GL_SMOOTH,GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,GL_REPEAT,GL_TEXTURE_WRAP_T,GL_TEXTURE_MAG_FILTER,GL_LINEAR,\
+                        GL_TEXTURE_MIN_FILTER, glTexImage2D,GL_RGB,GL_UNSIGNED_BYTE,glGenerateMipmap,glBindTexture,glTexCoord2f,glVertex3f,GL_QUADS,\
+                        glBegin, glEnd,GL_TRIANGLES
 from PIL import Image
 
 
@@ -70,7 +73,7 @@ class Game:
             }
             # Contains the gameplay component variables
             self.game_settings          =   {
-                "dimension"         : 100,
+                "dimension"         : 20,
                 "time"              : 0.0,
                 "start_time"        : 0.0,
                 "frame_time"        : 0.0,
@@ -106,7 +109,25 @@ class Game:
             gluPerspective(60.0,self.settings['width']/self.settings['height'],self.camera['near'],self.camera['far'])
             glMatrixMode(GL_MODELVIEW)
 
+            #Enable Textures
+            glShadeModel( GL_SMOOTH )
+            glEnable( GL_TEXTURE_2D )
 
+
+            #Load image texture )
+            im = Image.open(r"assets/GrassTop.png")
+            self.xSize = im.size[0]
+            self.ySize = im.size[1]
+            self.rawReference = im.tobytes("raw", "RGB", 0, -1)
+
+            glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT )
+            glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT )
+            glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR )
+            glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR )
+            glTexImage2D( GL_TEXTURE_2D, 0, 3, self.xSize, self.ySize, 0,
+                 GL_RGB, GL_UNSIGNED_BYTE, self.rawReference )
+            glGenerateMipmap(GL_TEXTURE_2D)
+            glBindTexture(GL_TEXTURE_2D,0)
         ########################################################################
         ####################### 3D ENVIRONEMNT CREATION  #######################
         ########################################################################
@@ -161,15 +182,27 @@ class Game:
                 self.movement()
 
                 # DEBUG
-                print(f"CAMERA: x:{self.camera['eye']['x']} y: {self.camera['eye']['y']} z: {self.camera['eye']['z']}\nCENTER: x:{self.camera['center']['x']} y: {self.camera['center']['y']} z: {self.camera['center']['z']}\n")
-                print(f"Frametime: {self.game_settings['frame_time']}\nFramerate: {1.0/self.game_settings['frame_time']}\n")
+                try:
+                    print(f"CAMERA: x:{self.camera['eye']['x']} y: {self.camera['eye']['y']} z: {self.camera['eye']['z']}\nCENTER: x:{self.camera['center']['x']} y: {self.camera['center']['y']} z: {self.camera['center']['z']}\n")
+                    print(f"Frametime: {self.game_settings['frame_time']}\nFramerate: {1.0/self.game_settings['frame_time']}\n")
+                except ZeroDivisionError:
+                    pass
+                im1 = Image.open(r"assets/GrassTop.png")
+                im2 = Image.open(r"assets/grass_side.png")
 
-                # Enable the VBO
-                glEnableClientState(GL_VERTEX_ARRAY)
-                # Ascribe the right properties
-                glVertexPointer(3, GL_FLOAT, 0, 0)
-                # Draw the   Buffer
-                glDrawArrays(GL_LINES, 0, self.graphics['buffer_size'])
+                for x in self.game_components['blocks']:
+                    for y in self.game_components['blocks'][x]:
+                        for z in self.game_components['blocks'][x][y]:
+                            try:
+                                block = self.game_components['blocks'][x][y][z]
+                            except KeyError:
+                                pass
+                            self.draw_block([block.coords["fll"].tup,block.coords["flr"].tup,block.coords["ful"].tup,block.coords["fur"].tup],im2)
+                            self.draw_block([block.coords["rll"].tup,block.coords["fll"].tup,block.coords["rul"].tup,block.coords["ful"].tup],im2)
+                            self.draw_block([block.coords["flr"].tup,block.coords["rlr"].tup,block.coords["fur"].tup,block.coords["rur"].tup],im2)
+                            self.draw_block([block.coords["rll"].tup,block.coords["rlr"].tup,block.coords["rul"].tup,block.coords["rur"].tup],im2)
+                            self.draw_block(block.TopSurface,im)
+
 
             @self.window.event
             def on_key_press(symbol,modifyer):
@@ -217,7 +250,7 @@ class Game:
             vert_array.append(y)
             vert_array.append(z)
         return vert_array
-        
+
     def run_game(self):
         pyglet.app.run()
 
@@ -272,6 +305,49 @@ class Game:
 
 
         self.camera['center']['y'] = self.camera['eye']['y'] + 10.0 * cos(phi)
+
+    def draw_block(self,square,im):
+
+        #load im
+        self.xSize = im.size[0]
+        self.ySize = im.size[1]
+        self.rawReference = im.tobytes("raw", "RGB", 0, -1)
+
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT )
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT )
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR )
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR )
+        glTexImage2D( GL_TEXTURE_2D, 0, 3, self.xSize, self.ySize, 0,
+             GL_RGB, GL_UNSIGNED_BYTE, self.rawReference )
+        glGenerateMipmap(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D,0)
+
+        glBegin(GL_TRIANGLES)
+
+        #Triangle1
+        x,y,z = square[0]
+        glTexCoord2f(0,0)
+        glVertex3f(x,y,z)
+        x,y,z = square[1]
+        glTexCoord2f(1,0)
+        glVertex3f(x,y,z)
+        x,y,z = square[2]
+        glTexCoord2f(0,1)
+        glVertex3f(x,y,z)
+        glEnd()
+
+        #Triangle2
+        glBegin(GL_TRIANGLES)
+        x,y,z = square[1]
+        glTexCoord2f(1,0)
+        glVertex3f(x,y,z)
+        x,y,z = square[2]
+        glTexCoord2f(0,1)
+        glVertex3f(x,y,z)
+        x,y,z = square[3]
+        glTexCoord2f(1,1)
+        glVertex3f(x,y,z)
+        glEnd()
 
 if __name__ == "__main__":
     game = Game()
