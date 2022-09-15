@@ -24,6 +24,10 @@ class SnakeGame:
 		self.height = h
 
 		self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
+		
+		while self.food == (0,0):
+				self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
+		
 		self.snake = [[0,0]]
 
 		self.colors = {"FOOD" : (255,20,20),"SNAKE" : (20,255,20)}
@@ -203,7 +207,7 @@ class SnakeGame:
 	def train_on_game(self,model,visible=True,epsilon=.2):
 		window_x, window_y = (600,600)
 		experiences = []
-		rewards = {"die":-10,"food":10,"live":0,"idle":-1}
+		rewards = {"die":-10,"food":10,"live":0,"idle":0}
 
 		score = 0
 		#setup
@@ -221,16 +225,13 @@ class SnakeGame:
 
 		#Game Loop
 		while game_running:
+
 			input_vector = self.get_state_vector()
 
 			#Find next update_movement
 			if random.random() < epsilon:
 				x = random.randint(-1,1)
-				y = random.randint(-1,1)
-
-				while abs(x) == abs(y):
-					x = random.randint(-1,1)
-					y = random.randint(-1,1)
+				y = int(x == 0) * random.sample([1,-1],1)[0]
 				self.direction = (x,y)
 			else:
 				movement_values = model.forward(input_vector.to(self.device))
@@ -240,11 +241,6 @@ class SnakeGame:
 			#Game display
 			if visible:
 				self.window.fill((0,0,0))
-				#print(f"model predicts: {[w,a,s,d]}")
-
-
-			#Game Display
-			if visible:
 				for coord in self.snake:
 					x,y = coord[0] * square_width,coord[1] * square_height
 					new_rect = pygame.draw.rect(self.window,self.colors["SNAKE"],pygame.Rect(x,y,square_width,square_height))
@@ -256,21 +252,22 @@ class SnakeGame:
 			#Game Logic
 			next_x = self.snake[0][0] + self.direction[0]
 			next_y = self.snake[0][1] + self.direction[1]
-			next_head = (next_x , next_y)
+
+			next_head = (self.snake[0][0] + self.direction[0] , self.snake[0][1] + self.direction[1])
 
 			#Check lose
-			if next_x >= self.width or next_y >= self.height or next_x < 0 or next_y < 0 or next_head in self.snake:
-				game_running = False
-				reward = rewards['die']
-				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':'terminal'})
+			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake:
+				experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':'terminal'})
 				return experiences, score
 
 			#Check eat food
-			eaten_since += 1
 			if next_head == self.food:
 				eaten_since = 0
-				self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
 				self.snake = [next_head] + self.snake
+				self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
+				while self.food in self.snake:
+					self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
+
 				reward = rewards['food']
 				score += 1
 			else:
@@ -279,30 +276,48 @@ class SnakeGame:
 
 			#Add to experiences
 			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
+			eaten_since += 1
 
-			if eaten_since > 100:
-				game_running = False
+			#Dont kill it since epsilon should take care of it
+			if eaten_since > 60:
 				reward = rewards['idle']
-				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':'terminal'})
+				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
 				return experiences, score
 		return experiences, score
 
-	def get_state_vector(self):
-		#Build x by y vector for snake
-		input_vector = [[0 for x in range(self.height)] for y in range(self.width)]
+	def get_state_vector(self,encoding="one_hot"):
 
-		#Head of snake == 1
-		input_vector[self.snake[0][1]][self.snake[0][0]] = 1
+		if encoding == "old":
+			#Build x by y vector for snake
+			input_vector = [[0 for x in range(self.height)] for y in range(self.width)]
 
-		#Rest of snake == -1
-		for piece in self.snake[1:]:
-			input_vector[piece[1]][piece[0]] = -1
+			#Head of snake == 1
+			input_vector[self.snake[0][1]][self.snake[0][0]] = 1
 
-		#Build x by y vector for food placement
-		food_placement = [[0 for x in range(self.height)] for y in range(self.width)]
-		food_placement[self.food[1]][self.food[0]] = 1
-		input_vector += food_placement
+			#Rest of snake == -1
+			for piece in self.snake[1:]:
+				input_vector[piece[1]][piece[0]] = -1
 
+			#Build x by y vector for food placement
+			food_placement = [[0 for x in range(self.height)] for y in range(self.width)]
+			food_placement[self.food[1]][self.food[0]] = 1
+			input_vector += food_placement
+		
+		elif encoding == "one_hot":
+			#Build x by y vector for snake
+			snake_body = [[0 for x in range(self.width)] for y in range(self.height)]
+			snake_head = [[0 for x in range(self.width)] for y in range(self.height)]
+			#Head of snake == 1
+			snake_head[self.snake[0][1]][self.snake[0][0]] = 1
+
+			#Rest of snake
+			for piece in self.snake[1:]:
+				snake_body[piece[1]][piece[0]] = 1
+
+			#Build x by y vector for food placement
+			food_placement = [[0 for x in range(self.height)] for y in range(self.width)]
+			food_placement[self.food[1]][self.food[0]] = 1
+			input_vector = snake_head + snake_body + food_placement 
 		#Translate to numpy and flatten
 		np_array = np.ndarray.flatten(np.array(input_vector))
 		#Translate to tensor
@@ -314,7 +329,7 @@ class Trainer:
 	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="E:\code\Scratch\models",fps=200,loss_fn=torch.optim.Adam,optimizer_fn=nn.MSELoss,lr=1e-6,wd=1e-6,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2):
 		self.PATH = PATH
 		self.fname = name
-		self.input_dim = game_w * game_h * 2  
+		self.input_dim = game_w * game_h * 3
 		self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
 		self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
 		self.w = game_w 
@@ -347,16 +362,16 @@ class Trainer:
 			"y"			: self.gamma
 		}
 		import pprint 
-		#pprint.pp(settings)
-		#print("\n\n")
 	
-	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2):
+	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False):
 
 		self.high_score = 0
 		self.best = 0
 		clear_every = 2
 		experiences = []
 		replay_buffer_size = replay_buffer
+		t0 = time.time()
+		high_scores = []
 
 		for e_i in range(int(episodes)):
 
@@ -374,21 +389,25 @@ class Trainer:
 				
 				#Change epsilon
 				if (e_i/episodes) > .1:
-					self.epsilon *= .75
+					self.epsilon *= .8
 				
-				print(f"[{e_i}/{episodes}]best score from last set was {self.high_score}")
-				
+				if verbose:
+					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}]")
+				t0 = time.time()
+
 				#Check score 
-				print(f"earned score of {self.high_score}")
 				if self.high_score > self.best:
 					self.best = self.high_score
-				
+				high_scores.append(self.high_score)
+				self.high_score = 0
+
 				#Make better experience set 
 				best = random.sample(experiences,sample_size)
-				best_size = sum(map(lambda x : int(not x['r'] == 0) + 5*int(x['r'] == 10), random.sample(experiences,sample_size)))
+				best_size = sum(map(lambda x : int(not x['r'] == 0) + ((2*int(x['r']) == 10)), best))
+
 				for _ in range(1000):
 					training_set = random.sample(experiences,sample_size)
-					efficiency = sum(map(lambda x : int(not x['r'] == 0 + 5*int(x['r'] == 10)), training_set))
+					efficiency = sum(map(lambda x : int(not x['r'] == 0) + ((2*int(x['r']) == 10)), training_set))
 					if efficiency > best_size:
 						best = training_set
 						best_size = efficiency 
@@ -400,10 +419,9 @@ class Trainer:
 			if e_i % transfer_models_every == 0:
 				self.transfer_models(transfer=True)
 
-		return self.best
+		return self.best,self.high_score
 
-	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=True):
-
+	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=False):
 		for epoch_i in range(epochs):
 			
 			#Printing things
@@ -419,8 +437,11 @@ class Trainer:
 
 			#For each batch 
 			for i,batch in enumerate(batches):
+
 				#Get a list (tensor) of all initial game states
 				initial_states = torch.stack(([exp['s'] for exp in batch]))
+				
+				#Make predictions of current states
 				predictions = self.learning_model(initial_states)
 
 				#Print progress of epoch
@@ -435,6 +456,7 @@ class Trainer:
 				# prepare for the adjusted values 
 				vals_target_adjusted = torch.clone(predictions)
 
+				#Apply Bellman
 				for index,action in enumerate(chosen_action):
 
 					# If state was terminal, use target reward 
@@ -460,9 +482,11 @@ class Trainer:
 
 			if early_stopping and c_loss > prev_loss:
 				if verbose and print(f"] - early stopped on {epoch_i} at loss={c_loss}"): pass
-				return 
+				break 
 			prev_loss = c_loss
 			if verbose and print(f"] loss: {c_loss}"): pass
+		if verbose:
+			print("\n\n\n")
 	
 	def transfer_models(self,transfer=False):
 		if transfer:
@@ -479,12 +503,12 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 		t1 = time.time()
 		print(f"starting process {name}")
 		trainer = Trainer(width,height,visible=visible,loading=loading,PATH=path,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,name=name,gamma=gamma,architecture=architecture,epsilon=epsilon)
-		score = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping)
-		print(f"{name} scored {score} in {(time.time()-t1):.2f}s")
+		best_score,all_scores = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping)
+		print(f"{name} scored {best_score} in {(time.time()-t1):.2f}s")
 	except Exception as e:
 		traceback.print_exception(e)
 
-	return (loss_fn,optimizer_fn,lr,wd,epochs,batch_size,gamma,architecture), score
+	return {"loss_fn":str(loss_fn),"optimizer_fn":str(optimizer_fn),"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores}
 
 def run(arguments):
 
@@ -493,22 +517,21 @@ def run(arguments):
 
 if __name__ == "__main__":
 	
-	run_iteration("test",12,12,True,False,"models",[512,256,256],torch.nn.MSELoss,torch.optim.SGD,.0001,1e-6,.5,4,5e6,4096,32768*2,1024,32,.985,True)
-	exit()
+	#run_iteration("test",5,5,True,False,"models",[128,32],torch.nn.MSELoss,torch.optim.Adam,.0001,1e-6,.5,1,5e5,2048,32768/2,128,8,.985,True)
+	#exit()
 	loss_fns = [torch.nn.MSELoss]
-	optimizers = [torch.optim.SGD]	
+	optimizers = [torch.optim.Adam]	
 
-	learning_rates = [1e-3]
+	learning_rates = [1e-3,1e-4]
 
 	gamma = [.99]
-	epsilon=[.5,.35]
+	epsilon=[.5]
 	train_every = [100,1000,10000]
-	replay_buffer = [16384,65536]
-	sample_size = [16,128,1024,8192] 
+	replay_buffer = [4096,16384*2]
+	sample_size = [128,1024,8192] 
 	batch_sizes = [2,32]
 	epochs = [1,4]
-	architectures = [[1024,32],[256,256],[16,16,16,16]]
-
+	architectures = [[512],[64,64],[16,16,16,16]]
 	i = 0
 	args = []
 	processes = []
@@ -526,7 +549,7 @@ if __name__ == "__main__":
 													if s > r or b > r or b > s:
 														pass
 													else:
-														args.append((i,12,12,False,False,"models",a,l,o,lr,1e-6,h,e,2**19,t,r,s,b,y,True,))
+														args.append((i,6,6,False,False,"models",a,l,o,lr,1e-6,h,e,2.01**16,t,r,s,b,y,True,))
 														i += 1
 
 	print(f"testing {len(args)} trials")
@@ -536,4 +559,9 @@ if __name__ == "__main__":
 		results = p.starmap(run_iteration,args)	
 		import pprint 
 		pprint.pp(results)
+		import json 
+
+		with open("saved_states.txt","w") as file:
+			file.write(json.dumps(results))
+		
   
