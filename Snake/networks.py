@@ -1,3 +1,4 @@
+from platform import architecture
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,14 +13,14 @@ class FullyConnectedNetwork(nn.Module):
 		super(FullyConnectedNetwork,self).__init__()
 
 		self.model = nn.Sequential(nn.Linear(input_size,architecture[0]))
-		self.model.append(nn.ReLU())
+		self.model.append(nn.LeakyReLU(.5))
 
 		for i,size in enumerate(architecture[:-1]):
 
 			self.model.append(nn.Linear(size,architecture[i+1]))
-			self.model.append(nn.ReLU())
+			self.model.append(nn.LeakyReLU(.5))
 		self.model.append(nn.Linear(architecture[-1],output_size))
-
+		self.model.append(nn.Softmax(dim=0))
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr,weight_decay=wd)
 		self.loss = loss_fn()
 
@@ -74,24 +75,36 @@ class FullyConnectedNetwork(nn.Module):
 
 
 	def forward(self,x_list):
-		y_predicted = []
-		y_pred = self.model(x_list)
-		return y_pred
+		return self.model(x_list)
 		#	y_predicted.append(y_pred.cpu().detach().numpy())
 
 
 class ConvolutionalNetwork(nn.Module):
-	def __init__(self,input_dimm):
+	
+	def __init__(self,channels,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
 		super(ConvolutionalNetwork,self).__init__()
+		self.model = nn.Sequential()
+		switched = False 
+		self.input_shape = input_shape
 
-		self.model = nn.Sequential(
-			nn.ReLU(),
-			nn.Linear(64,8),
-			nn.ReLU(),
-			nn.Linear(8,4))
-
-		self.loss_function = nn.MSELoss()
-		self.optimizer - optim.SGD(self.model.parameters(),lr=1e-4)
+		self.activation = {	"relu" : nn.ReLU,
+							"sigmoid" : nn.Sigmoid}
+		for i,layer in enumerate(architecture):
+			if len(layer) == 3:
+				in_c,out_c,kernel = layer[0],layer[1],layer[2]
+				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=1))
+				self.model.append(self.activation['sigmoid']())
+				self.model.append(nn.MaxPool2d(kernel_size=2,stride=2))
+			else:
+				in_size, out_size = layer[0],layer[1]
+				if not switched:
+					self.model.append(nn.Flatten(1))
+					switched = True 
+				self.model.append(nn.Linear(in_size,out_size))
+				if not i == len(architecture)-1 :
+					self.model.append(self.activation['sigmoid']())
+		self.loss = loss_fn()
+		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
 
 	def train(self,x_input,y_actual,epochs=10):
 
@@ -110,6 +123,8 @@ class ConvolutionalNetwork(nn.Module):
 			self.optimizer.step()
 
 	def forward(self,x):
+		if len(x.shape) == 3:
+			x = torch.reshape(x,self.input_shape)
 		return self.model(x)
 
 if __name__ == "__main__":

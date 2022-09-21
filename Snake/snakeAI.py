@@ -1,7 +1,7 @@
 from cgi import print_exception
 from filecmp import clear_cache
 from operator import le
-from turtle import back
+from turtle import back, shape
 import pygame
 from random import randint, sample
 import random
@@ -16,10 +16,12 @@ import torch.nn as nn
 from multiprocessing import Pool, Process
 from matplotlib import pyplot as plt
 import traceback
+import tkinter as tk
+from tkinter import scrolledtext as tk_st
 
 class SnakeGame:
 
-	def __init__(self,w,h,fps=30,device=torch.device('cpu')):
+	def __init__(self,w,h,fps=30,device=torch.device('cuda'),encoding_type="CNN"):
 		self.width = w
 		self.height = h
 
@@ -28,7 +30,7 @@ class SnakeGame:
 		while self.food == (0,0):
 				self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
 
-		self.snake = [[0,0]]
+		self.snake = [[randint(0,self.width - 1),randint(0,self.height - 1)]]
 
 		self.colors = {"FOOD" : (255,20,20),"SNAKE" : (20,255,20)}
 
@@ -39,6 +41,7 @@ class SnakeGame:
 		self.direction = (1,0)
 		self.device = device
 		self.data = []
+		self.encoding_type=encoding_type
 
 	def play_game(self,window_x,window_y,training_match=True,model=None):
 
@@ -168,16 +171,6 @@ class SnakeGame:
 	def game_to_model(self,x):
 		return np.ndarray.flatten(np.array(x))
 
-	def create_input_vector(self):
-		self.input_vector = [[0 for x in range(self.height)] for y in range(self.width)]
-		self.input_vector[self.snake[0][1]][self.snake[0][0]] = 1
-		for piece in self.snake[1:]:
-			self.input_vector[piece[1]][piece[0]] = -1
-		food_placement = [[0 for x in range(self.height)] for y in range(self.width)]
-		food_placement[self.food[1]][self.food[0]] = 1
-		self.input_vector += food_placement
-		return self.input_vector
-
 	def update_movement(self,player_input=False,w=0,s=0,a=0,d=0):
 
 		if player_input:
@@ -206,7 +199,7 @@ class SnakeGame:
 		self.direction = max(self.movement_choices,key=self.movement_choices.get)
 
 	def train_on_game(self,model,visible=True,epsilon=.2):
-		window_x, window_y = (600,600)
+		window_x, window_y = (900,600)
 		experiences = []
 		rewards = {"die":-10,"food":10,"live":0,"idle":0}
 		score = 0
@@ -233,8 +226,12 @@ class SnakeGame:
 				y = int(x == 0) * random.sample([1,-1],1)[0]
 				self.direction = (x,y)
 			else:
+				#torch.reshape(input_vector.to(self.device),(1,3,self.width,self.height))
 				movement_values = model.forward(input_vector.to(self.device))
-				w,s,a,d = movement_values.cpu().detach().numpy()
+				try:
+					w,s,a,d = movement_values.cpu().detach().numpy()
+				except ValueError:
+					w,s,a,d = movement_values[0].cpu().detach().numpy()
 				self.update_movement(w=w,s=s,a=a,d=d)
 
 			#Game display
@@ -278,16 +275,15 @@ class SnakeGame:
 			eaten_since += 1
 
 			#Dont kill it since epsilon should take care of it
-			if eaten_since > 60:
+			if eaten_since > self.width*self.height*3:
 				reward = rewards['idle']
 				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
 				return experiences, score
 		return experiences, score
 
+	def get_state_vector(self):
 
-	def get_state_vector(self,encoding="one_hot"):
-
-		if encoding == "old":
+		if self.encoding_type == "old":
 			#Build x by y vector for snake
 			input_vector = [[0 for x in range(self.height)] for y in range(self.width)]
 
@@ -303,7 +299,14 @@ class SnakeGame:
 			food_placement[self.food[1]][self.food[0]] = 1
 			input_vector += food_placement
 
-		elif encoding == "one_hot":
+		elif self.encoding_type == "3_channel":
+			enc_vectr = []
+			for x,y in [(i%self.width,int(i/self.height)) for i in range(self.width*self.height)]:
+				enc_vectr.append([int((x,y) == self.snake[0]), int((x,y) in self.snake[1:]),int((x,y) == self.food)])
+			enc_vectr = torch.reshape(torch.tensor(np.array(enc_vectr),dtype=torch.float,device=self.device),(3,self.width,self.height))
+			return enc_vectr
+
+		elif self.encoding_type == "one_hot":
 			#Build x by y vector for snake
 			snake_body = [[0 for x in range(self.width)] for y in range(self.height)]
 			snake_head = [[0 for x in range(self.width)] for y in range(self.height)]
@@ -326,13 +329,23 @@ class SnakeGame:
 
 class Trainer:
 
-	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="E:\code\Scratch\models",fps=200,loss_fn=torch.optim.Adam,optimizer_fn=nn.MSELoss,lr=1e-6,wd=1e-6,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2):
+	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="E:\code\Scratch\models",fps=200,loss_fn=torch.optim.Adam,optimizer_fn=nn.MSELoss,lr=1e-6,wd=1e-6,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=True,epsilon=.2,m_type="FCN"):
 		self.PATH = PATH
 		self.fname = name
-
+		self.m_type = m_type
 		self.input_dim = game_w * game_h * 3
-		self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
-		self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
+
+		if m_type == "FCN":
+			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
+			self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
+			self.encoding_type = "one_hot"
+
+		elif m_type == "CNN":
+			self.input_shape = (1,3,game_w,game_h)
+			self.target_model 	= networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
+			self.learning_model = networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)	
+			self.encoding_type = "3_channel"
+
 		self.w = game_w
 		self.h = game_h
 		self.gpu_acceleration = gpu_acceleration
@@ -340,6 +353,7 @@ class Trainer:
 			self.device = torch.device('cuda')
 		else:
 			self.device = torch.device('cpu')
+
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
 
@@ -364,7 +378,7 @@ class Trainer:
 		}
 		import pprint
 
-	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False):
+	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2000,verbose=True):
 
 		self.high_score = 0
 		self.best = 0
@@ -373,25 +387,26 @@ class Trainer:
 		replay_buffer_size = replay_buffer
 		t0 = time.time()
 		high_scores = []
-
+		trained = False
 		for e_i in range(int(episodes)):
 
 			#Play a game and collect the experiences
-			game = SnakeGame(self.w,self.h,fps=100)
+			game = SnakeGame(self.w,self.h,fps=100000,encoding_type=self.encoding_type,device=self.device)
 			exp, score = game.train_on_game(self.learning_model,visible=self.visible,epsilon=self.epsilon)
 			if score > self.high_score:
 				self.high_score = score
 			experiences += exp
 			if len(experiences) > replay_buffer:
 				experiences = experiences[int(-.8*replay_buffer):]
-
+			if e_i / episodes > .9:
+				self.epsilon = 0
 			#If training on this episode
 			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
-
+				trained = True 
 				#Change epsilon
-				if (e_i/episodes) > .1:
-					self.epsilon *= .8
-
+				if (e_i/episodes) > .01 and self.epsilon > .02:
+					self.epsilon *= .995
+				
 				if verbose:
 					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}]")
 				t0 = time.time()
@@ -402,29 +417,16 @@ class Trainer:
 				high_scores.append(self.high_score)
 				self.high_score = 0
 
-				#Make better experience set
-				best = random.sample(experiences,sample_size)
-				best_size = sum(map(lambda x : int(not x['r'] == 0) + ((2*int(x['r']) == 10)), best))
-
-				for _ in range(1000):
-					training_set = random.sample(experiences,sample_size)
-					efficiency = sum(map(lambda x : int(not x['r'] == 0) + ((2*int(x['r']) == 10)), training_set))
-					if efficiency > best_size:
-						best = training_set
-						best_size = efficiency
-
-				#print(f"efficiency score is {(100* best_size / len(best)):.3f}")
-
 				#Train
-				self.train_on_experiences(best,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping)
-			if e_i % transfer_models_every == 0:
-				self.transfer_models(transfer=True)
+				self.train_on_experiences(random.sample(experiences,sample_size),batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=verbose)
+			if (e_i % transfer_models_every) == 0 and not e_i == 0 and trained:
+				self.transfer_models(transfer=True,verbose=True)
 
 		return self.best,high_scores
 
-	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=False):
-		for epoch_i in range(epochs):
-
+	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=True):
+		for epoch_i in range(epochs):	
+			t0 = time.time()
 			#Printing things
 			if verbose and print(f"EPOCH {epoch_i}:\n\t",end='training['): pass
 			next_percent = .02
@@ -482,24 +484,29 @@ class Trainer:
 				self.learning_model.optimizer.step()
 
 			if early_stopping and c_loss > prev_loss:
-				if verbose and print(f"] - early stopped on {epoch_i} at loss={c_loss}"): pass
+				if verbose and print(f"] - early stopped on {epoch_i} at loss={c_loss} in {(time.time()-t0):.2f}"): pass
 				break
 			prev_loss = c_loss
-			if verbose and print(f"] loss: {c_loss}"): pass
+			if verbose and print(f"] loss: {c_loss} in {(time.time()-t0):.2f}"): pass
 		if verbose:
 			print("\n\n\n")
 
-	def transfer_models(self,transfer=False):
+	def transfer_models(self,transfer=False,verbose=False):
 		if transfer:
+			print("\ntransferring models\n\n")
 			#Save the models
+
 			torch.save(self.learning_model.state_dict(),os.path.join(self.PATH,f"{self.fname}_lm_state_dict"))
-
 			#Load the learning model as the target model
-			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
+			if self.m_type == "FCN":
+				self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
+			elif self.m_type == "CNN":
+				self.target_model = networks.ConvolutionalNetwork(channels=3,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture,input_shape=self.input_shape)
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
+			self.target_model.to(self.device)
 
 
-def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,optimizer_fn,lr,wd,epsilon,epochs,episodes,train_every,replay_buffer,sample_size,batch_size,gamma,early_stopping):
+def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,optimizer_fn,lr,wd,epsilon,epochs,episodes,train_every,replay_buffer,sample_size,batch_size,gamma,early_stopping,model_type):
 	try:
 		t1 = time.time()
 		print(f"starting process {name}")
@@ -513,25 +520,58 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 
 
 
-if __name__ == "__main__":
 
-	#run_iteration("test",5,5,True,False,"models",[128,32],torch.nn.MSELoss,torch.optim.Adam,.0001,1e-6,.5,1,5e5,2048,32768/2,128,8,.985,True)
-	#exit()
+class GuiTrainer(Trainer):
+	
+	def __init__(self,settings_dict):
+		#Init the trainer 
+		super().__init__(settings_dict['w'],settings_dict['h'],
+						visible			= settings_dict['vis'],
+						loading			= settings_dict['load'],
+						PATH			= settings_dict['PATH'],
+						architecture	= settings_dict['arch'],
+						loss_fn			= settings_dict['loss'],
+						optimizer_fn	= settings_dict['optim'],
+						lr 				= settings_dict['lr'],
+						wd				= settings_dict['wd'],
+						name			= settings_dict['name'],
+						gamma			= settings_dict['gamma'],
+						epsilon			= settings_dict['epsilon'],
+						m_type			= settings_dict['m_type'])
+		
+
+		self.window = tk.Tk()
+
+
+		self.view_window 	= tk.Frame(self.window)
+		self.output			= tk_st.ScrolledText(self.window)
+
+		self.view_window.grid(row=0,column=0)
+		self.output.grid(row=0,column=1)
+
+		self.window.mainloop()
+
+		
+
+if __name__ == "__main__":
+	trainer = Trainer(30,20,visible=True,loading=False,PATH="models",architecture=[[3,3,9],[3,1,3],[18,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,lr=.0001,wd=1e-6,name="FCN",gamma=.99,epsilon=.5,m_type="CNN")
+	trainer.train(episodes=1e5 ,train_every=64,replay_buffer=16384,sample_size=512,batch_size=1,epochs=1)
+	exit()
 	loss_fns = [torch.nn.MSELoss]
 	optimizers = [torch.optim.Adam]
 
-	learning_rates = [1e-4]
-	episodes = 1e6
+	learning_rates = [1e-3]
+	episodes = 1e5
 
 	gamma = [.99]
 	epsilon=[.5]
-	train_every = [1000,10000]
-	replay_buffer = [128,4096,16384*2]
-	sample_size = [64,8192]
-	batch_sizes = [2,32]
-	epochs = [1,4]
+	train_every = [128]
+	replay_buffer =[8196]
+	sample_size = [1024]
+	batch_sizes = [8]
+	epochs = [1]
 	w_d = [0]
-	architectures = [[256,32],[16,16,16,16]]
+	architectures = [[32,16]]
 	i = 0
 	args = []
 	processes = []
@@ -557,7 +597,7 @@ if __name__ == "__main__":
 
 	random.shuffle(args)
 
-	with Pool() as p:
+	with Pool(1) as p:
 		t0 = time.time()
 		results = p.starmap(run_iteration,args)
 		import json
