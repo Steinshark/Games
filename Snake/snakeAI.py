@@ -201,7 +201,7 @@ class SnakeGame:
 	def train_on_game(self,model,visible=True,epsilon=.2):
 		window_x, window_y = (900,600)
 		experiences = []
-		rewards = {"die":-10,"food":10,"live":0,"idle":0}
+		rewards = {"die":-1,"food":1,"live":0,"idle":0}
 		score = 0
 		#setup
 		assert model is not None
@@ -275,7 +275,7 @@ class SnakeGame:
 			eaten_since += 1
 
 			#Dont kill it since epsilon should take care of it
-			if eaten_since > self.width*self.height*3:
+			if eaten_since > self.width*self.height*10:
 				reward = rewards['idle']
 				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
 				return experiences, score
@@ -388,6 +388,7 @@ class Trainer:
 		t0 = time.time()
 		high_scores = []
 		trained = False
+		transfer_models_every = train_every * 2
 		for e_i in range(int(episodes)):
 
 			#Play a game and collect the experiences
@@ -396,16 +397,19 @@ class Trainer:
 			if score > self.high_score:
 				self.high_score = score
 			experiences += exp
+
 			if len(experiences) > replay_buffer:
 				experiences = experiences[int(-.8*replay_buffer):]
+
 			if e_i / episodes > .9:
 				self.epsilon = 0
+
 			#If training on this episode
 			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
 				trained = True 
 				#Change epsilon
 				if (e_i/episodes) > .01 and self.epsilon > .02:
-					self.epsilon *= .995
+					self.epsilon *= .996
 				
 				if verbose:
 					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}]")
@@ -417,8 +421,49 @@ class Trainer:
 				high_scores.append(self.high_score)
 				self.high_score = 0
 
+ 
+				blacklist = []
+				indices = [i for i, item in enumerate(experiences) if not item['r'] == 0]
+				quality = 100 * len(indices) / sample_size
+
+				print(f"quality of exps is {(100*quality / len(indices)):.2f}%")
+
+
+				best_sample = []
+
+				while not len(best_sample) == sample_size:
+					if random.uniform(0,1) < .5:
+						if len(indices) > 0:
+							i = indices.pop(0)
+							blacklist.append(i)
+							best_sample.append(experiences[i])
+						else:
+							rand_i = random.randint(0,len(experiences)-1)
+							while  rand_i in blacklist:
+								rand_i = random.randint(0,len(experiences)-1)
+							best_sample.append(experiences[rand_i])
+					else:
+							rand_i = random.randint(0,len(experiences)-1)
+							while  rand_i in blacklist:
+								rand_i = random.randint(0,len(experiences)-1)
+							best_sample.append(experiences[rand_i])
+
+				#Selective bias 
+				"""
+				best_sample 	= random.sample(experiences,sample_size)
+				best_quality	= sum(map(lambda x : int(x['r'] in [-1,1]),best_sample))
+				init_quality = best_quality
+				for _ in range(1000):
+					sample 	= random.sample(experiences,sample_size)
+					if quality > best_quality:
+						best_sample = sample 
+						best_quality = quality
+				
+				"""
+				quality = sum(map(lambda x : int(x['r'] in [-1,1]),best_sample))
+				print(f"quality score {(100*quality/len(best_sample)):.2f}%")
 				#Train
-				self.train_on_experiences(random.sample(experiences,sample_size),batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=verbose)
+				self.train_on_experiences(best_sample,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=verbose)
 			if (e_i % transfer_models_every) == 0 and not e_i == 0 and trained:
 				self.transfer_models(transfer=True,verbose=True)
 
@@ -510,7 +555,7 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 	try:
 		t1 = time.time()
 		print(f"starting process {name}")
-		trainer = Trainer(width,height,visible=visible,loading=loading,PATH=path,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,name=name,gamma=gamma,architecture=architecture,epsilon=epsilon)
+		trainer = Trainer(width,height,visible=visible,loading=loading,PATH=path,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,name=name,gamma=gamma,architecture=architecture,epsilon=epsilon,m_type=model_type)
 		best_score,all_scores = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping)
 		print(f"\t{name} scored {best_score} in {(time.time()-t1):.2f}s")
 	except Exception as e:
@@ -554,24 +599,24 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__":
-	trainer = Trainer(30,20,visible=True,loading=False,PATH="models",architecture=[[3,3,9],[3,1,3],[18,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,lr=.0001,wd=1e-6,name="FCN",gamma=.99,epsilon=.5,m_type="CNN")
-	trainer.train(episodes=1e5 ,train_every=64,replay_buffer=16384,sample_size=512,batch_size=1,epochs=1)
-	exit()
-	loss_fns = [torch.nn.MSELoss]
-	optimizers = [torch.optim.Adam]
+	#trainer = Trainer(30,20,visible=True,loading=False,PATH="models",architecture=[[3,3,3],[1800,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,lr=.01,wd=1e-8,name="FCN",gamma=.99,epsilon=.3,m_type="CNN")
+	#trainer.train(episodes=2.5e5 ,train_every=128,replay_buffer=16384*2,sample_size=4096,batch_size=2,epochs=1)
+	#exit()
+	loss_fns = [torch.nn.MSELoss,torch.nn.L1Loss]
+	optimizers = [torch.optim.Adam,torch.optim.SGD,torch.optim.Adagrad]
 
-	learning_rates = [1e-3]
-	episodes = 1e5
+	learning_rates = [1e-2,1e-4]
+	episodes = 2e5
 
 	gamma = [.99]
 	epsilon=[.5]
 	train_every = [128]
-	replay_buffer =[8196]
+	replay_buffer =[16384*2]
 	sample_size = [1024]
-	batch_sizes = [8]
+	batch_sizes = [1,4,8]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[32,16]]
+	architectures = [[[3,3,3],[3,1,5],[504,4]],[[3,3,3],[1800,4]]]
 	i = 0
 	args = []
 	processes = []
@@ -587,21 +632,23 @@ if __name__ == "__main__":
 											for a in architectures:
 												for h in epsilon:
 													for w in w_d:
-														if r < s or r < b or s < b or t < s:
+														if r < s or r < b or s < b:
 															pass
 														else:
-															args.append((i,10,10,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,))
+															args.append((i,30,20,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
 	random.shuffle(args)
+	try:
+		with Pool() as p:
+			t0 = time.time()
+			results = p.starmap(run_iteration,args)
+			import json
 
-	with Pool(1) as p:
-		t0 = time.time()
-		results = p.starmap(run_iteration,args)
-		import json
-
-		with open("saved_states.txt","w") as file:
-			file.write(json.dumps(results))
-		print(f"ran in {(time.time()-t0):.2f}s")
+			with open("saved_states.txt","w") as file:
+				file.write(json.dumps(results))
+			print(f"ran in {(time.time()-t0):.2f}s")
+	except Exception as e:
+		print("aborting")

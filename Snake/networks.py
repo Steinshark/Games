@@ -94,7 +94,6 @@ class ConvolutionalNetwork(nn.Module):
 				in_c,out_c,kernel = layer[0],layer[1],layer[2]
 				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=1))
 				self.model.append(self.activation['sigmoid']())
-				self.model.append(nn.MaxPool2d(kernel_size=2,stride=2))
 			else:
 				in_size, out_size = layer[0],layer[1]
 				if not switched:
