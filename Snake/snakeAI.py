@@ -632,24 +632,24 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__":
-	#trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,3,3],[1800,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.0005,wd=0,name="FCN",gamma=.99,epsilon=.25,m_type="CNN")
+	#trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,32,3],[32,16,5],[16,8,5],[288,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.0005,wd=0,name="FCN",gamma=.99,epsilon=.25,m_type="CNN")
 	#trainer.train(episodes=2e3 ,train_every=128,replay_buffer=16384*4,sample_size=4096,batch_size=32,epochs=1)
 	#exit()
 	loss_fns = [torch.nn.MSELoss,torch.nn.HuberLoss]
-	optimizers = [torch.optim.SGD,torch.optim.RMSprop]
+	optimizers = [torch.optim.RMSprop]
 
 	learning_rates = [1e-2,1e-4]
 	episodes = 1e5
 
 	gamma = [.99]
 	epsilon=[.3]
-	train_every = [128]
+	train_every = [32,128]
 	replay_buffer =[16384*4]
-	sample_size = [1024]
-	batch_sizes = [1,4,32]
+	sample_size = [1024,2048]
+	batch_sizes = [2,32]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[[3,32,3],[32,16,5],[16,8,7],[128,4]],[[3,3,3],[300,4]],[[3,16,3],[1600,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	architectures = [[[3,32,3],[32,16,5],[16,8,5],[288,4]],[[3,3,3],[300,4]],[[3,16,3],[1600,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
