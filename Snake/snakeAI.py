@@ -494,7 +494,7 @@ class Trainer:
 		axs[0].legend()
 		axs[1].legend()
 		axs[1].set_yscale("log")
-		axs[1].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}")
+		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}")
 		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}.png",dpi=100)
 
 
@@ -639,7 +639,7 @@ if __name__ == "__main__":
 	optimizers = [torch.optim.SGD,torch.optim.RMSprop]
 
 	learning_rates = [1e-2,1e-4]
-	episodes = 5e3
+	episodes = 1e5
 
 	gamma = [.99]
 	epsilon=[.3]
