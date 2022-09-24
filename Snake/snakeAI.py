@@ -1,3 +1,4 @@
+from cProfile import label
 from cgi import print_exception
 from filecmp import clear_cache
 from operator import le
@@ -42,6 +43,7 @@ class SnakeGame:
 		self.device = device
 		self.data = []
 		self.encoding_type=encoding_type
+		
 
 	def play_game(self,window_x,window_y,training_match=True,model=None):
 
@@ -199,9 +201,9 @@ class SnakeGame:
 		self.direction = max(self.movement_choices,key=self.movement_choices.get)
 
 	def train_on_game(self,model,visible=True,epsilon=.2):
-		window_x, window_y = (900,600)
+		window_x, window_y = (600,600)
 		experiences = []
-		rewards = {"die":-1,"food":1,"live":0,"idle":0}
+		rewards = {"die":-10,"food":10,"live":0,"idle":0}
 		score = 0
 		#setup
 		assert model is not None
@@ -209,7 +211,7 @@ class SnakeGame:
 		square_height 	= window_y / self.height
 		game_running = True
 		eaten_since = 0
-
+		lived = 0
 		#Game display
 		if visible:
 			pygame.init()
@@ -218,13 +220,17 @@ class SnakeGame:
 
 		#Game Loop
 		while game_running:
+			lived += 1
+			#Get init states
 			input_vector = self.get_state_vector()
+			old_dir = self.direction
 
-			#Find next update_movement
+			#Update move randomly  
 			if random.random() < epsilon:
-				x = random.randint(-1,1)
-				y = int(x == 0) * random.sample([1,-1],1)[0]
-				self.direction = (x,y)
+				while self.direction == old_dir:
+					x = random.randint(-1,1)
+					y = int(x == 0) * random.sample([1,-1],1)[0]
+					self.direction = (x,y)
 			else:
 				#torch.reshape(input_vector.to(self.device),(1,3,self.width,self.height))
 				movement_values = model.forward(input_vector.to(self.device))
@@ -244,17 +250,15 @@ class SnakeGame:
 				food_rect = pygame.draw.rect(self.window,self.colors["FOOD"],pygame.Rect(x,y,square_width,square_height))
 				pygame.display.update()
 
-
-			#Game Logic
+			#Find New Head 
 			next_x = self.snake[0][0] + self.direction[0]
 			next_y = self.snake[0][1] + self.direction[1]
-
 			next_head = (self.snake[0][0] + self.direction[0] , self.snake[0][1] + self.direction[1])
 
 			#Check lose
-			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake:
+			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake or old_dir == self.direction:
 				experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':'terminal'})
-				return experiences, score
+				return experiences, score,lived
 
 			#Check eat food
 			if next_head == self.food:
@@ -266,6 +270,7 @@ class SnakeGame:
 
 				reward = rewards['food']
 				score += 1
+			#Check No Outcome
 			else:
 				self.snake = [next_head] + self.snake[:-1]
 				reward = rewards['live']
@@ -274,12 +279,12 @@ class SnakeGame:
 			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
 			eaten_since += 1
 
-			#Dont kill it since epsilon should take care of it
-			if eaten_since > self.width*self.height*10:
+			#Check if lived too long 
+			if eaten_since > self.width*self.height*2:
 				reward = rewards['idle']
 				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
-				return experiences, score
-		return experiences, score
+				return experiences, score, lived
+		return experiences, score, lived
 
 	def get_state_vector(self):
 
@@ -304,6 +309,7 @@ class SnakeGame:
 			for x,y in [(i%self.width,int(i/self.height)) for i in range(self.width*self.height)]:
 				enc_vectr.append([int((x,y) == self.snake[0]), int((x,y) in self.snake[1:]),int((x,y) == self.food)])
 			enc_vectr = torch.reshape(torch.tensor(np.array(enc_vectr),dtype=torch.float,device=self.device),(3,self.width,self.height))
+			enc_vectr.to(self.device)
 			return enc_vectr
 
 		elif self.encoding_type == "one_hot":
@@ -349,6 +355,7 @@ class Trainer:
 		self.w = game_w
 		self.h = game_h
 		self.gpu_acceleration = gpu_acceleration
+
 		if gpu_acceleration:
 			self.device = torch.device('cuda')
 		else:
@@ -389,11 +396,20 @@ class Trainer:
 		high_scores = []
 		trained = False
 		transfer_models_every = train_every * 2
+
+		scores = []
+		lived = []
+
+		picking = False
 		for e_i in range(int(episodes)):
 
 			#Play a game and collect the experiences
 			game = SnakeGame(self.w,self.h,fps=100000,encoding_type=self.encoding_type,device=self.device)
-			exp, score = game.train_on_game(self.learning_model,visible=self.visible,epsilon=self.epsilon)
+			exp, score,lived_for = game.train_on_game(self.learning_model,visible=self.visible,epsilon=self.epsilon)
+
+			scores.append(score+1)
+			lived.append(lived_for)
+
 			if score > self.high_score:
 				self.high_score = score
 			experiences += exp
@@ -408,11 +424,11 @@ class Trainer:
 			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
 				trained = True 
 				#Change epsilon
-				if (e_i/episodes) > .01 and self.epsilon > .02:
+				if (e_i/episodes) > .1 and self.epsilon > .02:
 					self.epsilon *= .996
 				
 				if verbose:
-					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}]")
+					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lived)/len(lived):.2f} score_avg: {sum(scores)/len(scores):.2f}")
 				t0 = time.time()
 
 				#Check score
@@ -421,55 +437,70 @@ class Trainer:
 				high_scores.append(self.high_score)
 				self.high_score = 0
 
- 
-				blacklist = []
-				indices = [i for i, item in enumerate(experiences) if not item['r'] == 0]
-				quality = 100 * len(indices) / sample_size
-
-				print(f"quality of exps is {(100*quality / len(indices)):.2f}%")
-
 
 				best_sample = []
 
-				while not len(best_sample) == sample_size:
-					if random.uniform(0,1) < .5:
-						if len(indices) > 0:
-							i = indices.pop(0)
-							blacklist.append(i)
-							best_sample.append(experiences[i])
-						else:
-							rand_i = random.randint(0,len(experiences)-1)
-							while  rand_i in blacklist:
-								rand_i = random.randint(0,len(experiences)-1)
-							best_sample.append(experiences[rand_i])
-					else:
-							rand_i = random.randint(0,len(experiences)-1)
-							while  rand_i in blacklist:
-								rand_i = random.randint(0,len(experiences)-1)
-							best_sample.append(experiences[rand_i])
+				if picking:
+					blacklist = []
+					indices = [i for i, item in enumerate(experiences) if not item['r'] == 0]
+					quality = 100 * len(indices) / sample_size
 
-				#Selective bias 
-				"""
-				best_sample 	= random.sample(experiences,sample_size)
-				best_quality	= sum(map(lambda x : int(x['r'] in [-1,1]),best_sample))
-				init_quality = best_quality
-				for _ in range(1000):
-					sample 	= random.sample(experiences,sample_size)
-					if quality > best_quality:
-						best_sample = sample 
-						best_quality = quality
-				
-				"""
-				quality = sum(map(lambda x : int(x['r'] in [-1,1]),best_sample))
-				print(f"quality score {(100*quality/len(best_sample)):.2f}%")
+					if verbose:
+						print(f"quality of exps is {(100*quality / len(indices)):.2f}%")
+					while not len(best_sample) == sample_size:
+						if random.uniform(0,1) < .5:
+							if len(indices) > 0:
+								i = indices.pop(0)
+								blacklist.append(i)
+								best_sample.append(experiences[i])
+							else:
+								rand_i = random.randint(0,len(experiences)-1)
+								while  rand_i in blacklist:
+									rand_i = random.randint(0,len(experiences)-1)
+								best_sample.append(experiences[rand_i])
+						else:
+								rand_i = random.randint(0,len(experiences)-1)
+								while  rand_i in blacklist:
+									rand_i = random.randint(0,len(experiences)-1)
+								best_sample.append(experiences[rand_i])
+					if verbose:
+						quality = sum(map(lambda x : int(not x['r'] in [0]),best_sample))
+						print(f"quality score {(100*quality/len(best_sample)):.2f}%")
+
+				else:
+					best_sample = random.sample(experiences,sample_size)
+
+
 				#Train
 				self.train_on_experiences(best_sample,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=verbose)
 			if (e_i % transfer_models_every) == 0 and not e_i == 0 and trained:
-				self.transfer_models(transfer=True,verbose=True)
+				self.transfer_models(transfer=True,verbose=verbose)
+
+
+		#make smooth 
+
+		print(f"episodes {episodes}")
+		print(len(lived)) 
+		smooth = int(episodes / 100)
+		print(range(0,int(len(scores)/smooth),smooth))
+		scores = [sum(scores[i:i+smooth])/smooth for i in range(0,int(len(scores)),smooth)]
+		lived = [sum(lived[i:i+smooth])/smooth for i in range(0,int(len(lived)),smooth)]
+		print(len(scores))
+		print(len(lived)) 
+		fig, axs = plt.subplots(2,1)
+		fig.set_size_inches(19.2,10.8)
+		axs[0].plot([i*smooth for i in range(len(scores))],scores,label="scores",color='green')
+		axs[1].plot([i*smooth for i in range(len(lived))],lived,label="lived for",color='cyan')
+		axs[0].legend()
+		axs[1].legend()
+		axs[1].set_yscale("log")
+		axs[1].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}")
+		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}.png",dpi=100)
+
 
 		return self.best,high_scores
 
-	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=True):
+	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=False):
 		for epoch_i in range(epochs):	
 			t0 = time.time()
 			#Printing things
@@ -538,7 +569,8 @@ class Trainer:
 
 	def transfer_models(self,transfer=False,verbose=False):
 		if transfer:
-			print("\ntransferring models\n\n")
+			if verbose:
+				print("\ntransferring models\n\n")
 			#Save the models
 
 			torch.save(self.learning_model.state_dict(),os.path.join(self.PATH,f"{self.fname}_lm_state_dict"))
@@ -547,6 +579,7 @@ class Trainer:
 				self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
 			elif self.m_type == "CNN":
 				self.target_model = networks.ConvolutionalNetwork(channels=3,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture,input_shape=self.input_shape)
+
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
 			self.target_model.to(self.device)
 
@@ -556,7 +589,7 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 		t1 = time.time()
 		print(f"starting process {name}")
 		trainer = Trainer(width,height,visible=visible,loading=loading,PATH=path,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,name=name,gamma=gamma,architecture=architecture,epsilon=epsilon,m_type=model_type)
-		best_score,all_scores = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping)
+		best_score,all_scores = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=False)
 		print(f"\t{name} scored {best_score} in {(time.time()-t1):.2f}s")
 	except Exception as e:
 		traceback.print_exception(e)
@@ -599,24 +632,24 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__":
-	#trainer = Trainer(30,20,visible=True,loading=False,PATH="models",architecture=[[3,3,3],[1800,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,lr=.01,wd=1e-8,name="FCN",gamma=.99,epsilon=.3,m_type="CNN")
-	#trainer.train(episodes=2.5e5 ,train_every=128,replay_buffer=16384*2,sample_size=4096,batch_size=2,epochs=1)
+	#trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,3,3],[1800,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.0005,wd=0,name="FCN",gamma=.99,epsilon=.25,m_type="CNN")
+	#trainer.train(episodes=2e3 ,train_every=128,replay_buffer=16384*4,sample_size=4096,batch_size=32,epochs=1)
 	#exit()
-	loss_fns = [torch.nn.MSELoss,torch.nn.L1Loss]
-	optimizers = [torch.optim.Adam,torch.optim.SGD,torch.optim.Adagrad]
+	loss_fns = [torch.nn.MSELoss,torch.nn.HuberLoss]
+	optimizers = [torch.optim.SGD,torch.optim.RMSprop]
 
 	learning_rates = [1e-2,1e-4]
-	episodes = 2e5
+	episodes = 5e3
 
 	gamma = [.99]
-	epsilon=[.5]
+	epsilon=[.3]
 	train_every = [128]
-	replay_buffer =[16384*2]
+	replay_buffer =[16384*4]
 	sample_size = [1024]
-	batch_sizes = [1,4,8]
+	batch_sizes = [1,4,32]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[[3,3,3],[3,1,5],[504,4]],[[3,3,3],[1800,4]]]
+	architectures = [[[3,32,3],[32,16,5],[16,8,7],[128,4]],[[3,3,3],[300,4]],[[3,16,3],[1600,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
@@ -635,14 +668,14 @@ if __name__ == "__main__":
 														if r < s or r < b or s < b:
 															pass
 														else:
-															args.append((i,30,20,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
+															args.append((i,10,10,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
 	random.shuffle(args)
-	try:
-		with Pool() as p:
+	with Pool(8) as p:
+		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)
 			import json
@@ -650,5 +683,5 @@ if __name__ == "__main__":
 			with open("saved_states.txt","w") as file:
 				file.write(json.dumps(results))
 			print(f"ran in {(time.time()-t0):.2f}s")
-	except Exception as e:
-		print("aborting")
+		except Exception as e:
+			print("aborting")
