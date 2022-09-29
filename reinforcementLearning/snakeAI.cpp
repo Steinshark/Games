@@ -2,12 +2,13 @@
 #include <vector>
 #include "snakeBase.h"
 #include <cstdlib>
-
+#include <ctime>
 
 void runTrainingIterations(int iters){
 	vector<char> actions = {'w','s','a','d'};
-
+	srand(time(0));
 	vector<Experience> experiences;
+
 	for(int i =0; i < iters; i++){
 		SnakeGame game = SnakeGame(0,0,5,5);
 
@@ -29,5 +30,5 @@ void runTrainingIterations(int iters){
 
 
 int main(){
-	runTrainingIterations(10);
+	runTrainingIterations(100000);
 }

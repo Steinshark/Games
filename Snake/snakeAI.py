@@ -395,7 +395,6 @@ class Trainer:
 		t0 = time.time()
 		high_scores = []
 		trained = False
-		transfer_models_every = train_every * 2
 
 		scores = []
 		lived = []
@@ -424,11 +423,11 @@ class Trainer:
 			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
 				trained = True 
 				#Change epsilon
-				if (e_i/episodes) > .1 and self.epsilon > .02:
-					self.epsilon *= .996
+				if (e_i/episodes) > .4 and self.epsilon > .02:
+					self.epsilon *= .896
 				
 				if verbose:
-					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lived)/len(lived):.2f} score_avg: {sum(scores)/len(scores):.2f}")
+					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lived[-1000:])/len(lived[-1000:]):.2f} score_avg: {sum(scores[-1000:])/len(scores[-1000:]):.2f}")
 				t0 = time.time()
 
 				#Check score
@@ -442,7 +441,7 @@ class Trainer:
 
 				if picking:
 					blacklist = []
-					indices = [i for i, item in enumerate(experiences) if not item['r'] == 0]
+					indices = [i for i, item in enumerate(experiences) if not item['r'] < 0]
 					quality = 100 * len(indices) / sample_size
 
 					if verbose:
@@ -466,7 +465,6 @@ class Trainer:
 					if verbose:
 						quality = sum(map(lambda x : int(not x['r'] in [0]),best_sample))
 						print(f"quality score {(100*quality/len(best_sample)):.2f}%")
-
 				else:
 					best_sample = random.sample(experiences,sample_size)
 
@@ -493,9 +491,9 @@ class Trainer:
 		axs[1].plot([i*smooth for i in range(len(lived))],lived,label="lived for",color='cyan')
 		axs[0].legend()
 		axs[1].legend()
-		axs[1].set_yscale("log")
-		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}")
-		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}.png",dpi=100)
+		#axs[1].set_yscale("log")
+		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}-{train_every}")
+		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}-{train_every}.png",dpi=100)
 
 
 		return self.best,high_scores
@@ -539,7 +537,7 @@ class Trainer:
 				for index,action in enumerate(chosen_action):
 
 					# If state was terminal, use target reward
-					if batch[index]['s`'] == 'terminal':
+					if batch[index]['s`'] == 'terminal' or batch[index]['r'] > 0:
 						target = batch[index]['r']
 					# If not terminal, use Bellman Equation
 					else:
@@ -552,7 +550,8 @@ class Trainer:
 				#Calculate error
 				for param in self.learning_model.parameters():
 					param.grad = None
-				loss = self.learning_model.loss(predictions,vals_target_adjusted)
+
+				loss = self.learning_model.loss(vals_target_adjusted,predictions)
 				c_loss += loss
 
 				#Perform grad descent
@@ -632,9 +631,9 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__":
-	#trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,32,3],[32,16,5],[16,8,5],[288,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.0005,wd=0,name="FCN",gamma=.99,epsilon=.25,m_type="CNN")
-	#trainer.train(episodes=2e3 ,train_every=128,replay_buffer=16384*4,sample_size=4096,batch_size=32,epochs=1)
-	#exit()
+	trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,8,3],[8,4,3],[400,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.Adam,lr=.005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN")
+	trainer.train(episodes=2e4 ,train_every=128,replay_buffer=4096,sample_size=1024,batch_size=32,epochs=1,transfer_models_every=1000)
+	exit()
 	loss_fns = [torch.nn.MSELoss,torch.nn.HuberLoss]
 	optimizers = [torch.optim.RMSprop]
 
