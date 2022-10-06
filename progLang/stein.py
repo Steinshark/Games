@@ -1,5 +1,6 @@
 #Reverse polish notation calc 
 
+
 vars = {}
 
 def getVal(expr):
@@ -12,12 +13,11 @@ def getVal(expr):
             return expr
 
 def setVal(x):
+    print(f"setting {x}")
     key,value = x[0], x[1]
-    vars[key] = getVal(value)
-    print(vars)
+    ops[key] = lambda x : value
+    print(ops)
     return value
-
-
 
 def addition(argsList):
 
@@ -25,7 +25,7 @@ def addition(argsList):
         return 0
 
     while not len(argsList) == 1:
-        argsList[1] = getVal(argsList[0]) + getVal(argsList[1])
+        argsList[1] = execute(argsList[0]) + execute(argsList[1])
         argsList.pop(0)
     return argsList[0]
 
@@ -34,16 +34,21 @@ def multiplication(argsList):
         return 0
 
     while not len(argsList) == 1:
-        argsList[1] = getVal(argsList[0]) * getVal(argsList[1])
+        argsList[1] = execute(argsList[0]) * execute(argsList[1])
         argsList.pop(0)
     return argsList[0]
 
+def defineExec(args):
+    name = args[0].split('(')[1].split(' ')[0]
+    args = None
+
 ops = {
-    "x" : lambda x : multiplication(x),
+    "mul" : lambda x : multiplication(x),
     "div" : lambda x,y : float(x)/float(y),
     "+" : lambda x : addition(x),
     "-" : lambda x,y : float(x)-float(y),
-    "set" : lambda x : setVal(x)
+    "set" : lambda x : setVal(x),
+    "define" : lambda x : print(f"define call given {split_expr(x)}") or print(f"called{x[0].split('(')[1].split(' ')[0]}")
 }
 
 
@@ -52,28 +57,72 @@ ops = {
 
 #Legal expr always in form: (op expr1 ... expr2 ... exprn) || x x 3 {R} (x element of reals)
 
-def eval(expr):
 
+def split_expr(expr):
     expr = expr.strip()
+    if not expr[0] == "(":
+        return ops[expr]
+    #Get op 
+    op = expr.split("(")[1].split(" ")[0]
 
-    #Either return a constant  
-    if not "(" in expr:
-        return getVal(expr)
+    par_expr = False
+    expressions = []
+    #Get sub exprs
+    expr = expr[expr.find(" "):-1]
+    for i,c in enumerate(expr):
+        #If par, its either a new expression or nested expr
+        if c == "(":
+            # If new expression, append 
+            if not par_expr:
+                expressions.append(c)
+            # If nested Expr, continue adding normalling, but incr open count
+            else:
+                expressions[-1] += c 
+            par_expr += 1
+        elif c == ")":
+            expressions[-1] += c
+            par_expr -= 1
+        # If " ", either a new expr or nested expr
+        elif c == " ":
+            if par_expr:
+                expressions[-1] += c 
+            elif expr[1+i] == "(":
+                continue 
+            else:
+                expressions.append(c)
+        else:
+            if len(expressions) == 0:
+                expressions.append(c)
+            else:
+                expressions[-1] += c
 
-    #Or evaluate an operation
+    expressions = [e.strip() for e in expressions]
+    print(f"ended with op: {op} and exprs: {expressions}")
+    return [op] + expressions
+
+def execute(expr_str):
+    expr_str = expr_str.strip()
+    #Either an atom or an expression
+    if(not expr_str[0] == "("):
+        #Try VAR, then FLOAT 
+        try:
+            return ops[expr_str]
+        except KeyError:
+            return float(expr_str)
     else:
-        op = expr.split("(")[1].split(" ")[0]
-        #ensure valid op 
-        if not op in ops.keys():
-            return
+        expressions = []
+        expr = expr_str[1:-1]
 
-        #evaluate sub expressions
-        
-        expr_str = " ".join(expr.split(" ")[1:])[:-1]
+        op = expr.split(" ")[0].strip()
+        print(f"op: {op}")
 
-        expressions = [] 
-        par_expr = 0 
-        for i,c in enumerate(expr_str):
+        par_expr = False
+        expressions = []
+        #Get sub exprs
+        expr = expr[expr.find(" "):]
+
+        input(f"begin eval of {expr}")
+        for i,c in enumerate(expr):
             #If par, its either a new expression or nested expr
             if c == "(":
                 # If new expression, append 
@@ -90,7 +139,7 @@ def eval(expr):
             elif c == " ":
                 if par_expr:
                     expressions[-1] += c 
-                elif expr_str[1+i] == "(":
+                elif expr[1+i] == "(":
                     continue 
                 else:
                     expressions.append(c)
@@ -100,16 +149,15 @@ def eval(expr):
                 else:
                     expressions[-1] += c
 
-        expressions = [e.strip() for e in expressions]
-        return ops[op](expressions)
+        expressions = [op] + [e.strip() for e in expressions]
 
+        print(f"\tDEBUG:evaluated to {expressions}")
 
+        return ops[expressions[1]](expressions[1:])
 
-
-# (op x x )
 if __name__ == "__main__":
     line = "go ahead!"
     while not line == "(quit)":
         line = input("user in:> ") 
 
-        print(eval(line))
+        print(execute(line))
