@@ -1,7 +1,16 @@
 #Reverse polish notation calc 
+from pprint import pp
 
+DEBUG = False
 
-vars = {}
+ops = {
+    "mul" : lambda x : multiplication(x),
+    "div" : lambda x,y : float(x)/float(y),
+    "+" : lambda x : addition(x),
+    "-" : lambda x,y : float(x)-float(y),
+    "set" : lambda x : setVal(x),
+    "define" : lambda x : print(f"define call given {split_expr(x)}") or print(f"called{x[0].split('(')[1].split(' ')[0]}")
+}
 
 def getVal(expr):
     try:
@@ -15,18 +24,23 @@ def getVal(expr):
 def setVal(x):
     print(f"setting {x}")
     key,value = x[0], x[1]
-    ops[key] = lambda x : value
-    print(ops)
+    ops[key] = value
+    pp(ops)
     return value
 
 def addition(argsList):
 
+    print(f"\tDEBUG: addition with {argsList}")
     if len(argsList) == 0:
         return 0
+
+    if len(argsList) == 1:
+        return execute(argsList[0])
 
     while not len(argsList) == 1:
         argsList[1] = execute(argsList[0]) + execute(argsList[1])
         argsList.pop(0)
+
     return argsList[0]
 
 def multiplication(argsList):
@@ -41,22 +55,6 @@ def multiplication(argsList):
 def defineExec(args):
     name = args[0].split('(')[1].split(' ')[0]
     args = None
-
-ops = {
-    "mul" : lambda x : multiplication(x),
-    "div" : lambda x,y : float(x)/float(y),
-    "+" : lambda x : addition(x),
-    "-" : lambda x,y : float(x)-float(y),
-    "set" : lambda x : setVal(x),
-    "define" : lambda x : print(f"define call given {split_expr(x)}") or print(f"called{x[0].split('(')[1].split(' ')[0]}")
-}
-
-
-
-
-
-#Legal expr always in form: (op expr1 ... expr2 ... exprn) || x x 3 {R} (x element of reals)
-
 
 def split_expr(expr):
     expr = expr.strip()
@@ -106,22 +104,18 @@ def execute(expr_str):
     if(not expr_str[0] == "("):
         #Try VAR, then FLOAT 
         try:
-            return ops[expr_str]
+            return execute(ops[expr_str])
         except KeyError:
             return float(expr_str)
     else:
         expressions = []
         expr = expr_str[1:-1]
-
         op = expr.split(" ")[0].strip()
-        print(f"op: {op}")
-
         par_expr = False
         expressions = []
         #Get sub exprs
         expr = expr[expr.find(" "):]
 
-        input(f"begin eval of {expr}")
         for i,c in enumerate(expr):
             #If par, its either a new expression or nested expr
             if c == "(":
@@ -151,13 +145,14 @@ def execute(expr_str):
 
         expressions = [op] + [e.strip() for e in expressions]
 
-        print(f"\tDEBUG:evaluated to {expressions}")
+        if DEBUG:
+            print(f"op: {op}")
+            print(f"\tDEBUG:evaluated to {expressions}")
 
-        return ops[expressions[1]](expressions[1:])
+        return ops[expressions[0]](expressions[1:])
 
 if __name__ == "__main__":
-    line = "go ahead!"
+    line = input("user in:> ") 
     while not line == "(quit)":
-        line = input("user in:> ") 
-
         print(execute(line))
+        line = input("user in:> ") 
