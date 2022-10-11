@@ -203,7 +203,7 @@ class SnakeGame:
 	def train_on_game(self,model,visible=True,epsilon=.2):
 		window_x, window_y = (600,600)
 		experiences = []
-		rewards = {"die":-10,"food":10,"live":0,"idle":0}
+		rewards = {"die":-2,"food":2,"live":-.05,"idle":0}
 		score = 0
 		#setup
 		assert model is not None
@@ -277,6 +277,7 @@ class SnakeGame:
 
 			#Add to experiences
 			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
+
 			eaten_since += 1
 
 			#Check if lived too long 
@@ -306,10 +307,19 @@ class SnakeGame:
 
 		elif self.encoding_type == "3_channel":
 			enc_vectr = []
-			for x,y in [(i%self.width,int(i/self.height)) for i in range(self.width*self.height)]:
-				enc_vectr.append([int((x,y) == self.snake[0]), int((x,y) in self.snake[1:]),int((x,y) == self.food)])
+			flag= False 
+			enc_vectr = [[[0 for x in range(self.width)] for y in range(self.height)] for _ in range(3)]
+			enc_vectr[0][self.snake[0][1]][self.snake[0][0]] = 1
+
+			for pos in self.snake[1:]:
+				x,y = pos 
+				enc_vectr[1][y][x] = 1 
+			enc_vectr[2][self.food[1]][self.food[0]] = 1
+			#for x,y in [(i%self.width,int(i/self.height)) for i in range(self.width*self.height)]:
+			#	enc_vectr += [int((x,y) == self.snake[0]), int((x,y) in self.snake[1:]),int((x,y) == self.food)]
 			enc_vectr = torch.reshape(torch.tensor(np.array(enc_vectr),dtype=torch.float,device=self.device),(3,self.width,self.height))
 			enc_vectr.to(self.device)
+			#input(xcl[0].shape)
 			return enc_vectr
 
 		elif self.encoding_type == "one_hot":
@@ -416,15 +426,12 @@ class Trainer:
 			if len(experiences) > replay_buffer:
 				experiences = experiences[int(-.8*replay_buffer):]
 
-			if e_i / episodes > .9:
-				self.epsilon = 0
-
 			#If training on this episode
 			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
 				trained = True 
 				#Change epsilon
 				if (e_i/episodes) > .4 and self.epsilon > .02:
-					self.epsilon *= .896
+					self.epsilon = .3 * pow(.85,(episodes/train_every))
 				
 				if verbose:
 					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lived[-1000:])/len(lived[-1000:]):.2f} score_avg: {sum(scores[-1000:])/len(scores[-1000:]):.2f}")
@@ -477,14 +484,10 @@ class Trainer:
 
 		#make smooth 
 
-		print(f"episodes {episodes}")
-		print(len(lived)) 
 		smooth = int(episodes / 100)
-		print(range(0,int(len(scores)/smooth),smooth))
 		scores = [sum(scores[i:i+smooth])/smooth for i in range(0,int(len(scores)),smooth)]
 		lived = [sum(lived[i:i+smooth])/smooth for i in range(0,int(len(lived)),smooth)]
-		print(len(scores))
-		print(len(lived)) 
+
 		fig, axs = plt.subplots(2,1)
 		fig.set_size_inches(19.2,10.8)
 		axs[0].plot([i*smooth for i in range(len(scores))],scores,label="scores",color='green')
@@ -492,8 +495,8 @@ class Trainer:
 		axs[0].legend()
 		axs[1].legend()
 		#axs[1].set_yscale("log")
-		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}-{train_every}")
-		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-{self.lr}-{batch_size}-{train_every}.png",dpi=100)
+		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}")
+		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}.png",dpi=100)
 
 
 		return self.best,high_scores
@@ -631,24 +634,24 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__":
-	trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,8,3],[8,4,3],[400,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.Adam,lr=.005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN")
-	trainer.train(episodes=2e4 ,train_every=128,replay_buffer=4096,sample_size=1024,batch_size=32,epochs=1,transfer_models_every=1000)
-	exit()
+	#trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,32,5],[2048,64],[64,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.00005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN")
+	#trainer.train(episodes=1e5 ,train_every=1024,replay_buffer=4096*4,sample_size=1024*2,batch_size=32,epochs=1,transfer_models_every=2048)
+	#exit()
 	loss_fns = [torch.nn.MSELoss,torch.nn.HuberLoss]
 	optimizers = [torch.optim.RMSprop]
 
-	learning_rates = [1e-2,1e-4]
-	episodes = 1e5
+	learning_rates = [1e-3,1e-6]
+	episodes = 2e5
 
 	gamma = [.99]
 	epsilon=[.3]
-	train_every = [32,128]
-	replay_buffer =[16384*4]
-	sample_size = [1024,2048]
-	batch_sizes = [2,32]
+	train_every = [32,128,1024]
+	replay_buffer =[4096,16384*4]
+	sample_size = [512,2048]
+	batch_sizes = [4,32]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[[3,32,3],[32,16,5],[16,8,5],[288,4]],[[3,3,3],[300,4]],[[3,16,3],[1600,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	architectures = [[[3,32,5],[2048,64],[64,4]],[[3,16,3],[1600,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
