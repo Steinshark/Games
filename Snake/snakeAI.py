@@ -212,6 +212,7 @@ class SnakeGame:
 		game_running = True
 		eaten_since = 0
 		lived = 0
+		self.prev_frame = self.get_state_vector()
 		#Game display
 		if visible:
 			pygame.init()
