@@ -1,4 +1,4 @@
-#include <iostream>
+    #include <iostream>
 #include <vector>
 #include <math.h>
 #include <string>
@@ -63,7 +63,7 @@ void initOpenGL(int* argc,char** argv){
     //Start main loop
 
     glMatrixMode(GL_PROJECTION);
-    gluOrtho2D(0,400,0,500);
+    gluOrtho2D(-1,-1,1,1);
     glutMainLoop();
 }
 
@@ -84,11 +84,11 @@ void updateFood(Coordinate* newFood){
 void draw(){
     cout << "Drawing frame " << GLOBAL_FRAME_COUNT++ << endl;
 
+    glColor3f(1,1,1);
     glBegin(GL_TRIANGLES);
-    glColor3f(0.1, 0.2, 0.3);
-    glVertex3f(0, 0, 0);
-    glVertex3f(1, 0, 0);
-    glVertex3f(0, 1, 0);
+    glVertex2f(1, 0);
+    glVertex2f(-1, 0);
+    glVertex2f(0, 1);
     glEnd();
 
     cout << "\tfinished drawing" << endl;

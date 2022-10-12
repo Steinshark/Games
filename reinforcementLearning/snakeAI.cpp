@@ -30,30 +30,10 @@ void runTrainingIterations(int iters){
 
 
 int main(int argc,char* argv[]){
-	//initOpenGL(&argc, argv);
+	initOpenGL(&argc, argv);
 
 	//temp 
 
 	//height 
-	const char a[] = "312ft 12in\n";
-
-	char temp[strlen(a)];
-
-	int i = 0;
-	int insert = 0;
-	for(i = 0; i < strlen(a) && a[i] != 'f';i++){
-		temp[insert] = a[i];
-		insert++;
-	}
-	while(a[i] != ' '){
-		i++;
-	}
-	i++;
-	temp[++insert] = 97;
-	for(;i < strlen(a) && a[i] != 'i';i++){
-		temp[insert] = a[i];
-		insert++;
-	}
-	temp[insert+1] = 0;
-	cout << temp << endl;	
+	
 	}

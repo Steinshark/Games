@@ -3,12 +3,14 @@
 #include <math.h>
 #include <string>
 
+//Graphics libraries 
 #include <GL/gl.h>
 #include <GL/glut.h>
 #include <GL/glu.h>
 
-
 using namespace std;
+
+
 
 enum Direction{UP,DOWN,LEFT,RIGHT};
 enum GameState{LOSE,EAT,MOVE};
