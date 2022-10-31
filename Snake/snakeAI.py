@@ -22,17 +22,17 @@ from tkinter import scrolledtext as tk_st
 
 class SnakeGame:
 
-	def __init__(self,w,h,fps=30,device=torch.device('cuda'),encoding_type="CNN"):
+	def __init__(self,w,h,fps=30,device=torch.device('cpu'),encoding_type="CNN"):
 		self.width = w
 		self.height = h
 
 		self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
-
+		self.prev_food = self.food
 		while self.food == (0,0):
 				self.food = (randint(0,self.width - 1),randint(0,self.height - 1))
 
 		self.snake = [[randint(0,self.width - 1),randint(0,self.height - 1)]]
-
+		self.prev_snake = self.snake
 		self.colors = {"FOOD" : (255,20,20),"SNAKE" : (20,255,20)}
 
 		self.frame_time = 1 / fps
@@ -203,7 +203,7 @@ class SnakeGame:
 	def train_on_game(self,model,visible=True,epsilon=.2):
 		window_x, window_y = (600,600)
 		experiences = []
-		rewards = {"die":-2,"food":2,"live":-.05,"idle":0}
+		rewards = {"die":-2,"food":2,"live":-.1,"idle":0}
 		score = 0
 		#setup
 		assert model is not None
@@ -225,7 +225,9 @@ class SnakeGame:
 			#Get init states
 			input_vector = self.get_state_vector()
 			old_dir = self.direction
-
+			self.prev_snake = self.snake
+			self.prev_food = self.food
+			
 			#Update move randomly  
 			if random.random() < epsilon:
 				while self.direction == old_dir:
@@ -277,6 +279,7 @@ class SnakeGame:
 				reward = rewards['live']
 
 			#Add to experiences
+			
 			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
 
 			eaten_since += 1
@@ -323,10 +326,40 @@ class SnakeGame:
 			#input(xcl[0].shape)
 			return enc_vectr
 
+		elif self.encoding_type == "six_channel":
+			enc_vectr = torch.zeros((6,self.height,self.width))
+			flag= False 
+
+			#Old SNAKE
+			#Place head (ch0)
+			enc_vectr[0][self.prev_snake[0][1]][self.prev_snake[0][0]] = 1
+			#Place body (ch1)
+			for pos in self.prev_snake[1:]:
+				x = pos[0] 
+				y = pos[1]
+				enc_vectr[1][y][x] = 1
+			#Place food (ch2)
+			enc_vectr[2][self.prev_food[1]][self.prev_food[0]] = 1
+
+			#Cur SNAKE
+			#Place head (ch3)
+			enc_vectr[3][self.prev_snake[0][1]][self.prev_snake[0][0]] = 1
+			#Place body (ch4)
+			for pos in self.prev_snake[1:]:
+				x = pos[0] 
+				y = pos[1]
+				enc_vectr[4][y][x] = 1
+			#Place food (ch5)
+			enc_vectr[5][self.prev_food[1]][self.prev_food[0]] = 1
+			
+			enc_vectr.to(self.device)
+			return enc_vectr
+
 		elif self.encoding_type == "one_hot":
 			#Build x by y vector for snake
 			snake_body = [[0 for x in range(self.width)] for y in range(self.height)]
 			snake_head = [[0 for x in range(self.width)] for y in range(self.height)]
+			
 			#Head of snake == 1
 			snake_head[self.snake[0][1]][self.snake[0][0]] = 1
 
@@ -334,19 +367,24 @@ class SnakeGame:
 			for piece in self.snake[1:]:
 				snake_body[piece[1]][piece[0]] = 1
 
-			#Build x by y vector for food placement
-			food_placement = [[0 for x in range(self.height)] for y in range(self.width)]
+			#Food 
+			food_placement = [[0 for x in range(self.width)] for y in range(self.height)]
 			food_placement[self.food[1]][self.food[0]] = 1
+
 			input_vector = snake_head + snake_body + food_placement
 		#Translate to numpy and flatten
 		np_array = np.ndarray.flatten(np.array(input_vector))
+		
 		#Translate to tensor
+		tensr = torch.tensor(np_array,dtype=torch.float,device=self.device) 
+		input(tensr.shape)
+		input(f"tensr was this:\n{tensr}")
 		return torch.tensor(np_array,dtype=torch.float,device=self.device)
 
 
 class Trainer:
 
-	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="E:\code\Scratch\models",fps=200,loss_fn=torch.optim.Adam,optimizer_fn=nn.MSELoss,lr=1e-6,wd=1e-6,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=True,epsilon=.2,m_type="FCN"):
+	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="models",fps=200,loss_fn=torch.optim.Adam,optimizer_fn=nn.MSELoss,lr=1e-6,wd=1e-6,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2,m_type="FCN"):
 		self.PATH = PATH
 		self.fname = name
 		self.m_type = m_type
@@ -535,7 +573,8 @@ class Trainer:
 				chosen_action = [self.movement_repr_tuples.index(exp['a']) for exp in batch]
 
 				# prepare for the adjusted values
-				vals_target_adjusted = torch.clone(predictions)
+				vals_target_adjusted = torch.zeros((batch_size,4))
+				#input(f"init vta with size {vals_target_adjusted}")
 
 				#Apply Bellman
 				for index,action in enumerate(chosen_action):
@@ -550,6 +589,7 @@ class Trainer:
 
 					#Update with corrected value
 					vals_target_adjusted[index,action] = target
+					#input(f"target adj is now {vals_target_adjusted}")
 
 				#Calculate error
 				for param in self.learning_model.parameters():
@@ -563,10 +603,10 @@ class Trainer:
 				self.learning_model.optimizer.step()
 
 			if early_stopping and c_loss > prev_loss:
-				if verbose and print(f"] - early stopped on {epoch_i} at loss={c_loss} in {(time.time()-t0):.2f}"): pass
+				if verbose and print(f"] - early stopped on {epoch_i} at loss={c_loss} in {(time.time()-t0):.2f}s"): pass
 				break
 			prev_loss = c_loss
-			if verbose and print(f"] loss: {c_loss} in {(time.time()-t0):.2f}"): pass
+			if verbose and print(f"] loss: {c_loss:.4f} in {(time.time()-t0):.2f}"): pass
 		if verbose:
 			print("\n\n\n")
 
@@ -598,8 +638,6 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 		traceback.print_exception(e)
 
 	return {"time":time.time()-t1,"loss_fn":str(loss_fn),"optimizer_fn":str(optimizer_fn),"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores}
-
-
 
 
 class GuiTrainer(Trainer):
@@ -634,10 +672,10 @@ class GuiTrainer(Trainer):
 
 		
 
-if __name__ == "__main__":
-	#trainer = Trainer(10,10,visible=False,loading=False,PATH="models",architecture=[[3,32,5],[2048,64],[64,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.00005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN")
-	#trainer.train(episodes=1e5 ,train_every=1024,replay_buffer=4096*4,sample_size=1024*2,batch_size=32,epochs=1,transfer_models_every=2048)
-	#exit()
+if __name__ == "__main__" and True :
+	trainer = Trainer(10,10,visible=True,loading=False,PATH="models",architecture=[[3,32,5],[32,16,5],[576,64],[64,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.00005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN")
+	trainer.train(episodes=1e5 ,train_every=1024,replay_buffer=4096*4,sample_size=1024,batch_size=4,epochs=1,transfer_models_every=2048)
+	exit()
 	loss_fns = [torch.nn.MSELoss,torch.nn.HuberLoss]
 	optimizers = [torch.optim.RMSprop]
 
@@ -688,3 +726,15 @@ if __name__ == "__main__":
 			print(f"ran in {(time.time()-t0):.2f}s")
 		except Exception as e:
 			print("aborting")
+
+if __name__ == "__main__" and True :
+	exit()
+	w = 8 
+	h = 8 
+	network = networks.ConvolutionalNetwork([[6,16,5],[16,8,3],[128,4]])
+	network.optimizer = torch.optim.SGD(network.parameters,lr=.005)
+	exps = {}
+	
+	for i in range(1000):
+		g = SnakeGame(w,h)
+		g.train_on_game(network,visible=True)

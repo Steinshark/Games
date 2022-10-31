@@ -1,4 +1,5 @@
 from platform import architecture
+from typing import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -83,17 +84,19 @@ class ConvolutionalNetwork(nn.Module):
 	
 	def __init__(self,channels,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
 		super(ConvolutionalNetwork,self).__init__()
-		self.model = nn.Sequential()
+		self.model = []
 		switched = False 
 		self.input_shape = input_shape
 
 		self.activation = {	"relu" : nn.LeakyReLU,
 							"sigmoid" : nn.Sigmoid}
+
 		for i,layer in enumerate(architecture):
 			if len(layer) == 3:
 				in_c,out_c,kernel = layer[0],layer[1],layer[2]
 				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=1))
 				self.model.append(self.activation['relu'](.2))
+				
 			else:
 				in_size, out_size = layer[0],layer[1]
 				if not switched:
@@ -102,9 +105,12 @@ class ConvolutionalNetwork(nn.Module):
 				self.model.append(nn.Linear(in_size,out_size))
 				if not i == len(architecture)-1 :
 					self.model.append(self.activation['relu'](.2))
+
+
+		o_d = OrderedDict({str(i) : n for i,n in enumerate(self.model)})
+		self.model = nn.Sequential(o_d)
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
-
 	def train(self,x_input,y_actual,epochs=10):
 
 		#Run epochs
@@ -125,6 +131,28 @@ class ConvolutionalNetwork(nn.Module):
 		if len(x.shape) == 3:
 			x = torch.reshape(x,self.input_shape)
 		return self.model(x)
+
+
+
+class ConvNet(nn.Module):
+	def __init__(self,architecture,loss_fn=nn.MSELoss,optimizer=torch.optim.SGD,lr=.005):
+		self.layers = {}
+
+		for l in architecture:
+			#Add Conv2d layers
+			if len(l) == 3:
+				in_c,out_c,kernel_size = l[0],l[1],l[2]
+				self.layers.append(len(self.layers),nn.Conv2d(in_c,out_c,kernel_size))
+				self.layers.append(nn.ReLU())
+			#Add Linear layers
+			elif len(l) == 2:
+				in_dim,out_dim = l[0],l[1]
+				self.layers[len(self.layers) : nn.Linear(in_dim,out_dim)]
+				if not l == architecture[-1]:
+					self.layers.append(nn.ReLU())
+		
+		self.loss = loss_fn()
+
 
 if __name__ == "__main__":
 	function = lambda x : math.sin(x*.01) + 4
