@@ -1,0 +1,173 @@
+from platform import architecture
+from typing import runtime_checkable
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+import random
+
+class FullyConnectedNetwork(nn.Module):
+	def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[32,8]):
+		super(FullyConnectedNetwork,self).__init__()
+
+		self.model = [nn.Linear(input_size,architecture[0])]
+		self.model.append(nn.ReLU())
+
+		for i,size in enumerate(architecture[:-1]):
+
+			self.model.append(nn.Linear(size,architecture[i+1]))
+			self.model.append(nn.ReLU())
+		self.model.append(nn.Linear(architecture[-1],output_size))
+		self.model = nn.Sequential(*self.model)
+		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr,weight_decay=wd)
+		self.loss = loss_fn()
+
+	def train(self,x_input,y_actual,epochs=1000,verbose=False,show_steps=10,batch_size="online",show_graph=False):
+		memory = 3
+		prev_loss = 10000000000000000
+		losses = []
+		bad_count = 0
+		if type(batch_size) is str:
+			batch_size = len(y_actual)
+
+		if verbose:
+			print(f"Training on dataset shape:\t f{x_input.shape} -> {y_actual.shape}")
+			print(f"batching size:\t{batch_size}")
+
+		#Create the learning batches
+		dataset = torch.utils.data.TensorDataset(x_input,y_actual)
+		dataloader = torch.utils.data.DataLoader(dataset,batch_size=batch_size,shuffle=True)
+
+
+		for i in range(epochs):
+			#Track loss avg in batch
+			avg_loss = 0
+
+			for batch_i, (x,y) in enumerate(dataloader):
+
+				#Find the predicted values
+				batch_prediction = self.forward(x)
+				#Calculate loss
+				loss = self.loss(batch_prediction,y)
+				avg_loss += loss
+				#Perform grad descent
+				self.optimizer.zero_grad()
+				loss.backward()
+				self.optimizer.step()
+			avg_loss = avg_loss / batch_i 			# Add losses to metric's list
+			losses.append(avg_loss.cpu().detach().numpy())
+
+			#Check for rising error
+			if prev_loss < avg_loss:
+				prev_loss = avg_loss
+
+				bad_count += 1
+				if bad_count >= 8:
+					print(f"broke on epoch {i}")
+					if show_graph:
+						plt.plot(losses)
+						plt.show()
+					return losses
+
+			else:
+				bad_count = 0
+				prev_loss = avg_loss
+
+			#Check for verbosity
+			if verbose and i % show_steps == 0:
+				print(f"loss on epoch {i}: {str(loss.item()).ljust(30)}")
+
+		if show_graph:
+			plt.plot(losses)
+			plt.show()
+		return losses
+
+
+	def forward(self,x_list):
+		return self.model(x_list)
+		#	y_predicted.append(y_pred.cpu().detach().numpy())
+
+
+class ConvolutionalNetwork(nn.Module):
+	
+	def __init__(self,channels,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[[3,2,5]],input_shape=(1,3,30,20)):
+		super(ConvolutionalNetwork,self).__init__()
+		self.model = []
+		switched = False 
+		self.input_shape = input_shape
+
+		self.activation = {	"relu" : nn.LeakyReLU,
+							"sigmoid" : nn.Sigmoid}
+		for i,layer in enumerate(architecture):
+			if len(layer) == 3:
+				in_c,out_c,kernel = layer[0],layer[1],layer[2]
+				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=1))
+				self.model.append(self.activation['relu'](.2))
+			else:
+				in_size, out_size = layer[0],layer[1]
+				if not switched:
+					self.model.append(nn.Flatten(1))
+					switched = True 
+				self.model.append(nn.Linear(in_size,out_size))
+				if not i == len(architecture)-1 :
+					self.model.append(self.activation['relu'](.2))
+		self.model = nn.Sequential(*self.model)
+		self.loss = loss_fn()
+		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
+
+	def train(self,x_input,y_actual,epochs=10):
+
+		#Run epochs
+		for i in range(epochs):
+
+			#Predict on x : M(x) -> y
+			y_pred = self.model(x_input)
+			#Find loss  = y_actual - y
+			loss = self.loss_function(y_pred,y_actual)
+			print(f"epoch {i}:\nloss = {loss}")
+
+			#Update network
+			self.optimizer.zero_grad()
+			loss.backward()
+			self.optimizer.step()
+
+	def forward(self,x):
+		if len(x.shape) == 3:
+			x = torch.reshape(x,self.input_shape)
+		return self.model(x)
+
+
+
+if __name__ == "__main__":
+	function = lambda x : math.sin(x*.01) + 4
+	x_fun = lambda x : [x, x**2, 1 / (x+.00000001), math.sin(x * .01)]
+	x_train = torch.tensor([[x] for x in range(2000) if random.randint(0,100) < 80],dtype=torch.float)
+	x_train1 =  torch.tensor([x_fun(x) for x in range(2000) if random.randint(0,100) < 80],dtype=torch.float)
+	y_train = torch.tensor([[function(x[0])] for x in x_train1],dtype=torch.float)
+
+	#print(x_train.shape)
+	#print(y_train.shape)
+	#plt.scatter(x_train,y_train)
+	#plt.show()
+	print("Prelim dataset")
+
+	model = FullyConnectedNetwork(len(x_train1[0]))
+	model.train(x_train1,y_train)
+
+
+
+	x_pred = torch.tensor([[x] for x in range(2000) if random.randint(0,100) < 20],dtype=torch.float)
+	x_pred1 = torch.tensor([x_fun(x) for x in range(2000) if random.randint(0,100) < 20],dtype=torch.float)
+
+	y_actual = torch.tensor([[function(x[0])] for x in x_pred1],dtype=torch.float)
+
+
+	y_pred = model.forward(x_pred1).cpu().detach().numpy()
+
+	plt.scatter([i for i in range(len(x_pred1))],y_actual)
+	plt.scatter([i for i in range(len(x_pred1))],y_pred)
+	plt.show()
+	print("model output")
