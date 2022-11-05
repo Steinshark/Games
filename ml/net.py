@@ -25,7 +25,7 @@ class FullyConnectedNetwork(nn.Module):
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr,weight_decay=wd)
 		self.loss = loss_fn()
 
-	def train(self,x_input,y_actual,epochs=1000,verbose=False,show_steps=10,batch_size="online",show_graph=False):
+	def train(self,x_input,y_actual,epochs=1000,verbose=False,show_steps=10,batch_size="online",show_graph=False,callback_on=3):
 		memory = 3
 		prev_loss = 10000000000000000
 		losses = []
@@ -65,8 +65,8 @@ class FullyConnectedNetwork(nn.Module):
 				prev_loss = avg_loss
 
 				bad_count += 1
-				if bad_count >= 8:
-					print(f"broke on epoch {i}")
+				if bad_count >= callback_on:
+					print(f"broke on epoch {i}\n\n")
 					if show_graph:
 						plt.plot(losses)
 						plt.show()
@@ -78,7 +78,7 @@ class FullyConnectedNetwork(nn.Module):
 
 			#Check for verbosity
 			if verbose and i % show_steps == 0:
-				print(f"loss on epoch {i}: {str(loss.item()).ljust(30)}")
+				print(f"{f'loss on epoch {i}'.ljust(20)}: {str(loss.item()).ljust(30)}")
 
 		if show_graph:
 			plt.plot(losses)
