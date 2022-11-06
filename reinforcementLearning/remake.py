@@ -249,6 +249,9 @@ def train_model(experiences,model,batch_size=16,pool_size=128):
 
         next_state_predictions = model.forward(s_prime_states)
         next_state_rewards = [torch.argmax(t) for t in next_state_predictions]
+
+        
+        
         #Bellman Eq + final state check 
         final_eval = torch.clone(next_moves)
 
