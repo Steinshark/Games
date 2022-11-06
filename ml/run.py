@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     
     batches = [1,16,128,512]
-    callbacks = [3,10]
+    callbacks = [3,5]
     lrates = [.001,.0001,.00001,.000001]
     losses = {}
     for b in batches:
@@ -65,7 +65,7 @@ if __name__ == "__main__":
             for c in callbacks:
                 print(f"testing config: {(b,l,c)}")
                 network = FullyConnectedNetwork(len(dataset["x"][0]),1,loss_fn= nn.MSELoss,optimizer_fn=torch.optim.Adam ,lr=l,architecture=[128,64,8])
-                loss = network.train(train_data["x"],train_data["y"],epochs=10000,verbose=True,show_steps=10,batch_size=b,show_graph=False,callback_on=c)
+                loss = network.train(train_data["x"],train_data["y"],epochs=1000,verbose=True,show_steps=10,batch_size=b,show_graph=False,callback_on=c)
                 res = network.forward(test_data["x"])
                 diff = network.loss(res,test_data["y"])
                 losses[str((b,l,c))] = torch.sqrt(diff).item() 

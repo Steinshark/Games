@@ -47,7 +47,6 @@ class FullyConnectedNetwork(nn.Module):
 			avg_loss = 0
 
 			for batch_i, (x,y) in enumerate(dataloader):
-
 				#Find the predicted values
 				batch_prediction = self.forward(x)
 				#Calculate loss
@@ -78,7 +77,7 @@ class FullyConnectedNetwork(nn.Module):
 
 			#Check for verbosity
 			if verbose and i % show_steps == 0:
-				print(f"{f'loss on epoch {i}'.ljust(20)}: {str(loss.item()).ljust(30)}")
+				print(f"{f'loss on epoch {i:.4f}'.ljust(20)}: {str(loss.item()).ljust(30)}")
 
 		if show_graph:
 			plt.plot(losses)
