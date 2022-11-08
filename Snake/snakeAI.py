@@ -44,7 +44,6 @@ class SnakeGame:
 		self.data = []
 		self.encoding_type=encoding_type
 		
-
 	def play_game(self,window_x,window_y,training_match=True,model=None):
 
 
@@ -74,7 +73,6 @@ class SnakeGame:
 			t_start = time.time()
 			keys = pygame.key.get_pressed()
 			f_time = t_start - time.time()
-
 			#Draw snake and food
 			if training_match:
 				self.update_movement()
@@ -235,8 +233,8 @@ class SnakeGame:
 					y = int(x == 0) * random.sample([1,-1],1)[0]
 					self.direction = (x,y)
 			else:
-				#torch.reshape(input_vector.to(self.device),(1,3,self.width,self.height))
-				movement_values = model.forward(input_vector.to(self.device))
+				input_vector = torch.reshape(input_vector,(1,6,self.height,self.width))
+				movement_values = model.forward(input_vector)
 				try:
 					w,s,a,d = movement_values.cpu().detach().numpy()
 				except ValueError:
@@ -322,11 +320,10 @@ class SnakeGame:
 			#for x,y in [(i%self.width,int(i/self.height)) for i in range(self.width*self.height)]:
 			#	enc_vectr += [int((x,y) == self.snake[0]), int((x,y) in self.snake[1:]),int((x,y) == self.food)]
 			enc_vectr = torch.reshape(torch.tensor(np.array(enc_vectr),dtype=torch.float,device=self.device),(3,self.width,self.height))
-			enc_vectr.to(self.device)
 			#input(xcl[0].shape)
 			return enc_vectr
 
-		elif self.encoding_type == "six_channel":
+		elif self.encoding_type == "6_channel":
 			enc_vectr = torch.zeros((6,self.height,self.width))
 			flag= False 
 
@@ -352,8 +349,8 @@ class SnakeGame:
 			#Place food (ch5)
 			enc_vectr[5][self.prev_food[1]][self.prev_food[0]] = 1
 			
-			enc_vectr.to(self.device)
-			return enc_vectr
+			ret =  torch.reshape(enc_vectr,(6,self.height,self.width))
+			return ret
 
 		elif self.encoding_type == "one_hot":
 			#Build x by y vector for snake
@@ -377,8 +374,6 @@ class SnakeGame:
 		
 		#Translate to tensor
 		tensr = torch.tensor(np_array,dtype=torch.float,device=self.device) 
-		input(tensr.shape)
-		input(f"tensr was this:\n{tensr}")
 		return torch.tensor(np_array,dtype=torch.float,device=self.device)
 
 
@@ -399,7 +394,7 @@ class Trainer:
 			self.input_shape = (1,3,game_w,game_h)
 			self.target_model 	= networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.learning_model = networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)	
-			self.encoding_type = "3_channel"
+			self.encoding_type = "6_channel"
 
 		self.w = game_w
 		self.h = game_h
@@ -558,11 +553,10 @@ class Trainer:
 			for i,batch in enumerate(batches):
 
 				#Get a list (tensor) of all initial game states
-				initial_states = torch.stack(([exp['s'] for exp in batch]))
-
+				initial_states = torch.stack(([torch.reshape(exp['s'],(6,self.h,self.w)) for exp in batch]))
+				#input(f"shape of one is {initial_states[0].shape}")
 				#Make predictions of current states
 				predictions = self.learning_model(initial_states)
-
 				#Print progress of epoch
 				if verbose:
 					while (i / len(batches)) > next_percent:
@@ -584,7 +578,7 @@ class Trainer:
 						target = batch[index]['r']
 					# If not terminal, use Bellman Equation
 					else:
-						next_state_val = torch.max(self.target_model(batch[index]['s`']))
+						next_state_val = torch.max(self.target_model(torch.reshape(batch[index]['s`'],(1,6,self.h,self.w))))
 						target = batch[index]['r'] + (self.gamma * next_state_val)
 
 					#Update with corrected value
@@ -673,10 +667,10 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__" and True :
-	trainer = Trainer(10,10,visible=True,loading=False,PATH="models",architecture=[[3,32,5],[32,16,5],[576,64],[64,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.00005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN")
-	trainer.train(episodes=1e5 ,train_every=1024,replay_buffer=4096*4,sample_size=1024,batch_size=4,epochs=1,transfer_models_every=2048)
-	exit()
-	loss_fns = [torch.nn.MSELoss,torch.nn.HuberLoss]
+	#trainer = Trainer(10,10,visible=True,loading=False,PATH="models",architecture=[[6,32,5],[32,16,5],[576,64],[64,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.00005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN",gpu_acceleration=False)
+	#trainer.train(episodes=1e5 ,train_every=1024,replay_buffer=4096*4,sample_size=1024,batch_size=4,epochs=1,transfer_models_every=2048)
+	#exit()
+	loss_fns = [torch.nn.MSELoss]#,torch.nn.HuberLoss]
 	optimizers = [torch.optim.RMSprop]
 
 	learning_rates = [1e-3,1e-6]
@@ -684,13 +678,13 @@ if __name__ == "__main__" and True :
 
 	gamma = [.99]
 	epsilon=[.3]
-	train_every = [32,128,1024]
-	replay_buffer =[4096,16384*4]
+	train_every = [1024]
+	replay_buffer =[16384]
 	sample_size = [512,2048]
-	batch_sizes = [4,32]
-	epochs = [1]
+	batch_sizes = [1,4,32]
+	epochs = [1,4]
 	w_d = [0]
-	architectures = [[[3,32,5],[2048,64],[64,4]],[[3,16,3],[1600,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	architectures = [[[6,32,5],[1152,64],[64,4]],[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
@@ -709,13 +703,13 @@ if __name__ == "__main__" and True :
 														if r < s or r < b or s < b:
 															pass
 														else:
-															args.append((i,10,10,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
+															args.append((i,8,8,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
 	random.shuffle(args)
-	with Pool(8) as p:
+	with Pool(6) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)

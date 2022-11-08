@@ -111,7 +111,7 @@ class ConvolutionalNetwork(nn.Module):
 		self.model = nn.Sequential(o_d)
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
-	def train(self,x_input,y_actual,epochs=10):
+	def train(self,x_input,y_actual,epochs=10,in_shape=(1,6,10,10)):
 
 		#Run epochs
 		for i in range(epochs):
@@ -128,8 +128,10 @@ class ConvolutionalNetwork(nn.Module):
 			self.optimizer.step()
 
 	def forward(self,x):
-		if len(x.shape) == 3:
-			x = torch.reshape(x,self.input_shape)
+		#if len(x.shape) == 3:
+			#input(f"received input shape: {x.shape}")
+			#x = torch.reshape(x,self.input_shape)
+		
 		return self.model(x)
 
 
