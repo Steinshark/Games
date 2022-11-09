@@ -1,0 +1,139 @@
+starting process 31
+        31 scored 2 in 519.47s
+starting process 21
+        30 scored 2 in 700.85s
+starting process 66
+        10 scored 2 in 740.33s
+starting process 26
+        37 scored 3 in 754.03s
+starting process 70
+        21 scored 2 in 361.10s
+starting process 64
+        26 scored 2 in 495.17s
+starting process 39
+        70 scored 2 in 949.84s
+starting process 42
+        39 scored 2 in 752.44s
+starting process 27
+        42 scored 2 in 557.79s
+starting process 68
+        11 scored 3 in 2265.90s
+starting process 35
+        29 scored 2 in 2290.30s
+starting process 12
+        66 scored 2 in 2153.75s
+starting process 47
+        12 scored 2 in 715.22s
+starting process 34
+        27 scored 2 in 1143.16s
+starting process 22
+        35 scored 2 in 904.42s
+starting process 65
+        64 scored 2 in 2360.63s
+starting process 57
+        34 scored 4 in 365.94s
+starting process 53
+        22 scored 2 in 265.77s
+starting process 71
+        57 scored 2 in 621.84s
+starting process 25
+        25 scored 2 in 233.33s
+starting process 4
+        4 scored 2 in 256.96s
+starting process 5
+        5 scored 2 in 567.81s
+starting process 56
+        71 scored 3 in 2355.78s
+starting process 63
+        53 scored 2 in 2505.92s
+starting process 52
+        68 scored 2 in 3680.96s
+starting process 18
+        18 scored 2 in 431.70s
+starting process 58
+        52 scored 2 in 960.99s
+starting process 48
+        56 scored 2 in 1931.46s
+starting process 51
+        58 scored 3 in 483.65s
+starting process 61
+        61 scored 2 in 401.20s
+starting process 2
+        2 scored 3 in 866.01s
+starting process 1
+        51 scored 3 in 1383.39s
+starting process 67
+        1 scored 2 in 325.95s
+starting process 38
+        48 scored 2 in 2197.40s
+starting process 43
+        43 scored 3 in 377.60s
+starting process 49
+        67 scored 2 in 1384.41s
+starting process 46
+        63 scored 2 in 3890.92s
+starting process 59
+        47 scored 3 in 7042.42s
+starting process 20
+        65 scored 2 in 7197.77s
+starting process 8
+        38 scored 2 in 2077.38s
+starting process 16
+        20 scored 3 in 770.79s
+starting process 24
+        49 scored 2 in 1414.65s
+starting process 33
+        59 scored 2 in 1234.16s
+starting process 17
+        16 scored 2 in 387.98s
+starting process 45
+        8 scored 2 in 564.09s
+starting process 50
+        24 scored 2 in 281.81s
+starting process 55
+        33 scored 2 in 528.66s
+starting process 19
+        19 scored 2 in 326.02s
+starting process 40
+        55 scored 2 in 734.00s
+starting process 60
+        46 scored 3 in 2310.60s
+starting process 9
+        17 scored 2 in 1109.09s
+starting process 13
+        60 scored 3 in 525.20s
+starting process 44
+        40 scored 2 in 545.79s
+starting process 0
+        13 scored 2 in 542.26s
+starting process 32
+        0 scored 2 in 454.85s
+starting process 6
+        6 scored 2 in 286.99s
+starting process 28
+        9 scored 2 in 1175.87s
+starting process 62
+        44 scored 2 in 1088.84s
+starting process 23
+        28 scored 2 in 707.34s
+starting process 7
+        32 scored 2 in 1301.81s
+starting process 3
+        62 scored 2 in 784.00s
+starting process 54
+        7 scored 4 in 223.19s
+starting process 41
+        23 scored 2 in 606.34s
+        3 scored 2 in 310.64s
+        54 scored 2 in 900.75s
+starting process 15
+        41 scored 2 in 896.03s
+starting process 36
+        50 scored 2 in 3891.22s
+starting process 14
+        45 scored 2 in 3920.45s
+        15 scored 3 in 357.37s
+        14 scored 2 in 580.36s
+        36 scored 2 in 695.31s
+starting process 69
+        69 scored 3 in 580.62s

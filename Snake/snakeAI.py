@@ -528,9 +528,8 @@ class Trainer:
 		axs[1].plot([i*smooth for i in range(len(lived))],lived,label="lived for",color='cyan')
 		axs[0].legend()
 		axs[1].legend()
-		#axs[1].set_yscale("log")
-		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}")
-		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}.png",dpi=100)
+		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}")
+		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}.png",dpi=100)
 
 
 		return self.best,high_scores
@@ -674,10 +673,10 @@ if __name__ == "__main__" and True :
 	optimizers = [torch.optim.RMSprop]
 
 	learning_rates = [1e-3,1e-6]
-	episodes = 2e5
+	episodes = 1e6
 
 	gamma = [.99]
-	epsilon=[.3]
+	epsilon=[.35]
 	train_every = [1024]
 	replay_buffer =[16384]
 	sample_size = [512,2048]
@@ -707,8 +706,6 @@ if __name__ == "__main__" and True :
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
-
-	random.shuffle(args)
 	with Pool(6) as p:
 		try:
 			t0 = time.time()
