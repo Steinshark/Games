@@ -669,9 +669,9 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__" and True :
-	trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,32,5],[32,8,3],[800,32],[32,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.RMSprop,lr=.0001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	trainer.train(episodes=5e4 ,train_every=128,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=4096)
-	exit()
+	#trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,32,5],[32,8,3],[800,32],[32,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.RMSprop,lr=.0001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	#trainer.train(episodes=5e4 ,train_every=128,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=4096)
+	#exit()
 	loss_fns = [torch.nn.MSELoss,torch.nn.L1Loss,torch.nn.HuberLoss]
 	optimizers = [torch.optim.RMSprop,torch.optim.Adam]
 
