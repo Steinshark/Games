@@ -449,7 +449,7 @@ class Trainer:
 
 			#Play a game and collect the experiences
 			game = SnakeGame(self.w,self.h,fps=100000,encoding_type=self.encoding_type,device=self.device)
-			exp, score,lived_for = game.train_on_game(self.learning_model,visible=self.visible,epsilon=self.epsilon)
+			exp, score,lived_for = game.train_on_game(self.learning_model,visible=False,epsilon=self.epsilon)
 
 			scores.append(score+1)
 			lived.append(lived_for)
@@ -535,7 +535,7 @@ class Trainer:
 
 		
 		
-		return self.best,high_scores
+		return self.best,high_scores,scores,lived
 
 	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=False):
 		for epoch_i in range(epochs):	
@@ -628,12 +628,12 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 		t1 = time.time()
 		print(f"starting process {name}")
 		trainer = Trainer(width,height,visible=visible,loading=loading,PATH=path,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,name=name,gamma=gamma,architecture=architecture,epsilon=epsilon,m_type=model_type)
-		best_score,all_scores = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=False)
+		best_score,all_scores,avg_scores,lived = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=True)
 		print(f"\t{name} scored {best_score} in {(time.time()-t1):.2f}s")
 	except Exception as e:
 		traceback.print_exception(e)
 
-	return {"time":time.time()-t1,"loss_fn":str(loss_fn),"optimizer_fn":str(optimizer_fn),"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores}
+	return {"time":time.time()-t1,"loss_fn":str(loss_fn),"optimizer_fn":str(optimizer_fn),"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores,"avg_scores":avg_scores,"lived":lived}
 
 
 class GuiTrainer(Trainer):
@@ -669,27 +669,28 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__" and True :
-	#trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,32,5],[32,8,3],[800,32],[32,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.RMSprop,lr=.0001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	#trainer.train(episodes=5e4 ,train_every=128,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=4096)
+	#trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,8,3],[800,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	#trainer.train(episodes=5e4 ,train_every=32,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=512)
 	#exit()
-	loss_fns = [torch.nn.MSELoss,torch.nn.L1Loss,torch.nn.HuberLoss]
-	optimizers = [torch.optim.RMSprop,torch.optim.Adam]
+	loss_fns = [torch.nn.HuberLoss,torch.nn.MSE,torch.nn.L1Loss]
+	optimizers = [torch.optim.Adam, torch.optim.SGD,torch.optim.Adagrad	]
 
-	learning_rates = [1e-4]#,1e-4,1e-5,1e-6]
-	episodes = 2e4
+	learning_rates = [1e-3]#,1e-4,1e-5,1e-6]
+	episodes = 7.5e4
 
 	gamma = [.97]
 	epsilon=[.4]
-	train_every = [128,1024]
-	replay_buffer =[4096,16384]
-	sample_size = [256,2048]
-	batch_sizes = [16]#,4,32]
+	train_every = [128]#,1024]
+	replay_buffer =[4096]#,16384]
+	sample_size = [512]#,2048]
+	batch_sizes = [16]#2,16,32,64]#,4,32]
 	epochs = [1]
 	w_d = [0]
 	architectures = [[[6,32,5],[2048,64],[64,4]]]#,[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
+
 	for l in loss_fns:
 		for o in optimizers:
 				for y in gamma:
@@ -709,7 +710,8 @@ if __name__ == "__main__" and True :
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
-	with Pool(6) as p:
+	
+	with Pool(1) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)

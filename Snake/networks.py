@@ -106,7 +106,7 @@ class ConvolutionalNetwork(nn.Module):
 				if not i == len(architecture)-1 :
 					self.model.append(self.activation['relu']())
 
-
+		#self.model.append(nn.Softmax(1))
 		o_d = OrderedDict({str(i) : n for i,n in enumerate(self.model)})
 		self.model = nn.Sequential(o_d)
 		self.loss = loss_fn()
