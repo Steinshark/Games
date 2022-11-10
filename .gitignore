@@ -1,1 +1,5 @@
-"Snake\models\*" 
+Snake/models/*
+Snake/figs/*
+Snake\models\*
+Snake\figs\*
+
