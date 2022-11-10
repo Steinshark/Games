@@ -675,18 +675,18 @@ if __name__ == "__main__" and True :
 	loss_fns = [torch.nn.MSELoss,torch.nn.L1Loss,torch.nn.HuberLoss]
 	optimizers = [torch.optim.RMSprop,torch.optim.Adam]
 
-	learning_rates = [1e-3,1e-4,1e-5]
-	episodes = 5e4
+	learning_rates = [1e-4]#,1e-4,1e-5,1e-6]
+	episodes = 2e4
 
 	gamma = [.97]
 	epsilon=[.4]
 	train_every = [128,1024]
 	replay_buffer =[4096,16384]
 	sample_size = [256,2048]
-	batch_sizes = [1,4,32]
+	batch_sizes = [16]#,4,32]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[[6,32,5],[2048,64],[64,4]],[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	architectures = [[[6,32,5],[2048,64],[64,4]]]#,[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
@@ -709,7 +709,7 @@ if __name__ == "__main__" and True :
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
-	with Pool(4) as p:
+	with Pool(6) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)
@@ -720,15 +720,3 @@ if __name__ == "__main__" and True :
 			print(f"ran in {(time.time()-t0):.2f}s")
 		except Exception as e:
 			print("aborting")
-
-if __name__ == "__main__" and True :
-	exit()
-	w = 8 
-	h = 8 
-	network = networks.ConvolutionalNetwork([[6,16,5],[16,8,3],[128,4]])
-	network.optimizer = torch.optim.SGD(network.parameters,lr=.005)
-	exps = {}
-	
-	for i in range(1000):
-		g = SnakeGame(w,h)
-		g.train_on_game(network,visible=True)
