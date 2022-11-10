@@ -2,5 +2,9 @@ Snake/models/*
 Snake/figs/*
 Snake\models\*
 Snake\figs\*
-*.png
+*.png*
+*models*
+*experiences*
+
+
 
