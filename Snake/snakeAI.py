@@ -198,7 +198,7 @@ class SnakeGame:
 
 		self.direction = max(self.movement_choices,key=self.movement_choices.get)
 
-	def train_on_game(self,model,visible=True,epsilon=.2):
+	def train_on_game(self,model,visible=True,epsilon=.2,bad_opps=True):
 		window_x, window_y = (600,600)
 		experiences = []
 		rewards = {"die":-1,"food":1,"idle":-.1}
@@ -257,7 +257,7 @@ class SnakeGame:
 			next_head = (self.snake[0][0] + self.direction[0] , self.snake[0][1] + self.direction[1])
 
 			#Check lose
-			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake:
+			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake or (bad_opps and (old_dir[0]*-1,old_dir[1]*-1) == self.direction):
 				experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':'terminal'})
 				return experiences, score,lived
 
@@ -531,9 +531,10 @@ class Trainer:
 		axs[0].legend()
 		axs[1].legend()
 		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}")
-		fig.savefig(f"figs\{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}.png",dpi=100)
+		fig.savefig(os.path.join("figs",f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}.png"),dpi=100)
 
-
+		
+		
 		return self.best,high_scores
 
 	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=False):
@@ -671,19 +672,19 @@ if __name__ == "__main__" and True :
 	trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,32,5],[32,8,3],[800,32],[32,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.RMSprop,lr=.0001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
 	trainer.train(episodes=5e4 ,train_every=128,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=4096)
 	exit()
-	loss_fns = [torch.nn.MSELoss]#,torch.nn.HuberLoss]
-	optimizers = [torch.optim.RMSprop]
+	loss_fns = [torch.nn.MSELoss,torch.nn.L1Loss,torch.nn.HuberLoss]
+	optimizers = [torch.optim.RMSprop,torch.optim.Adam]
 
-	learning_rates = [1e-3,1e-6]
-	episodes = 1e6
+	learning_rates = [1e-3,1e-4,1e-5]
+	episodes = 5e4
 
-	gamma = [.99]
-	epsilon=[.35]
-	train_every = [1024]
-	replay_buffer =[16384]
-	sample_size = [512,2048]
+	gamma = [.97]
+	epsilon=[.4]
+	train_every = [128,1024]
+	replay_buffer =[4096,16384]
+	sample_size = [256,2048]
 	batch_sizes = [1,4,32]
-	epochs = [1,4]
+	epochs = [1]
 	w_d = [0]
 	architectures = [[[6,32,5],[1152,64],[64,4]],[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
