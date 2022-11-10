@@ -1,10 +1,6 @@
-Snake/models/*
-Snake/figs/*
-Snake\models\*
-Snake\figs\*
 *.png*
 *models*
 *experiences*
-
+*figs*
 
 

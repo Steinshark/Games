@@ -686,7 +686,7 @@ if __name__ == "__main__" and True :
 	batch_sizes = [1,4,32]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[[6,32,5],[1152,64],[64,4]],[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	architectures = [[[6,32,5],[2048,64],[64,4]],[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
@@ -709,7 +709,7 @@ if __name__ == "__main__" and True :
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
-	with Pool(6) as p:
+	with Pool(4) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)
