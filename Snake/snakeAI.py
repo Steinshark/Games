@@ -201,7 +201,7 @@ class SnakeGame:
 	def train_on_game(self,model,visible=True,epsilon=.2):
 		window_x, window_y = (600,600)
 		experiences = []
-		rewards = {"die":-2,"food":2,"live":-.1,"idle":0}
+		rewards = {"die":-1,"food":1,"idle":-.1}
 		score = 0
 		#setup
 		assert model is not None
@@ -257,7 +257,7 @@ class SnakeGame:
 			next_head = (self.snake[0][0] + self.direction[0] , self.snake[0][1] + self.direction[1])
 
 			#Check lose
-			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake or old_dir == self.direction:
+			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake:
 				experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':'terminal'})
 				return experiences, score,lived
 
@@ -274,7 +274,7 @@ class SnakeGame:
 			#Check No Outcome
 			else:
 				self.snake = [next_head] + self.snake[:-1]
-				reward = rewards['live']
+				reward = rewards["idle"]
 
 			#Add to experiences
 			
@@ -340,14 +340,14 @@ class SnakeGame:
 
 			#Cur SNAKE
 			#Place head (ch3)
-			enc_vectr[3][self.prev_snake[0][1]][self.prev_snake[0][0]] = 1
+			enc_vectr[3][self.snake[0][1]][self.snake[0][0]] = 1
 			#Place body (ch4)
-			for pos in self.prev_snake[1:]:
+			for pos in self.snake[1:]:
 				x = pos[0] 
 				y = pos[1]
 				enc_vectr[4][y][x] = 1
 			#Place food (ch5)
-			enc_vectr[5][self.prev_food[1]][self.prev_food[0]] = 1
+			enc_vectr[5][self.food[1]][self.food[0]] = 1
 			
 			ret =  torch.reshape(enc_vectr,(6,self.height,self.width))
 			return ret
@@ -417,6 +417,7 @@ class Trainer:
 		self.lr = lr
 		self.wd = wd
 		self.epsilon = epsilon
+		self.e_0 = self.epsilon
 		self.architecture = architecture
 		settings = {
 			"arch" : architecture,
@@ -463,11 +464,12 @@ class Trainer:
 			#If training on this episode
 			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
 				trained = True 
-				#Change epsilon
-				if (e_i/episodes) > .4 and self.epsilon > .02:
-					self.epsilon = .3 * pow(.85,(episodes/train_every))
+				#Change epsilon within window of .1 to .4 
+				if (e_i/episodes) > .1 and self.epsilon > .01:
+					e_range_percent_complete = ((e_i/episodes) - .1) / .4  
+					self.epsilon = self.e_0 - (self.e_0 * e_range_percent_complete)
 				
-				if verbose:
+				if verbose and e_i % 1024 == 0:
 					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lived[-1000:])/len(lived[-1000:]):.2f} score_avg: {sum(scores[-1000:])/len(scores[-1000:]):.2f}")
 				t0 = time.time()
 
@@ -485,7 +487,7 @@ class Trainer:
 					indices = [i for i, item in enumerate(experiences) if not item['r'] < 0]
 					quality = 100 * len(indices) / sample_size
 
-					if verbose:
+					if verbose and e_i % 1000 == 0:
 						print(f"quality of exps is {(100*quality / len(indices)):.2f}%")
 					while not len(best_sample) == sample_size:
 						if random.uniform(0,1) < .5:
@@ -503,7 +505,7 @@ class Trainer:
 								while  rand_i in blacklist:
 									rand_i = random.randint(0,len(experiences)-1)
 								best_sample.append(experiences[rand_i])
-					if verbose:
+					if verbose and e_i % 1000 == 0:
 						quality = sum(map(lambda x : int(not x['r'] in [0]),best_sample))
 						print(f"quality score {(100*quality/len(best_sample)):.2f}%")
 				else:
@@ -511,7 +513,7 @@ class Trainer:
 
 
 				#Train
-				self.train_on_experiences(best_sample,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=verbose)
+				self.train_on_experiences(best_sample,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=e_i % 1024 == 0)
 			if (e_i % transfer_models_every) == 0 and not e_i == 0 and trained:
 				self.transfer_models(transfer=True,verbose=verbose)
 
@@ -666,9 +668,9 @@ class GuiTrainer(Trainer):
 		
 
 if __name__ == "__main__" and True :
-	#trainer = Trainer(10,10,visible=True,loading=False,PATH="models",architecture=[[6,32,5],[32,16,5],[576,64],[64,4]],loss_fn=torch.nn.MSELoss ,optimizer_fn=torch.optim.RMSprop,lr=.00005,wd=0,name="CNN",gamma=.99,epsilon=.35,m_type="CNN",gpu_acceleration=False)
-	#trainer.train(episodes=1e5 ,train_every=1024,replay_buffer=4096*4,sample_size=1024,batch_size=4,epochs=1,transfer_models_every=2048)
-	#exit()
+	trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,32,5],[32,8,3],[800,32],[32,4]],loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.RMSprop,lr=.0001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	trainer.train(episodes=5e4 ,train_every=128,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=4096)
+	exit()
 	loss_fns = [torch.nn.MSELoss]#,torch.nn.HuberLoss]
 	optimizers = [torch.optim.RMSprop]
 

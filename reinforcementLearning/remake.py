@@ -173,7 +173,8 @@ class Trainer:
         for i in range(episodes):
             g = Game()
             exps += train_game(g,self.training_model)
-            
+
+
 def play_game(g,visible=(True,600,600)):
     exps = {}
 
@@ -205,6 +206,7 @@ def play_game(g,visible=(True,600,600)):
 
             print(g.get_repr("6Channel"))
 
+
 def train_game(g:Game,model:networks.ConvolutionalNetwork):
 
     pygame.init()
@@ -231,6 +233,7 @@ def train_game(g:Game,model:networks.ConvolutionalNetwork):
 
         pygame.display.flip()
     return exps
+
 
 def train_model(experiences,model,batch_size=16,pool_size=128):
     #Copy the list and shuffle it 

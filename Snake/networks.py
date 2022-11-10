@@ -88,14 +88,14 @@ class ConvolutionalNetwork(nn.Module):
 		switched = False 
 		self.input_shape = input_shape
 
-		self.activation = {	"relu" : nn.LeakyReLU,
+		self.activation = {	"relu" : nn.ReLU,
 							"sigmoid" : nn.Sigmoid}
 
 		for i,layer in enumerate(architecture):
 			if len(layer) == 3:
 				in_c,out_c,kernel = layer[0],layer[1],layer[2]
-				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=1))
-				self.model.append(self.activation['relu'](.2))
+				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=2))
+				self.model.append(self.activation['relu']())
 				
 			else:
 				in_size, out_size = layer[0],layer[1]
@@ -104,7 +104,7 @@ class ConvolutionalNetwork(nn.Module):
 					switched = True 
 				self.model.append(nn.Linear(in_size,out_size))
 				if not i == len(architecture)-1 :
-					self.model.append(self.activation['relu'](.2))
+					self.model.append(self.activation['relu']())
 
 
 		o_d = OrderedDict({str(i) : n for i,n in enumerate(self.model)})
