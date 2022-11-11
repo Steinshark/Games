@@ -633,7 +633,7 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 	except Exception as e:
 		traceback.print_exception(e)
 
-	return {"time":time.time()-t1,"loss_fn":str(loss_fn),"optimizer_fn":str(optimizer_fn),"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores,"avg_scores":avg_scores,"lived":lived}
+	return {"time":time.time()-t1,"loss_fn":str(loss_fn).split(".")[-1].split("'")[0],"optimizer_fn":str(optimizer_fn).split(".")[-1].split("'")[0],"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores,"avg_scores":avg_scores,"lived":lived}
 
 
 class GuiTrainer(Trainer):
@@ -676,7 +676,7 @@ if __name__ == "__main__" and True :
 	optimizers = [torch.optim.Adam, torch.optim.SGD,torch.optim.Adagrad	]
 
 	learning_rates = [1e-1,5e-3,1e-6]#,1e-4,1e-5,1e-6]
-	episodes = 7.5e4
+	episodes = 7.5e5
 
 	gamma = [.97]
 	epsilon=[.4]
@@ -711,7 +711,7 @@ if __name__ == "__main__" and True :
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 	
-	with Pool(1) as p:
+	with Pool(4) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)

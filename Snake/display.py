@@ -6,16 +6,38 @@ import json
 if __name__ == "__main__":
     #Grab data from file 
     f = open("saved_states.txt","r").read()
-    out_list = json.loads(f)
+    outlist = json.loads(f)
     data = {}
 
-    graph_cats = ['lr','']
+    graph_series = 'optimizer_fn'
 
+    #Unique values of the series (in one box)
+    series_vals = {l[graph_series] : None for l in outlist}
+
+    #Rows we are tracking
+    graph_rows = {'lr':0,'batch_size':0}
+    
+    #Num unique values for each row 
+    for dim in graph_rows:
+        graph_rows[dim] = {l[dim] for l in outlist}
+
+
+    row_len = max([len(k) for k in graph_rows.values()])
+
+
+    row_series = {k : {l : {i : None for i in series_vals} for l in graph_rows[k]} for k in graph_rows}
+
+    import pprint 
+    pprint.pp(row_series)
+    input()
 
     #Prep the charts
-    fig,axs = plt.subplots(2)
+    fig,axs = plt.subplots(nrows=len(graph_rows),ncols=max(graph_rows.values()))
 
-    for outcome in out_list:
+
+
+
+    for outcome in outlist:
         i = int(outcome['lr'] == 1e-6)
         axs[i].plot(outcome['avg_scores'],label=outcome['optimizer_fn'])
     
