@@ -672,10 +672,10 @@ if __name__ == "__main__" and True :
 	#trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,8,3],[800,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
 	#trainer.train(episodes=5e4 ,train_every=32,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=512)
 	#exit()
-	loss_fns = [torch.nn.HuberLoss,torch.nn.MSE,torch.nn.L1Loss]
+	loss_fns = [torch.nn.HuberLoss]#,torch.nn.MSE,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam, torch.optim.SGD,torch.optim.Adagrad	]
 
-	learning_rates = [1e-3]#,1e-4,1e-5,1e-6]
+	learning_rates = [1e-2,1e-6]#,1e-4,1e-5,1e-6]
 	episodes = 7.5e4
 
 	gamma = [.97]
@@ -683,7 +683,7 @@ if __name__ == "__main__" and True :
 	train_every = [128]#,1024]
 	replay_buffer =[4096]#,16384]
 	sample_size = [512]#,2048]
-	batch_sizes = [16]#2,16,32,64]#,4,32]
+	batch_sizes = [8]#2,16,32,64]#,4,32]
 	epochs = [1]
 	w_d = [0]
 	architectures = [[[6,32,5],[2048,64],[64,4]]]#,[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
