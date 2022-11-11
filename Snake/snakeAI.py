@@ -1,6 +1,6 @@
 from cProfile import label
-from cgi import print_exception
 from filecmp import clear_cache
+from cgi import print_exception
 from operator import le
 from turtle import back, shape
 import pygame
@@ -43,7 +43,7 @@ class SnakeGame:
 		self.device = device
 		self.data = []
 		self.encoding_type=encoding_type
-		
+
 	def play_game(self,window_x,window_y,training_match=True,model=None):
 
 
@@ -225,8 +225,8 @@ class SnakeGame:
 			old_dir = self.direction
 			self.prev_snake = self.snake
 			self.prev_food = self.food
-			
-			#Update move randomly  
+
+			#Update move randomly
 			if random.random() < epsilon:
 				while self.direction == old_dir:
 					x = random.randint(-1,1)
@@ -251,7 +251,7 @@ class SnakeGame:
 				food_rect = pygame.draw.rect(self.window,self.colors["FOOD"],pygame.Rect(x,y,square_width,square_height))
 				pygame.display.update()
 
-			#Find New Head 
+			#Find New Head
 			next_x = self.snake[0][0] + self.direction[0]
 			next_y = self.snake[0][1] + self.direction[1]
 			next_head = (self.snake[0][0] + self.direction[0] , self.snake[0][1] + self.direction[1])
@@ -277,12 +277,12 @@ class SnakeGame:
 				reward = rewards["idle"]
 
 			#Add to experiences
-			
+
 			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
 
 			eaten_since += 1
 
-			#Check if lived too long 
+			#Check if lived too long
 			if eaten_since > self.width*self.height*2:
 				reward = rewards['idle']
 				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
@@ -309,13 +309,13 @@ class SnakeGame:
 
 		elif self.encoding_type == "3_channel":
 			enc_vectr = []
-			flag= False 
+			flag= False
 			enc_vectr = [[[0 for x in range(self.width)] for y in range(self.height)] for _ in range(3)]
 			enc_vectr[0][self.snake[0][1]][self.snake[0][0]] = 1
 
 			for pos in self.snake[1:]:
-				x,y = pos 
-				enc_vectr[1][y][x] = 1 
+				x,y = pos
+				enc_vectr[1][y][x] = 1
 			enc_vectr[2][self.food[1]][self.food[0]] = 1
 			#for x,y in [(i%self.width,int(i/self.height)) for i in range(self.width*self.height)]:
 			#	enc_vectr += [int((x,y) == self.snake[0]), int((x,y) in self.snake[1:]),int((x,y) == self.food)]
@@ -325,14 +325,14 @@ class SnakeGame:
 
 		elif self.encoding_type == "6_channel":
 			enc_vectr = torch.zeros((6,self.height,self.width))
-			flag= False 
+			flag= False
 
 			#Old SNAKE
 			#Place head (ch0)
 			enc_vectr[0][self.prev_snake[0][1]][self.prev_snake[0][0]] = 1
 			#Place body (ch1)
 			for pos in self.prev_snake[1:]:
-				x = pos[0] 
+				x = pos[0]
 				y = pos[1]
 				enc_vectr[1][y][x] = 1
 			#Place food (ch2)
@@ -343,12 +343,12 @@ class SnakeGame:
 			enc_vectr[3][self.snake[0][1]][self.snake[0][0]] = 1
 			#Place body (ch4)
 			for pos in self.snake[1:]:
-				x = pos[0] 
+				x = pos[0]
 				y = pos[1]
 				enc_vectr[4][y][x] = 1
 			#Place food (ch5)
 			enc_vectr[5][self.food[1]][self.food[0]] = 1
-			
+
 			ret =  torch.reshape(enc_vectr,(6,self.height,self.width))
 			return ret
 
@@ -356,7 +356,7 @@ class SnakeGame:
 			#Build x by y vector for snake
 			snake_body = [[0 for x in range(self.width)] for y in range(self.height)]
 			snake_head = [[0 for x in range(self.width)] for y in range(self.height)]
-			
+
 			#Head of snake == 1
 			snake_head[self.snake[0][1]][self.snake[0][0]] = 1
 
@@ -364,16 +364,16 @@ class SnakeGame:
 			for piece in self.snake[1:]:
 				snake_body[piece[1]][piece[0]] = 1
 
-			#Food 
+			#Food
 			food_placement = [[0 for x in range(self.width)] for y in range(self.height)]
 			food_placement[self.food[1]][self.food[0]] = 1
 
 			input_vector = snake_head + snake_body + food_placement
 		#Translate to numpy and flatten
 		np_array = np.ndarray.flatten(np.array(input_vector))
-		
+
 		#Translate to tensor
-		tensr = torch.tensor(np_array,dtype=torch.float,device=self.device) 
+		tensr = torch.tensor(np_array,dtype=torch.float,device=self.device)
 		return torch.tensor(np_array,dtype=torch.float,device=self.device)
 
 
@@ -393,7 +393,7 @@ class Trainer:
 		elif m_type == "CNN":
 			self.input_shape = (1,3,game_w,game_h)
 			self.target_model 	= networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
-			self.learning_model = networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)	
+			self.learning_model = networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.encoding_type = "6_channel"
 
 		self.w = game_w
@@ -463,12 +463,12 @@ class Trainer:
 
 			#If training on this episode
 			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
-				trained = True 
-				#Change epsilon within window of .1 to .4 
+				trained = True
+				#Change epsilon within window of .1 to .4
 				if (e_i/episodes) > .1 and self.epsilon > .01:
-					e_range_percent_complete = ((e_i/episodes) - .1) / .4  
+					e_range_percent_complete = ((e_i/episodes) - .1) / .4
 					self.epsilon = self.e_0 - (self.e_0 * e_range_percent_complete)
-				
+
 				if verbose and e_i % 1024 == 0:
 					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lived[-1000:])/len(lived[-1000:]):.2f} score_avg: {sum(scores[-1000:])/len(scores[-1000:]):.2f}")
 				t0 = time.time()
@@ -518,27 +518,36 @@ class Trainer:
 				self.transfer_models(transfer=True,verbose=verbose)
 
 
-		#make smooth 
-
+		#Take score and lived data and shorten it
 		smooth = int(episodes / 100)
 		scores = [sum(scores[i:i+smooth])/smooth for i in range(0,int(len(scores)),smooth)]
 		lived = [sum(lived[i:i+smooth])/smooth for i in range(0,int(len(lived)),smooth)]
 
+
+		#Save a fig for results
+
+		#Top plot for avg. score, bottom plot for avg. time lived
 		fig, axs = plt.subplots(2,1)
 		fig.set_size_inches(19.2,10.8)
+
+		#Plot data
 		axs[0].plot([i*smooth for i in range(len(scores))],scores,label="scores",color='green')
 		axs[1].plot([i*smooth for i in range(len(lived))],lived,label="lived for",color='cyan')
 		axs[0].legend()
 		axs[1].legend()
 		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}")
+
+		#Save fig to figs directory
+		if not os.path.isdir("figs"):
+			os.mkdir("figs")
 		fig.savefig(os.path.join("figs",f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}.png"),dpi=100)
 
-		
-		
+
+		#Return the best score, high scores of all episode blocks, scores, and steps lived
 		return self.best,high_scores,scores,lived
 
 	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=False):
-		for epoch_i in range(epochs):	
+		for epoch_i in range(epochs):
 			t0 = time.time()
 			#Printing things
 			if verbose and print(f"EPOCH {epoch_i}:\n\t",end='training['): pass
@@ -637,9 +646,9 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 
 
 class GuiTrainer(Trainer):
-	
+
 	def __init__(self,settings_dict):
-		#Init the trainer 
+		#Init the trainer
 		super().__init__(settings_dict['w'],settings_dict['h'],
 						visible			= settings_dict['vis'],
 						loading			= settings_dict['load'],
@@ -653,7 +662,7 @@ class GuiTrainer(Trainer):
 						gamma			= settings_dict['gamma'],
 						epsilon			= settings_dict['epsilon'],
 						m_type			= settings_dict['m_type'])
-		
+
 
 		self.window = tk.Tk()
 
@@ -666,7 +675,7 @@ class GuiTrainer(Trainer):
 
 		self.window.mainloop()
 
-		
+
 
 if __name__ == "__main__" and True :
 	#trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,8,3],[800,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
@@ -676,7 +685,7 @@ if __name__ == "__main__" and True :
 	optimizers = [torch.optim.Adam, torch.optim.SGD,torch.optim.Adagrad	]
 
 	learning_rates = [1e-1,5e-3,1e-6]#,1e-4,1e-5,1e-6]
-	episodes = 7.5e5
+	episodes = 7.5e2
 
 	gamma = [.97]
 	epsilon=[.4]
@@ -710,15 +719,18 @@ if __name__ == "__main__" and True :
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
-	
-	with Pool(4) as p:
+
+	with Pool(1) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)
 			import json
-
-			with open("saved_states.txt","w") as file:
+			fname = os.path.join("sessions","saved_states.txt")
+			if len(sys.argv) > 1:
+			    fname = os.path.join("sessions",sys.argv[1])
+			with open(fname,"w") as file:
 				file.write(json.dumps(results))
 			print(f"ran in {(time.time()-t0):.2f}s")
 		except Exception as e:
 			print("aborting")
+			traceback.print_exception(e)
