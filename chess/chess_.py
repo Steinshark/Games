@@ -610,6 +610,8 @@ class QLearning:
     def run_model(self,i,e,s,output=None):
         t = threading.Thread(target=self.train_model,args=[i],kwargs={"exp_replay":e,"simul":s,"output":output})
         t.start()
+
+
 if __name__ == "__main__":  
     q = QLearning()
     #q.run_as_ui()

@@ -1,5 +1,5 @@
 from platform import architecture
-from typing import OrderedDict
+from typing import runtime_checkable
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,25 +10,26 @@ import math
 import random
 
 class FullyConnectedNetwork(nn.Module):
-	def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[512,32,16]):
+	def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[32,8]):
 		super(FullyConnectedNetwork,self).__init__()
 
-		self.model = nn.Sequential(nn.Linear(input_size,architecture[0]))
-		self.model.append(nn.LeakyReLU(.5))
+		self.model = [nn.Linear(input_size,architecture[0])]
+		self.model.append(nn.ReLU())
 
 		for i,size in enumerate(architecture[:-1]):
 
 			self.model.append(nn.Linear(size,architecture[i+1]))
-			self.model.append(nn.LeakyReLU(.5))
+			self.model.append(nn.ReLU())
 		self.model.append(nn.Linear(architecture[-1],output_size))
-		self.model.append(nn.Softmax(dim=0))
+		self.model = nn.Sequential(*self.model)
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr,weight_decay=wd)
 		self.loss = loss_fn()
 
-	def train(self,x_input,y_actual,epochs=1000,verbose=False,show_steps=10,batch_size="online",show_graph=False):
+	def train(self,x_input,y_actual,epochs=1000,verbose=False,show_steps=10,batch_size="online",show_graph=False,callback_on=3):
 		memory = 3
-		prev_loss = [100000000 for x in range(memory)]
+		prev_loss = 10000000000000000
 		losses = []
+		bad_count = 0
 		if type(batch_size) is str:
 			batch_size = len(y_actual)
 
@@ -46,7 +47,6 @@ class FullyConnectedNetwork(nn.Module):
 			avg_loss = 0
 
 			for batch_i, (x,y) in enumerate(dataloader):
-
 				#Find the predicted values
 				batch_prediction = self.forward(x)
 				#Calculate loss
@@ -60,19 +60,29 @@ class FullyConnectedNetwork(nn.Module):
 			losses.append(avg_loss.cpu().detach().numpy())
 
 			#Check for rising error
-			if not False in [prev_loss[x] > prev_loss[x+1] for x in range(len(prev_loss)-1)]:
-				print(f"broke on epoch {i}")
-				break
+			if prev_loss < avg_loss:
+				prev_loss = avg_loss
+
+				bad_count += 1
+				if bad_count >= callback_on:
+					print(f"broke on epoch {i}\n\n")
+					if show_graph:
+						plt.plot(losses)
+						plt.show()
+					return losses
+
 			else:
-				prev_loss = [avg_loss] + [prev_loss[x+1] for x in range(len(prev_loss)-1)]
+				bad_count = 0
+				prev_loss = avg_loss
 
 			#Check for verbosity
 			if verbose and i % show_steps == 0:
-				print(f"loss on epoch {i}:\t{loss}")
+				print(f"{f'loss on epoch {i:.4f}'.ljust(20)}: {str(loss.item()).ljust(30)}")
 
 		if show_graph:
 			plt.plot(losses)
 			plt.show()
+		return losses
 
 
 	def forward(self,x_list):
@@ -82,21 +92,19 @@ class FullyConnectedNetwork(nn.Module):
 
 class ConvolutionalNetwork(nn.Module):
 	
-	def __init__(self,channels,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
+	def __init__(self,channels,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[[3,2,5]],input_shape=(1,3,30,20)):
 		super(ConvolutionalNetwork,self).__init__()
 		self.model = []
 		switched = False 
 		self.input_shape = input_shape
 
-		self.activation = {	"relu" : nn.ReLU,
+		self.activation = {	"relu" : nn.LeakyReLU,
 							"sigmoid" : nn.Sigmoid}
-
 		for i,layer in enumerate(architecture):
 			if len(layer) == 3:
 				in_c,out_c,kernel = layer[0],layer[1],layer[2]
-				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=2))
-				self.model.append(self.activation['relu']())
-				
+				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=1))
+				self.model.append(self.activation['relu'](.2))
 			else:
 				in_size, out_size = layer[0],layer[1]
 				if not switched:
@@ -104,14 +112,12 @@ class ConvolutionalNetwork(nn.Module):
 					switched = True 
 				self.model.append(nn.Linear(in_size,out_size))
 				if not i == len(architecture)-1 :
-					self.model.append(self.activation['relu']())
-
-		#self.model.append(nn.Softmax(1))
-		o_d = OrderedDict({str(i) : n for i,n in enumerate(self.model)})
-		self.model = nn.Sequential(o_d)
+					self.model.append(self.activation['relu'](.2))
+		self.model = nn.Sequential(*self.model)
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
-	def train(self,x_input,y_actual,epochs=10,in_shape=(1,6,10,10)):
+
+	def train(self,x_input,y_actual,epochs=10):
 
 		#Run epochs
 		for i in range(epochs):
@@ -128,32 +134,10 @@ class ConvolutionalNetwork(nn.Module):
 			self.optimizer.step()
 
 	def forward(self,x):
-		#if len(x.shape) == 3:
-			#input(f"received input shape: {x.shape}")
-			#x = torch.reshape(x,self.input_shape)
-		
+		if len(x.shape) == 3:
+			x = torch.reshape(x,self.input_shape)
 		return self.model(x)
 
-
-
-class ConvNet(nn.Module):
-	def __init__(self,architecture,loss_fn=nn.MSELoss,optimizer=torch.optim.SGD,lr=.005):
-		self.layers = {}
-
-		for l in architecture:
-			#Add Conv2d layers
-			if len(l) == 3:
-				in_c,out_c,kernel_size = l[0],l[1],l[2]
-				self.layers.append(len(self.layers),nn.Conv2d(in_c,out_c,kernel_size))
-				self.layers.append(nn.ReLU())
-			#Add Linear layers
-			elif len(l) == 2:
-				in_dim,out_dim = l[0],l[1]
-				self.layers[len(self.layers) : nn.Linear(in_dim,out_dim)]
-				if not l == architecture[-1]:
-					self.layers.append(nn.ReLU())
-		
-		self.loss = loss_fn()
 
 
 if __name__ == "__main__":
