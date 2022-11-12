@@ -1,9 +1,17 @@
 from matplotlib import pyplot as plt 
 import json 
-
+import sys 
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "-b":
+            olist = json.loads(open(sys.argv[2],"r").read())
+            fig,axs = plt.subplots(2)
+            axs[0].plot(olist[-1])
+            axs[1].plot(olist[-2])
+            plt.show()
+            exit()
     #Grab data from file 
     f = open("saved_states.txt","r").read()
     outlist = json.loads(f)

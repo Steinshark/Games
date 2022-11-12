@@ -449,7 +449,7 @@ class Trainer:
 
 			#Play a game and collect the experiences
 			game = SnakeGame(self.w,self.h,fps=100000,encoding_type=self.encoding_type,device=self.device)
-			exp, score,lived_for = game.train_on_game(self.learning_model,visible=False,epsilon=self.epsilon)
+			exp, score,lived_for = game.train_on_game(self.learning_model,visible=self.visible,epsilon=self.epsilon)
 
 			scores.append(score+1)
 			lived.append(lived_for)
@@ -678,14 +678,21 @@ class GuiTrainer(Trainer):
 
 
 if __name__ == "__main__" and True :
-	#trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,8,3],[800,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	#trainer.train(episodes=5e4 ,train_every=32,replay_buffer=4096*4,sample_size=256,batch_size=16,epochs=1,transfer_models_every=512)
+	#trainer = Trainer(12,12,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,8,3],[1568,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.01,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	#l = trainer.train(episodes=15e4 ,train_every=32,replay_buffer=4096*4,sample_size=256,batch_size=32,epochs=1,transfer_models_every=512)
+	#import json
+	#import sys
+	#fname = os.path.join("sessions","saved_states.txt")
+	#if len(sys.argv) > 1:
+	#	fname = os.path.join("sessions",sys.argv[1])
+	#with open(fname,"w") as file:
+	#	file.write(json.dumps(l))
 	#exit()
 	loss_fns = [torch.nn.HuberLoss]#,torch.nn.MSE,torch.nn.L1Loss]
-	optimizers = [torch.optim.Adam, torch.optim.SGD,torch.optim.Adagrad	]
+	optimizers = [torch.optim.Adam]
 
-	learning_rates = [1e-1,5e-3,1e-6]#,1e-4,1e-5,1e-6]
-	episodes = 7.5e2
+	learning_rates = [1e-3]#,1e-4,1e-5,1e-6]
+	episodes = 7.5e4
 
 	gamma = [.97]
 	epsilon=[.4]
@@ -720,14 +727,15 @@ if __name__ == "__main__" and True :
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
-	with Pool(1) as p:
+	with Pool(4) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)
 			import json
+			import sys
 			fname = os.path.join("sessions","saved_states.txt")
 			if len(sys.argv) > 1:
-			    fname = os.path.join("sessions",sys.argv[1])
+				fname = os.path.join("sessions",sys.argv[1])
 			with open(fname,"w") as file:
 				file.write(json.dumps(results))
 			print(f"ran in {(time.time()-t0):.2f}s")
