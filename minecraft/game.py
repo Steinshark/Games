@@ -70,7 +70,7 @@ class Game:
             }
             # Contains the gameplay component variables
             self.game_settings          =   {
-                "dimension"         : 1000,
+                "dimension"         : 200,
                 "time"              : 0.0,
                 "start_time"        : 0.0,
                 "frame_time"        : 0.0,

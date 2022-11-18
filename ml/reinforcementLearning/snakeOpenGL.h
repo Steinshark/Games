@@ -1,4 +1,4 @@
-    #include <iostream>
+#include <iostream>
 #include <vector>
 #include <math.h>
 #include <string>
@@ -98,8 +98,6 @@ void draw(){
 
 //Helper Function to force screen updates
 void timer(int val){   
-
-
     glutPostRedisplay();
     glutTimerFunc(TIMER_MSEC_LBOUND,timer,GLOBAL_CTIME);
 }

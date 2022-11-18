@@ -203,6 +203,7 @@ class SnakeGame:
 		experiences = []
 		rewards = {"die":-1,"food":1,"idle":-.1}
 		score = 0
+		
 		#setup
 		assert model is not None
 		square_width 	= window_x / self.width
@@ -678,6 +679,9 @@ class GuiTrainer(Trainer):
 
 
 if __name__ == "__main__" and True :
+	for dir in ["models","sessions","figs"]:
+		if not os.path.isdir("models"):
+			os.mkdir("models")
 	#trainer = Trainer(12,12,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,8,3],[1568,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.01,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
 	#l = trainer.train(episodes=15e4 ,train_every=32,replay_buffer=4096*4,sample_size=256,batch_size=32,epochs=1,transfer_models_every=512)
 	#import json
@@ -688,11 +692,11 @@ if __name__ == "__main__" and True :
 	#with open(fname,"w") as file:
 	#	file.write(json.dumps(l))
 	#exit()
-	loss_fns = [torch.nn.HuberLoss]#,torch.nn.MSE,torch.nn.L1Loss]
+	loss_fns = [torch.nn.HuberLoss,torch.nn.MSELoss]#,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam]
 
 	learning_rates = [1e-3]#,1e-4,1e-5,1e-6]
-	episodes = 7.5e4
+	episodes = 1e5
 
 	gamma = [.97]
 	epsilon=[.4]
@@ -702,7 +706,7 @@ if __name__ == "__main__" and True :
 	batch_sizes = [1,8,16]#2,16,32,64]#,4,32]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[[6,32,5],[2048,64],[64,4]]]#,[[6,16,3],[1024,4]],[[6,16,5],[16,16,5],[16,8,3],[128,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	architectures = [[[6,32,5],[3200,64],[64,4]],[[6,16,3],[2304,4]],[[6,16,5],[16,16,5],[16,8,3],[1152,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
@@ -722,7 +726,7 @@ if __name__ == "__main__" and True :
 														if r < s or r < b or s < b:
 															pass
 														else:
-															args.append((i,8,8,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
+															args.append((i,10,10,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()

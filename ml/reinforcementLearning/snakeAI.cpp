@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+
+
 void runTrainingIterations(int iters){
 	vector<char> actions = {'w','s','a','d'};
 	srand(time(0));
