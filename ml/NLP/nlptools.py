@@ -35,3 +35,4 @@ class LanguageModel:
                  print(f"encoding type {self.encoding} unsucessfull for {textname}.")
 
 
+    
