@@ -1,4 +1,0 @@
-source:twitter
-.@EpicGames v @Apple is saying security vs open source is what distinguishes the @AppStore vs @GooglePlay store. 
-
-“Apple is a customer focused company. Epic doesn’t like that”

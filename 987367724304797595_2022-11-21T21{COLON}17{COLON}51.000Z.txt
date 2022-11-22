@@ -1,4 +1,0 @@
-source:twitter
-Our analysis shows $AAPL is a Sell. 
-[ONE DAY INTERVAL]
-2022-11-21 21:17:51.103976+00:00 UTC

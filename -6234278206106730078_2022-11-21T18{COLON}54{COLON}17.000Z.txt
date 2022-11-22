@@ -1,2 +1,0 @@
-source:twitter
-@MiakodaWinds @joecarlsonshow It's not actionable information. You could do this for any company retrospectively - pick a timespan (say 10y), find the best performing co in that timespan, then say "Look $AAPL / $MSFT / $NFLX etc has underperformed X over Y years" -- so what?

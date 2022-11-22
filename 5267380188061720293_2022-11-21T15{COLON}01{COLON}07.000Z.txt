@@ -1,6 +1,0 @@
-source:twitter
-AAPL Net Income Q3 $19.4b, expected to grow 1.5%
-AMZN Net Income Q3 $2.9b, expected to decline
-TSLA Net income Q3 $3.3b, expected to grow 40%
-TSLA is already past AMZN in Net Income yet has a market cap $400b less
-TSLA is projected to equal AAPL Net Income in 5 years legio

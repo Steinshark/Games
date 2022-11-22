@@ -1,9 +1,0 @@
-source:twitter
-Fidelity buy/sell
-$TSLA   1330/993
-$AMZN 882/528
-$AAPL  386/309
-$MMAT 295/98 (up 20+% PM)
-$AMC 151/169
-$GME 141/174
-$MULN 237/68

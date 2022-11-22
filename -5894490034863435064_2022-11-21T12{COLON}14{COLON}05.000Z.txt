@@ -1,6 +1,0 @@
-source:twitter
-The strategy in selling covered calls or cash secured puts can be very different from one stock to another
-
-Strategy for $AAPL is very different than $TSLA
-
-Volatility and market matters

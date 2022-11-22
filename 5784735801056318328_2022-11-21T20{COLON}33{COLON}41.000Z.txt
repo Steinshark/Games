@@ -1,3 +1,0 @@
-source:twitter
-@engineers_feed I wrote a policy for my company to use dd mmm yyyy in any order.
-Dates are written mm/dd because Americans say it that way, "July the 21st" i assumed.

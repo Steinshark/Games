@@ -254,3 +254,5 @@ if __name__ == "__main__":
     #     params['mediafire'].append({"date":"2022-11-17,2022-11-20","categories":"business","symbols":"","language":"en","countries":"us","limit":"100","offset":offset})
     # params['alphavantage'].append({'tickers':"AAPL","t_from":"20221113T0000","limit":"200"})
     # download_today(["AAPL"],params=params)
+
+    carve_wiki()

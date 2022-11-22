@@ -1,6 +1,0 @@
-source:twitter
-Apple Inc
-NASDAQ: AAPL
-148.06 USD
--3.23 (-2.14%)
-It's the Economy stupid!
