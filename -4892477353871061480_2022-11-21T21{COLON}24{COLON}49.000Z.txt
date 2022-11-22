@@ -1,0 +1,16 @@
+source:twitter
+Kowalski Analysis Market on Close🐧
+
+$SPY:-0,37%
+$QQQ:-1,03%
+$DIA:-0,13%
+$IWM:-0,52%
+$XLF:0,31%
+$XLE:-1,35%
+$VIX:-3,2%
+$AAPL:-2,17%
+$MSFT:0,34%
+$AMZN:-1,78%
+$TSLA:-6,84%
+
+Have a great evening! See you tomorrow!

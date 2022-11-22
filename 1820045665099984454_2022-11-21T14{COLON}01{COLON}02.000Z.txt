@@ -1,0 +1,6 @@
+source:twitter
+trigger update. trade at your own risk
+
+AAPL &gt; 150.7 (big DP) &lt; 149.25
+MSFT 241.22 (DP) &lt; 239.1 (DP)
+NVDA &gt; 153.82 &lt; 151.65

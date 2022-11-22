@@ -1,0 +1,7 @@
+source:twitter
+These are the 4 insiders from the Consumer Finance Industry who bought the most shares through 2022-11-11:
+    
+Vazquez Raul | $OPRT ($348,215)
+Coblentz Jonathan Aaron | $OPRT ($247,523)
+Clayton Walter Joseph Iii | $AXP ($149,270)
+Landon Allan R | $LC ($47,500)
