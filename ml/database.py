@@ -354,8 +354,6 @@ def robinhood_data_download(tickers:list[str]):
                     #Add to file and leave 
                     file.write(contents)
                     file.close()
-
-            
 ##
 ##
 ##     
