@@ -156,7 +156,7 @@ def clean_raw_html(html):
     if not text:
         PARSER.set_html(html)
         PARSER.parse()
-    return text.replace("&nbsp;"," ").replace("&#8217;","'").replace("&#8230;","...").replace("&amp;","&").replace("&#8221;","'".replace("&#8220;","'"))
+    return text.replace("&nbsp;"," ").replace("&#8217;","'").replace("&#8230;","...").replace("&amp;","&").replace("&#8221;","'".replace("&#8220;","'")).replace("&#x27;","'")
 ##
 ##
 #Make a Mediastack API request
@@ -223,8 +223,9 @@ def grab_robinhood(ticker):
 
     #Grab the data for all stocks listed
     responses = rstocks.get_news(ticker)
+    
     if not responses:
-        return False 
+        return [] 
     
     data = [{"title":resp['title'],"url":resp['url'],"date":resp['published_at']} for resp in responses]
     return data
@@ -249,6 +250,5 @@ def grab_robinhood_data(ticker,interval="5minute",span="week"):
 ##
 ##
 if __name__ == "__main__":
-    resp = grab_robinhood_data("AAPL")
-    import yahoofinance
-    print(apl)
+    resp = grab_robinhood("AAPL")
+    print(resp)

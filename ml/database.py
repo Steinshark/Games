@@ -45,7 +45,7 @@ DUPLICATE_TOTAL     = 0
 def save_media_source(name:str,timestamp:str,source:str,contents:str):
     
     #Globals
-    global MISSED_TOTAL, DUPLICATE_TOTAL, COLLECTED_TOTAL
+    global DUPLICATE_TOTAL
 
     #Create unique media ID 
     f_name = f"{DB_NEWS_PATH}\{name.__hash__()}_{timestamp.replace(':','{COLON}')}.txt"
@@ -59,7 +59,7 @@ def save_media_source(name:str,timestamp:str,source:str,contents:str):
     #Ensure we don't have duplicate files, if so just skip them 
     if os.path.exists(f_name):
         DUPLICATE_TOTAL += 1
-        return True
+        return False
     
     #Open and save contents to file 
     file = open(f_name,"w",encoding='utf-8')
@@ -90,13 +90,18 @@ def download_worker():
             save_media_source(name,timestamp,source,contents)
 ##
 ##
-def download_today(tickers:list[str],params={},today_only=True):
+def download_today(tickers:list[str],params={},today_only=True,MEDIAFIRE:bool=True,ALPHAVANTAGE:bool=True,TWITTER:bool=True,ROBINHOOD:bool=True):
 
     #Globals 
     global MISSED_TOTAL, DUPLICATE_TOTAL, COLLECTED_TOTAL
+
     #Download Mediafire
     for t in tickers:
-        
+
+        #Ensure not skipped
+        if not MEDIAFIRE:
+            break
+
         #Make API requests
         for param_set in params['mediafire']:
             param_set["symbols"] = t
@@ -125,9 +130,14 @@ def download_today(tickers:list[str],params={},today_only=True):
             #Ensure we don't cycle over the same source        
             if fetch["pagination"]['total'] < int(param_set['limit']): 
                 break
-    
+        
     #Download alphavantage
     for t in tickers:
+
+        #Ensure Collecting 
+        if not ALPHAVANTAGE:
+            break 
+
         for param_set in params["alphavantage"]:
             param_set["tickers"] = t
             fetch = grab_alphavantage(param_set)
@@ -157,6 +167,11 @@ def download_today(tickers:list[str],params={},today_only=True):
 
     #Download Twitter
     for twitter_lookup in params["twitter"]:
+
+        #Ensure not skipped 
+        if not TWITTER:
+            break 
+
         twitter_lookup = f"{t} {twitter_lookup}"
         tweets = grab_twitter(twitter_lookup)
         
@@ -179,11 +194,37 @@ def download_today(tickers:list[str],params={},today_only=True):
                         print(f"\t{FNFE}")
                         return
                     else:
-                        MISSED_TOTAL += 1
                         print(FNFE)
-   
+
     #Download Robinhood 
-    process_robinhood(tickers)
+    for t in tickers:
+
+        #Ensure not skipped 
+        if not ROBINHOOD:
+            break
+        data = grab_robinhood(t)
+        
+        #Parse data 
+        for d in data:
+            title       = d['title'] 
+            date_posted = d['date']
+            url         = d['url']
+
+            DOWNLOAD_LINK_LIST.append((title,date_posted,url,"robinhood")) 
+
+            #Attempt to grab the content
+            content = grab_newspage(url)
+            if "please enable Javascript and cookies" in content.lower():
+                content = grab_newspage(url,use_driver=True)
+            
+            #Clean the content
+            content = clean_raw_html(content)
+
+            #Only save if it exists
+            if content:
+                COLLECTED_TOTAL += int(save_media_source(title,date_posted,"robinhood",content))
+            else:
+                MISSED_TOTAL += 1
 ##
 ##
 #Take the wikipedia XML file and iteratively save each article to disk
@@ -277,7 +318,7 @@ def carve_wiki():
 #This method is meant to grab data and append to a weekly,stock specific db file ONLY if it doenst 
 #already exist in there
 #All data is added in 5 min format
-def process_robinhood(tickers:list[str]):
+def robinhood_data_download(tickers:list[str]):
     
     for ticker in tickers:
         
@@ -321,7 +362,9 @@ def process_robinhood(tickers:list[str]):
 ##
 ##     
 if __name__ == "__main__":
-    download_today(DEFAULT_STOCKS,params=DEFAULT_PARAMS)
     t0 = time.time()
+    robinhood_data_download(DEFAULT_STOCKS)
+    download_today(DEFAULT_STOCKS,params=DEFAULT_PARAMS)
     total_attempts = COLLECTED_TOTAL + MISSED_TOTAL
-    print(f"Attempted to fetch {total_attempts} items in {(time.time()-t0):.1f}s\n{COLLECTED_TOTAL}\t{(100*COLLECTED_TOTAL/(total_attempts)):2f}% new\n\t{(DUPLICATE_TOTAL/total_attempts):.2f}% existed\n\t{((MISSED_TOTAL-DUPLICATE_TOTAL)/total_attempts):.2f}% failed")
+    print(f"Attempted to fetch {total_attempts} items in {(time.time()-t0):.1f}s\n\t{(100*COLLECTED_TOTAL/(total_attempts)):.2f}%\tnew\n\t{(100*DUPLICATE_TOTAL/total_attempts):.2f}%\texisted\n\t{(100*(MISSED_TOTAL-DUPLICATE_TOTAL)/total_attempts):.2f}%\tfailed")
+
