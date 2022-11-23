@@ -363,4 +363,3 @@ if __name__ == "__main__":
     download_today(DEFAULT_STOCKS,params=DEFAULT_PARAMS)
     total_attempts = COLLECTED_TOTAL + MISSED_TOTAL
     print(f"Attempted to fetch {total_attempts} items in {(time.time()-t0):.1f}s\n\t{(100*COLLECTED_TOTAL/(total_attempts)):.2f}%\tnew\n\t{(100*DUPLICATE_TOTAL/total_attempts):.2f}%\texisted\n\t{(100*(MISSED_TOTAL-DUPLICATE_TOTAL)/total_attempts):.2f}%\tfailed")
-    input("end of program") # This is useless and trying next arbitrartyAABBBBCCCCCCCCDDDDDDDD
