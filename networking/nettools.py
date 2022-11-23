@@ -4,21 +4,32 @@ from fake_useragent import UserAgent
 from fake_headers import Headers
 header_gen = Headers(browser="chrome",os="win",headers=True)
 
-#Handle net big tasks
+#Handle networking and requests
 import requests 
 from netErr import *
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from newspaper import Article
-parser = Article("")
-options = webdriver.chrome.options.Options()
-options.add_argument("--headless")
-options.add_argument('--disable-logging') 
-options.add_experimental_option('excludeSwitches', ['enable-logging'])
-import tlib 
+import tlib
+from  robin_stocks import robinhood
+from robin_stocks.robinhood import authentication as rauth 
+from robin_stocks.robinhood import profiles as rprof 
+from robin_stocks.robinhood import stocks as rstocks
 
-DEFAULT_DRIVER = webdriver.Chrome(options=options)
+from datetime import datetime,timezone
+#Instantiate some globals
+PARSER = Article("")
+OPTIONS = webdriver.chrome.options.Options()
+OPTIONS.add_argument("--headless")
+OPTIONS.add_argument('--disable-logging') 
+OPTIONS.add_experimental_option('excludeSwitches', ['enable-logging'])
+
+
+#GLOBALS
+DEFAULT_DRIVER  = webdriver.Chrome(options=OPTIONS)
+LOGIN_TSTAMP    = 0
+LOGIN_DURATION  = 24*3600
 
 #Utilities
 import time
@@ -43,11 +54,13 @@ def update_proxy_list(country="US",protocol="https"):
         page_scrape = r.text
         input(page_scrape)
         page_scrape = page_scrape.split("DataGrid")[1].split("tbody>")[1].split("</tbody>")[0]
-
+##
+##
 #Unused and unwritten
 def build_driver():
     pass
-
+##
+##
 #Grab a list of urls of news articles on a specific ticker from Yahoo Finance 
 def pull_yf_urls(ticker):
   
@@ -82,7 +95,8 @@ def pull_yf_urls(ticker):
         raise UnexpectedReturnErr("Split was less than 1")
     
     return [chunk.split('href="')[1].split('"')[0] for chunk in url_chunks]
-
+##
+##
 #Grab a list of urls of news articles on a specific ticker from Yahoo Finance 
 def pull_fool_urls(ticker,exchange):
     base_url = f"https://www.fool.com/quote/{exchange}/{ticker}/"
@@ -94,7 +108,8 @@ def pull_fool_urls(ticker,exchange):
     time.sleep(3)
     b = driver.find_element(By.CLASS_NAME,".flex.items-center.load-more-button.foolcom-btn-white.mt-24px.md:mb-80.mb-32px")
     b.click()
-
+##
+##
 #Downoads a url 
 def grab_newspage(url,use_driver=False):
 
@@ -109,7 +124,8 @@ def grab_newspage(url,use_driver=False):
         return ""
     else:
         return r.text
-
+##
+##
 #Grab only article contents off of html
 def clean_raw_html(html):
     if not html:
@@ -127,10 +143,10 @@ def clean_raw_html(html):
 
     #Ensure we got SOMETHING
     if len(new_p) == 0:
-        parser.set_html(html)
-        parser.parse()
-        parser.text = "LEN WAS 0" + parser.text
-        for char in parser.text:
+        PARSER.set_html(html)
+        PARSER.parse()
+        PARSER.text = "LEN WAS 0" + PARSER.text
+        for char in PARSER.text:
             text += char.encode("utf-8").decode("utf-8")
     else:
         for char in ". ".join([p.strip() for p in new_p]):
@@ -138,10 +154,11 @@ def clean_raw_html(html):
 
     #Finish good text
     if not text:
-        parser.set_html(html)
-        parser.parse()
+        PARSER.set_html(html)
+        PARSER.parse()
     return text.replace("&nbsp;"," ").replace("&#8217;","'").replace("&#8230;","...").replace("&amp;","&").replace("&#8221;","'".replace("&#8220;","'"))
-
+##
+##
 #Make a Mediastack API request
 #Params ican be {"data","categories","symbols","langauge","countries","keywords","limit","offset"}
 def grab_mediastack(params:dict):
@@ -161,7 +178,8 @@ def grab_mediastack(params:dict):
         raise StatusCodeErr(f"mediastack gave code {r.status_code} on url:{base_url}",code=r.status_code,url=r.ur)
     else:
         return json.loads(r.text)
-
+##
+##
 #Make an alphavantage API request
 #Params ican be {"data","categories","symbols","langauge","countries","keywords","limit","offset"}
 def grab_alphavantage(params:dict):
@@ -174,7 +192,8 @@ def grab_alphavantage(params:dict):
         raise StatusCodeErr(f"alphavantage gave code {r.status_code} on url:{r.url}",code=r.status_code,url=r.ur)
     data = r.json()
     return data
-
+##
+##
 #Make twitter API call
 def grab_twitter(twitter_lookup,fields=None):
     try:
@@ -187,13 +206,48 @@ def grab_twitter(twitter_lookup,fields=None):
     except StatusCodeErr as SCE:
         print(f"twitter lookup failed code {SCE.code} for {SCE.url}")
         return None 
+##
+##    
+#Make a robinhood api call for news 
+def grab_robinhood(ticker):
 
+    #Login
+    try: 
+        rprof.load_account_profile(info=None)
+        logged_in = True
+    except Exception:
+        logged_in = False
+    if not logged_in:
+        user,passw = tuple(json.loads(open(r"D:\code\robinhood.txt","r").read()))
+        rauth.login(username=user,password=passw,expiresIn=24*3600)
+
+    #Grab the data for all stocks listed
+    responses = rstocks.get_news(ticker)
+    if not responses:
+        return False 
+    
+    data = [{"title":resp['title'],"url":resp['url'],"date":resp['published_at']} for resp in responses]
+    return data
+##
+##
+#Make a request for market data for a stock ticker
+def grab_robinhood_data(ticker,interval="5minute",span="week"):
+
+    #Login
+    try: 
+        rprof.load_account_profile(info=None)
+        logged_in = True
+    except Exception:
+        logged_in = False
+    if not logged_in:
+        user,passw = tuple(json.loads(open(r"D:\code\robinhood.txt","r").read()))
+        rauth.login(username=user,password=passw,expiresIn=24*3600)
+
+    response = rstocks.get_stock_historicals(ticker,interval=interval,span=span)
+    return [{'time':(datetime.now(timezone.utc)-datetime.strptime(r['begins_at'],"%Y-%m-%dT%H:%M:%S%z")).seconds,'open':r['open_price'],'close':r['close_price'],'high':r['high_price'],'low':r['low_price'],'volume':r['volume']} for r in response]
+##  
+##
+##
 if __name__ == "__main__":
-    res = grab_alphavantage({'tickers':"AAPL","topics":"finance","t_from":"20221113T0000","t_to":"20221120T0000"})
-    input(res["feed"][0])
-
-    while(True):
-        try:
-            exec(input())
-        except:
-            pass
+    resp = grab_robinhood_data("AAPL")
+    print(resp[389])

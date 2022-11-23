@@ -16,6 +16,8 @@ import networkmodels
 import os 
 import time 
 
+
+#This class is unused and stupid, but i dont want to delete it 
 class LanguageModel:
     
     def __init__(self,encoding="utf-8"):
@@ -50,7 +52,6 @@ class LanguageModel:
                  print(f"encoding type {self.encoding} unsucessfull for {textname}.")
 
 
-
 #A news worker will handle downloading and working will news data
 class Predictor:
 
@@ -69,7 +70,8 @@ class Predictor:
         token_ids = self.tokenizer.encode_plus(text,add_special_tokens=True,padding=True,truncation=True,max_length=max_length,return_attention_mask=True,return_tensors="pt")
         return token_ids
 
-    def train_model(self,lr=1e-4,epochs=10):
+    def train_model(self,x:torch.tensor,y:torch.tensor,lr=1e-4,epochs=10,batch_size=8):
+        
         #Build the optimizer 
         self.optimizer = AdamW(self.model.parameters(),lr=lr) 
 
@@ -78,8 +80,9 @@ class Predictor:
 
             self.optimizer.zero_grad()
 
-    def grab_news(self):
-        database.download_today()
+    def grab_news(self,tickers,params):
+        database.download_today(tickers,params=params)
+        self.DB_PATH = database.DB_PATH
 
     def analyze_news(self):
         pass
@@ -96,11 +99,9 @@ if __name__ == "__main__":
             if t in database.ALIASES:
                 database.DEFAULT_PARAMS['twitter'].append(f"({' OR '.join([t] + database.ALIASES[t])}) {database.DEFAULT_PARAMS['twitter'][0]}")
 
-    print(len(database.DEFAULT_PARAMS['twitter']))
-    exit()
     #Grab all news
     t0 = time.time()
-    database.download_today(tickers,params=database.DEFAULT_PARAMS)
+    n.grab_news(tickers,params=database.DEFAULT_PARAMS)
     print(f"\n\n\n\n\n\ndownloading all data took {(time.time()-t0):.2f}s")
 
     #ids = n.text_to_id(open(r'D:\data\wiki\pages\enron.txt',"r").read())

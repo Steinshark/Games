@@ -13,6 +13,7 @@ DB_PATH = r"S:\data\testdowns"
 
 DOWNLOAD_LINK_LIST = []
 
+
 DEFAULT_PARAMS = {  "mediafire":
                         [{"date":"2022-11-17,2022-11-20","categories":"business","symbols":"","language":"en","countries":"us","limit":"100","offset":off} for off in [0,100]],
                     "alphavantage":
@@ -21,7 +22,7 @@ DEFAULT_PARAMS = {  "mediafire":
                         ["(nyse OR nasdaq OR trade OR buy OR sell OR market OR invest OR company OR business OR finance OR quarter OR report) -has:links -is:retweet lang:en"]
                 }
 
-ALIASES = {     "MMM"   : ["3M","Minnesota Mining and Manufacturing", "Minnesota Mining & Manufacturing"],
+ALIASES = {     "MMM"   : ["3M","Minnesota Mining and Manufacturing", "Minnesota Mining Manufacturing"],
                 "AAPL"  : ["Apple","Apple_Inc","APL","AppleInc"],
                 "AXP"   : ["American Express","AMEX","AmericanExpress"],
                 "CAT"   : ["Caterpillar",],
@@ -35,17 +36,21 @@ ALIASES = {     "MMM"   : ["3M","Minnesota Mining and Manufacturing", "Minnesota
 ##
 ##
 ##
-##
 #Saves to the database
 def save_media_source(name,timestamp,source,contents):
     
     #Create unique media ID 
     f_name = f"{DB_PATH}\{name.__hash__()}_{timestamp.replace(':','{COLON}')}.txt"
+    
     #Open file in DB 
     if not os.path.exists(DB_PATH):
         #Try to make it 
         print(f"PATH {DB_PATH} was not found, attempting to create.")
         os.mkdir(DB_PATH)
+    
+    #Ensure we don't have duplicate files, if so just skip them 
+    if os.path.exists(f_name):
+        return True
     
     #Open and save contents to file 
     file = open(f_name,"w",encoding='utf-8')
@@ -53,33 +58,34 @@ def save_media_source(name,timestamp,source,contents):
     file.write(contents)
 
     #Return 
-    return 
-#
-#
-#Does the actual downloading
+    return True
+##
+##
+#This method was meant to be run in parallel in separate threads. I currently just do downloading
+#within the "download_today" method, but this can be changed with a kwarg
 def download_worker():
+
+    #Ensure there is something there
     if DOWNLOAD_LINK_LIST:
-        current_link = DOWNLOAD_LINK_LIST.pop(0)
-        try:
-            #print(f"fetching {current_link}")
-            html = grab_newspage(current_link)
 
-            if "To ensure this doesn’t happen in the future" in html:
-                html = grab_newspage(current_link,use_driver=True)
+        #Grab the next available url and following info 
+        name,timestamp,url,source = DOWNLOAD_LINK_LIST.pop(0)
+        
+        #Get the contents 
+        contents = grab_newspage(url)
+        if "please enable Javascript and cookies" in contents.lower():
+            contents = grab_newspage(url,use_driver=True)
 
-            return clean_raw_html(html)
-
-        except StatusCodeErr as SCE:
-            DOWNLOAD_LINK_LIST.append(current_link)
-            print(f"failed with status code {SCE.code}")
-            return ""
-#
-#
+        #Try to write to the database if there's anything to write
+        if contents:
+            save_media_source(name,timestamp,source,contents)
+##
+##
 def download_today(tickers,params={},today_only=True):
-
 
     #Download Mediafire
     for t in tickers:
+        
         #Make API requests
         for param_set in params['mediafire']:
             param_set["symbols"] = t
@@ -89,13 +95,14 @@ def download_today(tickers,params={},today_only=True):
                 title = result['title']
                 url = result['url']
                 pub_date = result['published_at']
-                DOWNLOAD_LINK_LIST.append(url)
+                DOWNLOAD_LINK_LIST.append((title,pub_date,url,"MediaFire"))
 
                 #Attempt to grab the content
                 content = grab_newspage(url)
                 if "please enable Javascript and cookies" in content.lower():
                     content = grab_newspage(url,use_driver=True)
                 
+                #Clean the content
                 content = clean_raw_html(content)
                 
                 if content:
@@ -105,23 +112,26 @@ def download_today(tickers,params={},today_only=True):
             if fetch["pagination"]['total'] < int(param_set['limit']): 
                 break
     
-    #Download Twitter
+    #Download alphavantage
     for t in tickers:
         for param_set in params["alphavantage"]:
             param_set["tickers"] = t
             fetch = grab_alphavantage(param_set)
 
             for result in fetch["feed"]:
+                
+                #Grab fields
                 title = result['title']
                 url = result['url']
-                DOWNLOAD_LINK_LIST.append(url)
                 pub_date = result['time_published']
+                DOWNLOAD_LINK_LIST.append((title,pub_date,url,"alphavantage"))
 
                 #Attempt to grab the content
                 content = grab_newspage(url)
                 if "please enable Javascript and cookies" in content.lower():
                     content = grab_newspage(url,use_driver=True)
-               
+                
+                #Clean the content
                 content = clean_raw_html(content)
 
                 #Only save if it exists
@@ -138,8 +148,8 @@ def download_today(tickers,params={},today_only=True):
             continue 
         else:
             for tweet in tweets:
-
-                date_posted =  tweet["created_at"]
+                #Grab fields
+                date_posted = tweet["created_at"]
                 content     = tweet["text"] 
                 id          = tweet["id"]
 
@@ -153,8 +163,33 @@ def download_today(tickers,params={},today_only=True):
                         return
                     else:
                         print(FNFE)
-#                    
-#
+   
+    #Download Robinhood 
+    for t in tickers:
+        data = grab_robinhood(t)
+        
+        #Parse data 
+        for d in data:
+            title       = d['title'] 
+            date_posted = d['date']
+            url         = d['url']
+
+            DOWNLOAD_LINK_LIST.append((title,date_posted,url,"robinhood")) 
+
+            #Attempt to grab the content
+            content = grab_newspage(url)
+            if "please enable Javascript and cookies" in content.lower():
+                content = grab_newspage(url,use_driver=True)
+            
+            #Clean the content
+            content = clean_raw_html(content)
+
+            #Only save if it exists
+            if content:
+                save_media_source(title,date_posted,"robinhood",content)
+##
+##
+#Take the wikipedia XML file and iteratively save each article to disk
 def carve_wiki():
     STOPTITLES = ["demographics","river","lake","diego","nick","geography","henry","holiday","house","howard","hudson","hunt","ian","index of ","list of","interstate","isabel","isaac","politics of","robert","roger","sam","samue","san","thomas","university"]
     file_raw = open("D:\data\wiki\wiki.xml","r",encoding='utf-8')
@@ -240,12 +275,11 @@ def carve_wiki():
                 print(FNFE)
         else:
             pass
-            #print("")
-#
-#            
-#
-#
-#       
+##
+##           
+##
+##
+##     
 if __name__ == "__main__":
     
     # params = {"mediafire":[],"alphavantage":[]}
