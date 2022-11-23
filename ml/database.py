@@ -356,8 +356,6 @@ def robinhood_data_download(tickers:list[str]):
                     file.close()
 
             
-
-
 ##
 ##
 ##     
