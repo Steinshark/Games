@@ -6,15 +6,15 @@ from netErr import *
 import nettools
 from datetime import datetime
 import json 
-
+import time 
 ## >>>>>>>>>>>>>>>>>>>>>>>>>>>> BEGIN DEFAULT DEFINITIONS <<<<<<<<<<<<<<<<<<<<<<<<<<<< ##
 
 DB_NEWS_PATH = r"S:\Data\market\news"
 DB_DATA_PATH = r"S:\Data\market\data"
-DOWNLOAD_LINK_LIST = []
+DOWNLOAD_LINK_LIST  = []
 
-DEFAULT_STOCKS = ["MMM","AAPL","AXP","CAT","KO","V"]
-DEFAULT_PARAMS = {  "mediafire":
+DEFAULT_STOCKS      = ["MMM","AAPL","AXP","CAT","KO","V"]
+DEFAULT_PARAMS      = {  "mediafire":
                         [{"date":"2022-11-17,2022-11-20","categories":"business","symbols":"","language":"en","countries":"us","limit":"100","offset":off} for off in [0,100]],
                     "alphavantage":
                         [{'tickers':"","t_from":"20221113T0000","limit":"200"}],
@@ -22,15 +22,19 @@ DEFAULT_PARAMS = {  "mediafire":
                         ["(nyse OR nasdaq OR trade OR buy OR sell OR market OR invest OR company OR business OR finance OR quarter OR report) -has:links -is:retweet lang:en"]
                 }
 
-ALIASES = {     "MMM"   : ["3M","Minnesota Mining and Manufacturing", "Minnesota Mining Manufacturing"],
-                "AAPL"  : ["Apple","Apple_Inc","APL","AppleInc"],
-                "AXP"   : ["American Express","AMEX","AmericanExpress"],
-                "CAT"   : ["Caterpillar",],
-                "KO"    : ["Coca-Cola","CocaCola","Coke"],
-                "V"     : ["Visa"]
-            }
+ALIASES             = {     "MMM"   : ["3M","Minnesota Mining and Manufacturing", "Minnesota Mining Manufacturing"],
+                            "AAPL"  : ["Apple","Apple_Inc","APL","AppleInc"],
+                            "AXP"   : ["American Express","AMEX","AmericanExpress"],
+                            "CAT"   : ["Caterpillar",],
+                            "KO"    : ["Coca-Cola","CocaCola","Coke"],
+                            "V"     : ["Visa"]
+                        }
 
-COLLECTION_START = 1667692800
+COLLECTION_START    = 1667692800
+
+COLLECTED_TOTAL     = 0
+MISSED_TOTAL        = 0
+DUPLICATE_TOTAL     = 0
 ## >>>>>>>>>>>>>>>>>>>>>>>>>>>>> END DEFAULT DEFINITIONS <<<<<<<<<<<<<<<<<<<<<<<<<<<<< ##
 ##
 ##
@@ -38,8 +42,11 @@ COLLECTION_START = 1667692800
 ##
 ##
 #Saves to the database
-def save_media_source(name,timestamp,source,contents):
+def save_media_source(name:str,timestamp:str,source:str,contents:str):
     
+    #Globals
+    global MISSED_TOTAL, DUPLICATE_TOTAL, COLLECTED_TOTAL
+
     #Create unique media ID 
     f_name = f"{DB_NEWS_PATH}\{name.__hash__()}_{timestamp.replace(':','{COLON}')}.txt"
     
@@ -51,6 +58,7 @@ def save_media_source(name,timestamp,source,contents):
     
     #Ensure we don't have duplicate files, if so just skip them 
     if os.path.exists(f_name):
+        DUPLICATE_TOTAL += 1
         return True
     
     #Open and save contents to file 
@@ -82,8 +90,10 @@ def download_worker():
             save_media_source(name,timestamp,source,contents)
 ##
 ##
-def download_today(tickers,params={},today_only=True):
+def download_today(tickers:list[str],params={},today_only=True):
 
+    #Globals 
+    global MISSED_TOTAL, DUPLICATE_TOTAL, COLLECTED_TOTAL
     #Download Mediafire
     for t in tickers:
         
@@ -108,6 +118,9 @@ def download_today(tickers,params={},today_only=True):
                 
                 if content:
                     save_media_source(title,pub_date,"MediaFire",content)
+                    COLLECTED_TOTAL += 1
+                else:
+                    MISSED_TOTAL    += 1
 
             #Ensure we don't cycle over the same source        
             if fetch["pagination"]['total'] < int(param_set['limit']): 
@@ -138,6 +151,9 @@ def download_today(tickers,params={},today_only=True):
                 #Only save if it exists
                 if content:
                     save_media_source(title,pub_date,"AlphaVantage",content)
+                    COLLECTED_TOTAL += 1 
+                else:
+                    MISSED_TOTAL += 1
 
     #Download Twitter
     for twitter_lookup in params["twitter"]:
@@ -163,31 +179,11 @@ def download_today(tickers,params={},today_only=True):
                         print(f"\t{FNFE}")
                         return
                     else:
+                        MISSED_TOTAL += 1
                         print(FNFE)
    
     #Download Robinhood 
-    for t in tickers:
-        data = grab_robinhood(t)
-        
-        #Parse data 
-        for d in data:
-            title       = d['title'] 
-            date_posted = d['date']
-            url         = d['url']
-
-            DOWNLOAD_LINK_LIST.append((title,date_posted,url,"robinhood")) 
-
-            #Attempt to grab the content
-            content = grab_newspage(url)
-            if "please enable Javascript and cookies" in content.lower():
-                content = grab_newspage(url,use_driver=True)
-            
-            #Clean the content
-            content = clean_raw_html(content)
-
-            #Only save if it exists
-            if content:
-                save_media_source(title,date_posted,"robinhood",content)
+    process_robinhood(tickers)
 ##
 ##
 #Take the wikipedia XML file and iteratively save each article to disk
@@ -325,6 +321,7 @@ def process_robinhood(tickers:list[str]):
 ##
 ##     
 if __name__ == "__main__":
-    
-    process_robinhood(DEFAULT_STOCKS)
     download_today(DEFAULT_STOCKS,params=DEFAULT_PARAMS)
+    t0 = time.time()
+    total_attempts = COLLECTED_TOTAL + MISSED_TOTAL
+    print(f"Attempted to fetch {total_attempts} items in {(time.time()-t0):.1f}s\n{COLLECTED_TOTAL}\t{(100*COLLECTED_TOTAL/(total_attempts)):2f}% new\n\t{(DUPLICATE_TOTAL/total_attempts):.2f}% existed\n\t{((MISSED_TOTAL-DUPLICATE_TOTAL)/total_attempts):.2f}% failed")
