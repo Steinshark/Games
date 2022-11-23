@@ -4,16 +4,16 @@ sys.path.insert(0,r"D:\code\projects\networking")
 from nettools import *
 from netErr import *
 import nettools
-
-
+from datetime import datetime
+import json 
 
 ## >>>>>>>>>>>>>>>>>>>>>>>>>>>> BEGIN DEFAULT DEFINITIONS <<<<<<<<<<<<<<<<<<<<<<<<<<<< ##
 
-DB_PATH = r"S:\data\testdowns"
-
+DB_NEWS_PATH = r"S:\Data\market\news"
+DB_DATA_PATH = r"S:\Data\market\data"
 DOWNLOAD_LINK_LIST = []
 
-
+DEFAULT_STOCKS = ["MMM","AAPL","AXP","CAT","KO","V"]
 DEFAULT_PARAMS = {  "mediafire":
                         [{"date":"2022-11-17,2022-11-20","categories":"business","symbols":"","language":"en","countries":"us","limit":"100","offset":off} for off in [0,100]],
                     "alphavantage":
@@ -30,6 +30,7 @@ ALIASES = {     "MMM"   : ["3M","Minnesota Mining and Manufacturing", "Minnesota
                 "V"     : ["Visa"]
             }
 
+COLLECTION_START = 1667692800
 ## >>>>>>>>>>>>>>>>>>>>>>>>>>>>> END DEFAULT DEFINITIONS <<<<<<<<<<<<<<<<<<<<<<<<<<<<< ##
 ##
 ##
@@ -40,13 +41,13 @@ ALIASES = {     "MMM"   : ["3M","Minnesota Mining and Manufacturing", "Minnesota
 def save_media_source(name,timestamp,source,contents):
     
     #Create unique media ID 
-    f_name = f"{DB_PATH}\{name.__hash__()}_{timestamp.replace(':','{COLON}')}.txt"
+    f_name = f"{DB_NEWS_PATH}\{name.__hash__()}_{timestamp.replace(':','{COLON}')}.txt"
     
     #Open file in DB 
-    if not os.path.exists(DB_PATH):
+    if not os.path.exists(DB_NEWS_PATH):
         #Try to make it 
-        print(f"PATH {DB_PATH} was not found, attempting to create.")
-        os.mkdir(DB_PATH)
+        print(f"PATH {DB_NEWS_PATH} was not found, attempting to create.")
+        os.mkdir(DB_NEWS_PATH)
     
     #Ensure we don't have duplicate files, if so just skip them 
     if os.path.exists(f_name):
@@ -276,17 +277,54 @@ def carve_wiki():
         else:
             pass
 ##
-##           
+##
+#This method is meant to grab data and append to a weekly,stock specific db file ONLY if it doenst 
+#already exist in there
+#All data is added in 5 min format
+def process_robinhood(tickers:list[str]):
+    
+    for ticker in tickers:
+        
+        #Download data 
+        data = grab_robinhood_data(ticker)
+
+        for item in data:
+            #Figure out what weekly DB file it belongs in 
+            week = (item['time']- COLLECTION_START) // 604800
+            f_name = os.path.join(DB_DATA_PATH, f"{ticker.upper()}_{week}.sdbf")    #"StockDataBaseFile"
+
+            #File contents will be a line of the json encoded dict 
+            contents = json.dumps(item)
+            contents += "\n"
+
+            #Create the file if it doesnt exist
+            if not os.path.exists(f_name):
+                file = open(f_name,"w",encoding='utf-8')
+                #Add to file and leave 
+                file.write(contents)
+                file.close()
+            #Ensure its not in here already
+            else:
+                file = open(f_name,"r")
+                
+                #if it exists, skip 
+                if contents in file.read():
+                    file.close()
+                #Otherwise, write the data to the file    
+                else:
+                    file.close()
+                    file = open(f_name,"a")
+                    #Add to file and leave 
+                    file.write(contents)
+                    file.close()
+
+            
+
+
 ##
 ##
 ##     
 if __name__ == "__main__":
     
-    # params = {"mediafire":[],"alphavantage":[]}
-
-    # for offset in [0,100,200,300,400]:
-    #     params['mediafire'].append({"date":"2022-11-17,2022-11-20","categories":"business","symbols":"","language":"en","countries":"us","limit":"100","offset":offset})
-    # params['alphavantage'].append({'tickers':"AAPL","t_from":"20221113T0000","limit":"200"})
-    # download_today(["AAPL"],params=params)
-
-    carve_wiki()
+    process_robinhood(DEFAULT_STOCKS)
+    download_today(DEFAULT_STOCKS,params=DEFAULT_PARAMS)

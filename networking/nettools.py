@@ -244,10 +244,11 @@ def grab_robinhood_data(ticker,interval="5minute",span="week"):
         rauth.login(username=user,password=passw,expiresIn=24*3600)
 
     response = rstocks.get_stock_historicals(ticker,interval=interval,span=span)
-    return [{'time':(datetime.now(timezone.utc)-datetime.strptime(r['begins_at'],"%Y-%m-%dT%H:%M:%S%z")).seconds,'open':r['open_price'],'close':r['close_price'],'high':r['high_price'],'low':r['low_price'],'volume':r['volume']} for r in response]
+    return [{'time':round(datetime.strptime(r['begins_at'],"%Y-%m-%dT%H:%M:%S%z").timestamp()),'open':r['open_price'],'close':r['close_price'],'high':r['high_price'],'low':r['low_price'],'volume':r['volume']} for r in response]
 ##  
 ##
 ##
 if __name__ == "__main__":
     resp = grab_robinhood_data("AAPL")
-    print(resp[389])
+    import yahoofinance
+    print(apl)
