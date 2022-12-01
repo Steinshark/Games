@@ -685,20 +685,20 @@ if __name__ == "__main__" and True :
 	#with open(fname,"w") as file:
 	#	file.write(json.dumps(l))
 	#exit()
-	loss_fns = [torch.nn.HuberLoss,torch.nn.MSELoss]#,torch.nn.L1Loss]
+	loss_fns = [torch.nn.HuberLoss]#,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam]
 
-	learning_rates = [1e-3,1e-4,1e-5,1e-6]
+	learning_rates = [1e-3,1e-4,1e-6]
 	episodes = 1e6
 
 	gamma = [.97]
 	epsilon=[.4]
 	train_every = [32,128,1024]
-	replay_buffer =[512,1024,4096,16384]
-	sample_size = [128,512,1024,2048]
+	replay_buffer =[512,1024,4096]
+	sample_size = [128,512,2048]
 	batch_sizes = [1,8,16,32]#2,16,32,64]#,4,32]
 	epochs = [1,2,5]
-	w_d = [0,1e-3,1e-6]
+	w_d = [0,1e-6]
 	architectures = [[[6,32,5],[7072,64],[64,4]],[[6,16,5],[16,16,5],[16,8,3],[2280,4]],[[6,64,3],[64,16,5],[4560,4]]]
 	i = 0
 	args = []
