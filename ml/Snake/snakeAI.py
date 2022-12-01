@@ -725,7 +725,7 @@ if __name__ == "__main__" and True :
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
 	random.shuffle(args)
-	with Pool(8) as p:
+	with Pool(4) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)
