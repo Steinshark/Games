@@ -199,7 +199,7 @@ class SnakeGame:
 		self.direction = max(self.movement_choices,key=self.movement_choices.get)
 
 	def train_on_game(self,model,visible=True,epsilon=.2,bad_opps=True):
-		window_x, window_y = (600,600)
+		window_x, window_y = (1300,900)
 		experiences = []
 		rewards = {"die":-1,"food":1,"idle":-.1}
 		score = 0
@@ -431,99 +431,110 @@ class Trainer:
 		}
 		import pprint
 
-	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2000,verbose=True):
+	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2000,verbose=True,iters=3):
+		scored = [] 
+		lived = [] 
+		
+		for i in range(iters):
+			self.high_score = 0
+			self.best = 0
+			clear_every = 2
+			experiences = []
+			replay_buffer_size = replay_buffer
+			t0 = time.time()
+			high_scores = []
+			trained = False
 
-		self.high_score = 0
-		self.best = 0
-		clear_every = 2
-		experiences = []
-		replay_buffer_size = replay_buffer
-		t0 = time.time()
-		high_scores = []
-		trained = False
+			scores = []
+			lives = []
 
-		scores = []
-		lived = []
+			picking = False
+			for e_i in range(int(episodes)):
+				#Play a game and collect the experiences
+				game = SnakeGame(self.w,self.h,fps=100000,encoding_type=self.encoding_type,device=self.device)
+				exp, score,lived_for = game.train_on_game(self.learning_model,visible=self.visible,epsilon=self.epsilon)
 
-		picking = False
-		for e_i in range(int(episodes)):
+				scores.append(score+1)
+				lives.append(lived_for)
 
-			#Play a game and collect the experiences
-			game = SnakeGame(self.w,self.h,fps=100000,encoding_type=self.encoding_type,device=self.device)
-			exp, score,lived_for = game.train_on_game(self.learning_model,visible=self.visible,epsilon=self.epsilon)
+				if score > self.high_score:
+					self.high_score = score
+				experiences += exp
 
-			scores.append(score+1)
-			lived.append(lived_for)
+				if len(experiences) > replay_buffer:
+					experiences = experiences[int(-.8*replay_buffer):]
 
-			if score > self.high_score:
-				self.high_score = score
-			experiences += exp
+				#If training on this episode
+				if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
+					trained = True
+					#Change epsilon within window of .1 to .4
+					if (e_i/episodes) > .1 and self.epsilon > .01:
+						e_range_percent_complete = ((e_i/episodes) - .1) / .4
+						self.epsilon = self.e_0 - (self.e_0 * e_range_percent_complete)
 
-			if len(experiences) > replay_buffer:
-				experiences = experiences[int(-.8*replay_buffer):]
+					if verbose and e_i % 1024 == 0:
+						print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lives[-1000:])/len(lives[-1000:]):.2f} score_avg: {sum(scores[-1000:])/len(scores[-1000:]):.2f}")
+					t0 = time.time()
 
-			#If training on this episode
-			if e_i % train_every == 0 and not e_i == 0 and not len(experiences) <= sample_size:
-				trained = True
-				#Change epsilon within window of .1 to .4
-				if (e_i/episodes) > .1 and self.epsilon > .01:
-					e_range_percent_complete = ((e_i/episodes) - .1) / .4
-					self.epsilon = self.e_0 - (self.e_0 * e_range_percent_complete)
-
-				if verbose and e_i % 1024 == 0:
-					print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lived[-1000:])/len(lived[-1000:]):.2f} score_avg: {sum(scores[-1000:])/len(scores[-1000:]):.2f}")
-				t0 = time.time()
-
-				#Check score
-				if self.high_score > self.best:
-					self.best = self.high_score
-				high_scores.append(self.high_score)
-				self.high_score = 0
+					#Check score
+					if self.high_score > self.best:
+						self.best = self.high_score
+					high_scores.append(self.high_score)
+					self.high_score = 0
 
 
-				best_sample = []
+					best_sample = []
 
-				if picking:
-					blacklist = []
-					indices = [i for i, item in enumerate(experiences) if not item['r'] < 0]
-					quality = 100 * len(indices) / sample_size
+					if picking:
+						blacklist = []
+						indices = [i for i, item in enumerate(experiences) if not item['r'] < 0]
+						quality = 100 * len(indices) / sample_size
 
-					if verbose and e_i % 1000 == 0:
-						print(f"quality of exps is {(100*quality / len(indices)):.2f}%")
-					while not len(best_sample) == sample_size:
-						if random.uniform(0,1) < .5:
-							if len(indices) > 0:
-								i = indices.pop(0)
-								blacklist.append(i)
-								best_sample.append(experiences[i])
+						if verbose and e_i % 1000 == 0:
+							print(f"quality of exps is {(100*quality / len(indices)):.2f}%")
+						while not len(best_sample) == sample_size:
+							if random.uniform(0,1) < .5:
+								if len(indices) > 0:
+									i = indices.pop(0)
+									blacklist.append(i)
+									best_sample.append(experiences[i])
+								else:
+									rand_i = random.randint(0,len(experiences)-1)
+									while  rand_i in blacklist:
+										rand_i = random.randint(0,len(experiences)-1)
+									best_sample.append(experiences[rand_i])
 							else:
-								rand_i = random.randint(0,len(experiences)-1)
-								while  rand_i in blacklist:
 									rand_i = random.randint(0,len(experiences)-1)
-								best_sample.append(experiences[rand_i])
-						else:
-								rand_i = random.randint(0,len(experiences)-1)
-								while  rand_i in blacklist:
-									rand_i = random.randint(0,len(experiences)-1)
-								best_sample.append(experiences[rand_i])
-					if verbose and e_i % 1000 == 0:
-						quality = sum(map(lambda x : int(not x['r'] in [0]),best_sample))
-						print(f"quality score {(100*quality/len(best_sample)):.2f}%")
-				else:
-					best_sample = random.sample(experiences,sample_size)
+									while  rand_i in blacklist:
+										rand_i = random.randint(0,len(experiences)-1)
+									best_sample.append(experiences[rand_i])
+						if verbose and e_i % 1000 == 0:
+							quality = sum(map(lambda x : int(not x['r'] in [0]),best_sample))
+							print(f"quality score {(100*quality/len(best_sample)):.2f}%")
+					else:
+						best_sample = random.sample(experiences,sample_size)
 
 
-				#Train
-				self.train_on_experiences(best_sample,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=e_i % 1024 == 0)
-			if (e_i % transfer_models_every) == 0 and not e_i == 0 and trained:
-				self.transfer_models(transfer=True,verbose=verbose)
+					#Train
+					self.train_on_experiences(best_sample,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=e_i % 1024 == 0)
+				if (e_i % transfer_models_every) == 0 and not e_i == 0 and trained:
+					self.transfer_models(transfer=True,verbose=verbose)
 
 
-		#Take score and lived data and shorten it
-		smooth = int(episodes / 100)
-		scores = [sum(scores[i:i+smooth])/smooth for i in range(0,int(len(scores)),smooth)]
-		lived = [sum(lived[i:i+smooth])/smooth for i in range(0,int(len(lived)),smooth)]
+			#Take score and lived data and shorten it
+			smooth = int(episodes / 100)
+			scores = [sum(scores[i:i+smooth])/smooth for i in range(0,int(len(scores)),smooth)]
+			lives = [sum(lives[i:i+smooth])/smooth for i in range(0,int(len(lives)),smooth)]
 
+			if len(lived) == 0:
+				scored = scores
+				lived = lives 
+			else:
+				scored = [scored[i] + scores[i] for i in range(len(scored))] 
+				scored = [lived[i] + lives[i] for i in range(len(lived))] 
+		
+		lived = [l/iters for l in lived]
+		scored = [s/iters for s in scored]
 
 		#Save a fig for results
 
@@ -532,7 +543,7 @@ class Trainer:
 		fig.set_size_inches(19.2,10.8)
 
 		#Plot data
-		axs[0].plot([i*smooth for i in range(len(scores))],scores,label="scores",color='green')
+		axs[0].plot([i*smooth for i in range(len(scores))],scored,label="scores",color='green')
 		axs[1].plot([i*smooth for i in range(len(lived))],lived,label="lived for",color='cyan')
 		axs[0].legend()
 		axs[1].legend()
@@ -545,7 +556,7 @@ class Trainer:
 
 
 		#Return the best score, high scores of all episode blocks, scores, and steps lived
-		return self.best,high_scores,scores,lived
+		return scores,lived
 
 	def train_on_experiences(self,big_set,epochs=100,batch_size=8,early_stopping=True,verbose=False):
 		for epoch_i in range(epochs):
@@ -642,61 +653,44 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 		print(f"\t{name} scored {best_score} in {(time.time()-t1):.2f}s")
 	except Exception as e:
 		traceback.print_exception(e)
-
+ 
 	return {"time":time.time()-t1,"loss_fn":str(loss_fn).split(".")[-1].split("'")[0],"optimizer_fn":str(optimizer_fn).split(".")[-1].split("'")[0],"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores,"avg_scores":avg_scores,"lived":lived}
-
-
-class GuiTrainer(Trainer):
-
-	def __init__(self,settings_dict):
-		#Init the trainer
-		super().__init__(settings_dict['w'],settings_dict['h'],
-						visible			= settings_dict['vis'],
-						loading			= settings_dict['load'],
-						PATH			= settings_dict['PATH'],
-						architecture	= settings_dict['arch'],
-						loss_fn			= settings_dict['loss'],
-						optimizer_fn	= settings_dict['optim'],
-						lr 				= settings_dict['lr'],
-						wd				= settings_dict['wd'],
-						name			= settings_dict['name'],
-						gamma			= settings_dict['gamma'],
-						epsilon			= settings_dict['epsilon'],
-						m_type			= settings_dict['m_type'])
-
-
-		self.window = tk.Tk()
-
-
-		self.view_window 	= tk.Frame(self.window)
-		self.output			= tk_st.ScrolledText(self.window)
-
-		self.view_window.grid(row=0,column=0)
-		self.output.grid(row=0,column=1)
-
-		self.window.mainloop()
-
 
 
 if __name__ == "__main__" and True :
 	for dir in ["models","sessions","figs"]:
-		if not os.path.isdir("models"):
-			os.mkdir("models")
-	#trainer = Trainer(12,12,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,8,3],[1568,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.01,wd=0,name="CNN",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	#l = trainer.train(episodes=15e4 ,train_every=32,replay_buffer=4096*4,sample_size=256,batch_size=32,epochs=1,transfer_models_every=512)
-	#import json
-	#import sys
-	#fname = os.path.join("sessions","saved_states.txt")
-	#if len(sys.argv) > 1:
-	#	fname = os.path.join("sessions",sys.argv[1])
-	#with open(fname,"w") as file:
-	#	file.write(json.dumps(l))
-	#exit()
+		if not os.path.isdir(dir):
+			os.mkdir(dir)
+
+	lived = [] 
+	scored = []
+
+	#Long Model, quick Training 
+	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,4,3],[1216,32],[32,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="LongModelQ",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	#l = trainer.train(episodes=100e4 ,train_every=16,replay_buffer=1024,sample_size=32,batch_size=16,epochs=1,transfer_models_every=128)
+	
+	#Short Model, quick Training 
+	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="ShortModelQ",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	#l = trainer.train(episodes=100e4 ,train_every=16,replay_buffer=1024,sample_size=32,batch_size=16,epochs=1,transfer_models_every=128)
+
+	#Short Model, long Training 
+	trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="ShortModelL",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	l = trainer.train(episodes=2.5e4 ,train_every=512,replay_buffer=1024*8,sample_size=1024,batch_size=16,epochs=1,transfer_models_every=1024)
+	scores, lives = l[2],l[3]
+
+	import json
+	import sys
+	fname = os.path.join("sessions","saved_states2.txt")
+	if len(sys.argv) > 1:
+		fname = os.path.join("sessions",sys.argv[1])
+	with open(fname,"w") as file:
+		file.write(json.dumps(l))
+	exit()
 	loss_fns = [torch.nn.HuberLoss,torch.nn.MSELoss]#,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam]
 
 	learning_rates = [1e-3]#,1e-4,1e-5,1e-6]
-	episodes = 1e5
+	episodes = 2.5e5
 
 	gamma = [.97]
 	epsilon=[.4]
@@ -706,7 +700,7 @@ if __name__ == "__main__" and True :
 	batch_sizes = [1,8,16]#2,16,32,64]#,4,32]
 	epochs = [1]
 	w_d = [0]
-	architectures = [[[6,32,5],[3200,64],[64,4]],[[6,16,3],[2304,4]],[[6,16,5],[16,16,5],[16,8,3],[1152,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	architectures = [[[6,32,5],[3200,64],[64,4]],[[6,16,5],[16,16,5],[16,8,3],[1152,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
 	i = 0
 	args = []
 	processes = []
@@ -726,12 +720,12 @@ if __name__ == "__main__" and True :
 														if r < s or r < b or s < b:
 															pass
 														else:
-															args.append((i,10,10,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
+															args.append((i,12,12,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
-	with Pool(4) as p:
+	with Pool(2) as p:
 		try:
 			t0 = time.time()
 			results = p.starmap(run_iteration,args)
