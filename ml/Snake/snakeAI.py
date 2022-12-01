@@ -649,7 +649,7 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 		t1 = time.time()
 		print(f"starting process {name}")
 		trainer = Trainer(width,height,visible=visible,loading=loading,PATH=path,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,name=name,gamma=gamma,architecture=architecture,epsilon=epsilon,m_type=model_type)
-		best_score,all_scores,avg_scores,lived = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=True)
+		avg_scores,lived = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=True)
 		print(f"\t{name} scored {best_score} in {(time.time()-t1):.2f}s")
 	except Exception as e:
 		traceback.print_exception(e)
@@ -674,33 +674,32 @@ if __name__ == "__main__" and True :
 	#l = trainer.train(episodes=100e4 ,train_every=16,replay_buffer=1024,sample_size=32,batch_size=16,epochs=1,transfer_models_every=128)
 
 	#Short Model, long Training 
-	trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="ShortModelL",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	l = trainer.train(episodes=2.5e4 ,train_every=512,replay_buffer=1024*8,sample_size=1024,batch_size=16,epochs=1,transfer_models_every=1024)
-	scores, lives = l[2],l[3]
-
-	import json
-	import sys
-	fname = os.path.join("sessions","saved_states2.txt")
-	if len(sys.argv) > 1:
-		fname = os.path.join("sessions",sys.argv[1])
-	with open(fname,"w") as file:
-		file.write(json.dumps(l))
-	exit()
+	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,name="ShortModelL",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	#l = trainer.train(episodes=2.5e4 ,train_every=512,replay_buffer=1024*8,sample_size=1024,batch_size=16,epochs=1,transfer_models_every=1024)
+	#scores, lives = l[0],l[1]
+	#import json
+	#import sys
+	#fname = os.path.join("sessions","saved_states2.txt")
+	#if len(sys.argv) > 1:
+	#	fname = os.path.join("sessions",sys.argv[1])
+	#with open(fname,"w") as file:
+	#	file.write(json.dumps(l))
+	#exit()
 	loss_fns = [torch.nn.HuberLoss,torch.nn.MSELoss]#,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam]
 
-	learning_rates = [1e-3]#,1e-4,1e-5,1e-6]
-	episodes = 2.5e5
+	learning_rates = [1e-3,1e-4,1e-5,1e-6]
+	episodes = 1e6
 
 	gamma = [.97]
 	epsilon=[.4]
-	train_every = [128]#,1024]
-	replay_buffer =[4096]#,16384]
-	sample_size = [512]#,2048]
-	batch_sizes = [1,8,16]#2,16,32,64]#,4,32]
-	epochs = [1]
-	w_d = [0]
-	architectures = [[[6,32,5],[3200,64],[64,4]],[[6,16,5],[16,16,5],[16,8,3],[1152,4]]]#[[3,16,3],[16,16,5],[16,16,5],[576,4]],
+	train_every = [32,128,1024]
+	replay_buffer =[512,1024,4096,16384]
+	sample_size = [128,512,1024,2048]
+	batch_sizes = [1,8,16,32]#2,16,32,64]#,4,32]
+	epochs = [1,2,5]
+	w_d = [0,1e-3,1e-6]
+	architectures = [[[6,32,5],[7072,64],[64,4]],[[6,16,5],[16,16,5],[16,8,3],[1152,4]],[[6,64,3],[64,16,5],[576,4]]]
 	i = 0
 	args = []
 	processes = []
@@ -720,11 +719,12 @@ if __name__ == "__main__" and True :
 														if r < s or r < b or s < b:
 															pass
 														else:
-															args.append((i,12,12,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
+															args.append((i,17,13,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
 															i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
+	random.shuffle(args)
 	with Pool(2) as p:
 		try:
 			t0 = time.time()
