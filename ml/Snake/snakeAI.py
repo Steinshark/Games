@@ -663,16 +663,16 @@ def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,op
 
 
 if __name__ == "__main__" and True :
-	for dir in ["models","sessions","figs"]:
-		if not os.path.isdir(dir):
-			os.mkdir(dir)
-
-	lived = [] 
-	scored = []
-
-	#Long Model, quick Training 
-	trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,4,3],[400,32],[32,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=1e-6,name="LongModelQ",gamma=.985,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	l = trainer.train(episodes=750000 ,train_every=1024,replay_buffer=1024*4,sample_size=1024*2,batch_size=64,epochs=1,transfer_models_every=2048)
+	#for dir in ["models","sessions","figs"]:
+	#	if not os.path.isdir(dir):
+	#		os.mkdir(dir)
+#
+	#lived = [] 
+	#scored = []
+#
+	##Long Model, quick Training 
+	#trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,4,3],[400,32],[32,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=1e-6,name="LongModelQ",gamma=.985,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	#l = trainer.train(episodes=750000 ,train_every=1024,replay_buffer=1024*4,sample_size=1024*2,batch_size=64,epochs=1,transfer_models_every=2048)
 	
 	#Short Model, quick Training 
 	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="ShortModelQ",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
@@ -681,15 +681,15 @@ if __name__ == "__main__" and True :
 	#Short Model, long Training 
 	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,name="ShortModelL",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
 	#l = trainer.train(episodes=2.5e4 ,train_every=512,replay_buffer=1024*8,sample_size=1024,batch_size=16,epochs=1,transfer_models_every=1024)
-	scores, lives = l[0],l[1]
-	import json
-	import sys
-	fname = os.path.join("sessions","saved_states2.txt")
-	if len(sys.argv) > 1:
-		fname = os.path.join("sessions",sys.argv[1])
-	with open(fname,"w") as file:
-		file.write(json.dumps(l))
-	exit()
+	#scores, lives = l[0],l[1]
+	#import json
+	#import sys
+	#fname = os.path.join("sessions","saved_states2.txt")
+	#if len(sys.argv) > 1:
+	#	fname = os.path.join("sessions",sys.argv[1])
+	#with open(fname,"w") as file:
+	#	file.write(json.dumps(l))
+	#exit()
 	loss_fns = [torch.nn.HuberLoss]#,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam]
 
@@ -698,11 +698,11 @@ if __name__ == "__main__" and True :
 
 	gamma = [.97]
 	epsilon=[.4]
-	train_every = [32,128,1024]
-	replay_buffer =[512,1024,4096]
-	sample_size = [128,512,2048]
-	batch_sizes = [8,16,32]#2,16,32,64]#,4,32]
-	epochs = [1,2]
+	train_every = [1024]
+	replay_buffer =[4096*4]
+	sample_size = [2048,2048*2]
+	batch_sizes = [16,32]#2,16,32,64]#,4,32]
+	epochs = [1]
 	w_d = [0,1e-6]
 	architectures = [[[6,32,5],[7072,64],[64,4]],[[6,16,5],[16,16,5],[16,8,3],[2280,4]],[[6,64,3],[64,16,5],[4560,4]]]
 	i = 0
