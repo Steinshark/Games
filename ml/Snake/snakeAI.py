@@ -20,6 +20,9 @@ import traceback
 import tkinter as tk
 from tkinter import scrolledtext as tk_st
 
+_WIDTH = 1100 * 2 / 3  
+_HEIGHT = 1100 * 2 / 3
+
 class SnakeGame:
 
 	def __init__(self,w,h,fps=30,device=torch.device('cpu'),encoding_type="CNN"):
@@ -199,9 +202,11 @@ class SnakeGame:
 		self.direction = max(self.movement_choices,key=self.movement_choices.get)
 
 	def train_on_game(self,model,visible=True,epsilon=.2,bad_opps=True):
-		window_x, window_y = (1300,900)
+		global _WIDTH
+		global _HEIGHT
+		window_x, window_y = ( _WIDTH, _HEIGHT)
 		experiences = []
-		rewards = {"die":-1,"food":1,"idle":-.1}
+		rewards = {"die":-1,"food":1,"idle":-.01}
 		score = 0
 		
 		#setup
@@ -552,7 +557,7 @@ class Trainer:
 		#Save fig to figs directory
 		if not os.path.isdir("figs"):
 			os.mkdir("figs")
-		fig.savefig(os.path.join("figs",f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}.png"),dpi=100)
+		fig.savefig(os.path.join("figs",f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-wd{self.wd}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}.png"),dpi=100)
 
 
 		#Return the best score, high scores of all episode blocks, scores, and steps lived
@@ -666,8 +671,8 @@ if __name__ == "__main__" and True :
 	scored = []
 
 	#Long Model, quick Training 
-	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,4,3],[1216,32],[32,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="LongModelQ",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	#l = trainer.train(episodes=100e4 ,train_every=16,replay_buffer=1024,sample_size=32,batch_size=16,epochs=1,transfer_models_every=128)
+	trainer = Trainer(8,8,visible=True,loading=False,PATH="models",architecture=[[6,16,5],[16,16,5],[16,4,3],[400,32],[32,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=1e-6,name="LongModelQ",gamma=.985,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	l = trainer.train(episodes=750000 ,train_every=1024,replay_buffer=1024*4,sample_size=1024*2,batch_size=64,epochs=1,transfer_models_every=2048)
 	
 	#Short Model, quick Training 
 	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.001,wd=0,name="ShortModelQ",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
@@ -676,15 +681,15 @@ if __name__ == "__main__" and True :
 	#Short Model, long Training 
 	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,name="ShortModelL",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
 	#l = trainer.train(episodes=2.5e4 ,train_every=512,replay_buffer=1024*8,sample_size=1024,batch_size=16,epochs=1,transfer_models_every=1024)
-	#scores, lives = l[0],l[1]
-	#import json
-	#import sys
-	#fname = os.path.join("sessions","saved_states2.txt")
-	#if len(sys.argv) > 1:
-	#	fname = os.path.join("sessions",sys.argv[1])
-	#with open(fname,"w") as file:
-	#	file.write(json.dumps(l))
-	#exit()
+	scores, lives = l[0],l[1]
+	import json
+	import sys
+	fname = os.path.join("sessions","saved_states2.txt")
+	if len(sys.argv) > 1:
+		fname = os.path.join("sessions",sys.argv[1])
+	with open(fname,"w") as file:
+		file.write(json.dumps(l))
+	exit()
 	loss_fns = [torch.nn.HuberLoss]#,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam]
 

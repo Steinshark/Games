@@ -9,32 +9,31 @@ import numpy as np
 #This class interfaces only with NP 
 class Snake:
 
-	def __init__(self,w,h,n_games=32,fps=30,device=torch.device('cpu'),encoding_type="CNN"):
+	def __init__(self,w,h,n_games=32,device=torch.device('cpu'),encoding_type="CNN"):
 
 		#Set global Vars
 		self.grid_w = w
 		self.grid_h = h
 		self.num_games = n_games
 
-
 		#Set game vars 
 		self.snakes = [[]] * n_games
 		self.foods = [(randint(1,self.grid_w - 1),randint(1,self.grid_h - 1))] * n_games
 		self.prev_foods = self.foods 
 
-		self.snakes = [[randint(0,self.grid_w - 1),randint(0,self.grid_h - 1)]] * n_games
-		self.prev_snake = self.snakes
-
-		self.snapshot_vector = [[0 for x in range(self.grid_h)] for i in range(self.grid_w)] * n_games
+		self.snakes = [[(randint(0,self.grid_w - 1),randint(0,self.grid_h - 1))]] * n_games
+		self.prev_snakes = self.snakes
 
 		self.directions = [(1,0)] * n_games
 		self.device = device
-		self.data = []
+		
 		self.encoding_type=encoding_type
 
 	def update_movements(self,model_outputs):
 		
-		for out in model_outputs:
+		for i in len(self.num_games):
+			
+			out = model_outputs[i]
 			w,a,s,d = out
 			movement_choices = {
 				(0,-1) 	: w,
@@ -42,7 +41,7 @@ class Snake:
 				(-1,0) 	: a,
 				(1,0)	: d}
 
-		self.direction = max(self.movement_choices,key=self.movement_choices.get)
+			self.directions[i] = max(movement_choices,key=self.movement_choices.get)
 
 	def train_on_game(self,model,visible=True,epsilon=.2,bad_opps=True):
 		window_x, window_y = (1920,1080)
