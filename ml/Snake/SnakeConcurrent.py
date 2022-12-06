@@ -1,224 +1,270 @@
-import pygame 
 
-from random import randint 
+# All pytorch modules 
 import torch
+import torch.nn as nn
+
+#All supporting modules 
+import random
+import numpy 
 import time 
-import numpy as np 
 
 
 #This class interfaces only with NP 
 class Snake:
 
-	def __init__(self,w,h,n_games=32,device=torch.device('cpu'),encoding_type="CNN"):
+
+	#	CONSTRUCTOR 
+	#	This method initializes the snake games to be played until each are over 
+	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
+	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cpu'),rewards={"die":-1,"food":1,"step":-.01}):
+
 
 		#Set global Vars
-		self.grid_w = w
-		self.grid_h = h
-		self.num_games = n_games
+		#	grid_w maintains the width of the game field 
+		#	grid_h tracks the height of the game field 
+		#	simul_games is how many games will be played at once. 
+		# 	- essential this is the batch size  
+		self.grid_w 			= w
+		self.grid_h 			= h
+		self.simul_games 		= simul_games
 
-		#Set game vars 
-		self.snakes = [[]] * n_games
-		self.foods = [(randint(1,self.grid_w - 1),randint(1,self.grid_h - 1))] * n_games
-		self.prev_foods = self.foods 
 
-		self.snakes = [[(randint(0,self.grid_w - 1),randint(0,self.grid_h - 1))]] * n_games
-		self.prev_snakes = self.snakes
+		#	GPU or CPU computation are both possible 
+		#	Requires pytorch for NVIDIA GPU Computing Toolkit 11.7
+		self.device 			= device
 
-		self.directions = [(1,0)] * n_games
-		self.device = device
+
+		#	Hopefully is a CNN 
+		# 	must be a torch.nn Module
+		self.learning_model 	= learning_model
+
+		#	This list holds information on each game, as well as their experience sets.
+		#	Since all games are played simultaneously, we must keep track of which ones
+		#	should still be played out and which ones are over.
+		#
+		#	MAINTAINS:
+		#		status: 		if the game is over or not 
+		#		experiences: 	the set of (s,a,s`,r,done) tuples 
+		#		highscore:		how many foods this snake collected
+		#		lived_for:		how many steps this snake survived
+		self.game_collection 	= [{"status":"active","experiences":[],"highscore":0,"lived_for":0,"eaten_since":0,"step_reward":None}]
+		self.active_games 		= list(range(simul_games))
+
+		#	Games are held in a 4D numpy array 
+		#   (GAME#,CHANNEL#,HEIGHT,WIDTH)
+		#	
+		#	CHANNELS:
+		#	1: one-hot encodes the snake's head location 
+		#	2: one-hot encodes the snake's body's locations 
+		#	3: one-hot encodes the food's location 
+		#	REPEAT memory_size# times. i.e. memory_size = 4 means 12 channels
+		self.game_vectors 		= numpy.zeros(shape=(simul_games,memory_size*3,h,w))
+
+
+		#	The game directions are tracked in this list. 
+		# 	Each tuple encodes the step taken in (x,y).
+		#
+		# 	Tuples should only ever have one '1' in it. 
+		# 	i.e. (1,1) & (0,0) are NOT legal direction tuples
+		self.direction_vectors 	= [ [1,0] for _ in range(simul_games) ]
+
+		#	The food directions are tracked in this list. 
+		# 	Each tuple encodes the food at pos (x,y).
+		self.food_vectors 		= [ [random.randint(0,w-1),random.randint(0,w-1)] for _ in range(simul_games) ]
+
+		#	The head and tail of each snake is tracked in this list 
+		#	Used to update Numpy Arrays in a more efficient manner.
+		#	I.e. only head and tail must be moved each game step
+		self.snake_tracker		= [ [[0,0]] for _ in range(simul_games) ]
+
+
+		#	A very important hyper-parameter: the reward made for each action
+		self.reward = rewards 
+		self.movements = [[0,-1],[0,1],[-1,0],[1,0]]
+
+	#	GAME PLAYER 
+	#	Calling this method will play out all games until completion
+	def train_on_game(self,epsilon=.2):
 		
-		self.encoding_type=encoding_type
-
-	def update_movements(self,model_outputs):
+		#	Maintain some global parameters 
 		
-		for i in len(self.num_games):
+		cur_step = 0
+		
+		#	Game Loop executes while at least one game is still running 
+		#	Executes one step of the game and does all work accordingly
+		while len(self.active_games) > 0:
+			pass
 			
-			out = model_outputs[i]
-			w,a,s,d = out
-			movement_choices = {
-				(0,-1) 	: w,
-				(0,1) 	: s,
-				(-1,0) 	: a,
-				(1,0)	: d}
 
-			self.directions[i] = max(movement_choices,key=self.movement_choices.get)
-
-	def train_on_game(self,model,visible=True,epsilon=.2,bad_opps=True):
-		window_x, window_y = (1920,1080)
-		experiences = []
-		rewards = {"die":-1,"food":1,"idle":-.1}
-		score = 0
-		
-		#setup
-		assert model is not None
-		square_width 	= window_x / self.grid_w
-		square_height 	= window_y / self.grid_h
-		game_running = True
-		eaten_since = 0
-		lived = 0
-		self.prev_frame = self.get_state_vector()
-		#Game display
-		if visible:
-			pygame.init()
-			self.window = pygame.display.set_mode((window_x,window_y))
-			pygame.display.set_caption("AI Training!")
-
-		#Game Loop
-		while game_running:
-			lived += 1
-			#Get init states
-			input_vector = self.get_state_vector()
-			old_dir = self.direction
-			self.prev_snake = self.snake
-			self.prev_food = self.food
-
-			#Update move randomly
+			#	GET NEXT DIR  
+			#	- an epsilon-greedy implementation 
+			#	- choose either to exploit or explore based off of 
+			#	  some threshold. At first, P(explore) >> P(exploit).
+			#	- decides for ALL GAMES simultaneously
+			
+			# 	The model for this dropoff will probably change and is 
+			#	open to exploration
 			if random.random() < epsilon:
-				while self.direction == old_dir:
-					x = random.randint(-1,1)
-					y = int(x == 0) * random.sample([1,-1],1)[0]
-					self.direction = (x,y)
+				self.explore()
 			else:
-				input_vector = torch.reshape(input_vector,(1,6,self.grid_h,self.grid_w))
-				movement_values = model.forward(input_vector)
-				try:
-					w,s,a,d = movement_values.cpu().detach().numpy()
-				except ValueError:
-					w,s,a,d = movement_values[0].cpu().detach().numpy()
-				self.update_movement(w=w,s=s,a=a,d=d)
+				self.exploit()
+			
+			#	MAKE NEXT MOVES 
+			#	Involves querying head of each game, finding where it will end next,
+			#	and applying game logic to kill/reward it 
+			
+			#	Step
+			self.step()
 
-			#Game display
-			if visible:
-				self.window.fill((0,0,0))
-				for coord in self.snake:
-					x,y = coord[0] * square_width,coord[1] * square_height
-					new_rect = pygame.draw.rect(self.window,self.colors["SNAKE"],pygame.Rect(x,y,square_width,square_height))
-				x,y = self.food[0] * square_width,self.food[1] * square_height
-				food_rect = pygame.draw.rect(self.window,self.colors["FOOD"],pygame.Rect(x,y,square_width,square_height))
-				pygame.display.update()
+			#	Check 
+			self.check()
+			
+		# 		input_vector = torch.reshape(input_vector,(1,6,self.grid_h,self.grid_w))
+		# 		movement_values = model.forward(input_vector)
+		# 		try:
+		# 			w,s,a,d = movement_values.cpu().detach().numpy()
+		# 		except ValueError:
+		# 			w,s,a,d = movement_values[0].cpu().detach().numpy()
+		# 		self.update_movement(w=w,s=s,a=a,d=d)
 
-			#Find New Head
-			next_x = self.snake[0][0] + self.direction[0]
-			next_y = self.snake[0][1] + self.direction[1]
-			next_head = (self.snake[0][0] + self.direction[0] , self.snake[0][1] + self.direction[1])
+		# 	#Game display
+		# 	if visible:
+		# 		self.window.fill((0,0,0))
+		# 		for coord in self.snake:
+		# 			x,y = coord[0] * square_width,coord[1] * square_height
+		# 			new_rect = pygame.draw.rect(self.window,self.colors["SNAKE"],pygame.Rect(x,y,square_width,square_height))
+		# 		x,y = self.food[0] * square_width,self.food[1] * square_height
+		# 		food_rect = pygame.draw.rect(self.window,self.colors["FOOD"],pygame.Rect(x,y,square_width,square_height))
+		# 		pygame.display.update()
 
-			#Check lose
-			if next_head[0] >= self.grid_w or next_head[1] >= self.grid_h or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake or (bad_opps and (old_dir[0]*-1,old_dir[1]*-1) == self.direction):
-				experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':'terminal'})
-				return experiences, score,lived
+		# 	#Find New Head
+		# 	next_x = self.snake[0][0] + self.direction[0]
+		# 	next_y = self.snake[0][1] + self.direction[1]
+		# 	next_head = (self.snake[0][0] + self.direction[0] , self.snake[0][1] + self.direction[1])
 
-			#Check eat food
-			if next_head == self.food:
-				eaten_since = 0
-				self.snake = [next_head] + self.snake
-				self.food = (randint(0,self.grid_w - 1),randint(0,self.grid_h - 1))
-				while self.food in self.snake:
-					self.food = (randint(0,self.grid_w - 1),randint(0,self.grid_h - 1))
+		# 	#Check lose
+		# 	if next_head[0] >= self.grid_w or next_head[1] >= self.grid_h or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake or (bad_opps and (old_dir[0]*-1,old_dir[1]*-1) == self.direction):
+		# 		experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':'terminal'})
+		# 		return experiences, score,lived
 
-				reward = rewards['food']
-				score += 1
-			#Check No Outcome
-			else:
-				self.snake = [next_head] + self.snake[:-1]
-				reward = rewards["idle"]
+		# 	#Check eat food
+		# 	if next_head == self.food:
+		# 		eaten_since = 0
+		# 		self.snake = [next_head] + self.snake
+		# 		self.food = (randint(0,self.grid_w - 1),randint(0,self.grid_h - 1))
+		# 		while self.food in self.snake:
+		# 			self.food = (randint(0,self.grid_w - 1),randint(0,self.grid_h - 1))
 
-			#Add to experiences
+		# 		reward = rewards['food']
+		# 		score += 1
+		# 	#Check No Outcome
+		# 	else:
+		# 		self.snake = [next_head] + self.snake[:-1]
+		# 		reward = rewards["idle"]
 
-			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
+		# 	#Add to experiences
 
-			eaten_since += 1
+		# 	experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
 
-			#Check if lived too long
-			if eaten_since > self.grid_w*self.grid_h*2:
-				reward = rewards['idle']
-				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
-				return experiences, score, lived
-		return experiences, score, lived
+		# 	eaten_since += 1
 
-	def get_state_vector(self):
+		# 	#Check if lived too long
+		# 	if eaten_since > self.grid_w*self.grid_h*2:
+		# 		reward = rewards['idle']
+		# 		experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
+		# 		return experiences, score, lived
+		# return experiences, score, lived
+		return
+	
 
-		if self.encoding_type == "old":
-			#Build x by y vector for snake
-			input_vector = [[0 for x in range(self.grid_h)] for y in range(self.grid_w)]
 
-			#Head of snake == 1
-			input_vector[self.snake[0][1]][self.snake[0][0]] = 1
 
-			#Rest of snake == -1
-			for piece in self.snake[1:]:
-				input_vector[piece[1]][piece[0]] = -1
+	#															#
+	#	HELPER FUNCTIONS TO MAKE TRAINING FUNCTION LOOK NICER   #
+	#															#
+	 
+	#	EXPLORE 
+	# 	Update all directions to be random.
+	#	This includes illegal directions i.e. direction reversal
+	def explore(self):
+		self.direction_vectors = [self.movements[random.randint(0,3)] for _ in range(self.simul_games)]
+	
+	#	EXPLOIT 
+	# 	Sends ALL games into model to be predicted (probably faster than sifting (???))
+	def exploit(self):
 
-			#Build x by y vector for food placement
-			food_placement = [[0 for x in range(self.grid_h)] for y in range(self.grid_w)]
-			food_placement[self.food[1]][self.food[0]] = 1
-			input_vector += food_placement
 
-		elif self.encoding_type == "3_channel":
-			enc_vectr = []
-			flag= False
-			enc_vectr = [[[0 for x in range(self.grid_w)] for y in range(self.grid_h)] for _ in range(3)]
-			enc_vectr[0][self.snake[0][1]][self.snake[0][0]] = 1
+		#	Inputs are of shape (#Games,#Channels,Height,Width) 
+		#	Model output should be of shape (#Games,4)
+		#	model_out corresponds to the EV of taking direction i for each game
+		model_out = self.learning_model(self.game_vectors)
 
-			for pos in self.snake[1:]:
-				x,y = pos
-				enc_vectr[1][y][x] = 1
-			enc_vectr[2][self.food[1]][self.food[0]] = 1
-			#for x,y in [(i%self.grid_w,int(i/self.grid_h)) for i in range(self.grid_w*self.grid_h)]:
-			#	enc_vectr += [int((x,y) == self.snake[0]), int((x,y) in self.snake[1:]),int((x,y) == self.food)]
-			enc_vectr = torch.reshape(torch.tensor(np.array(enc_vectr),dtype=torch.float,device=self.device),(3,self.grid_w,self.grid_h))
-			#input(xcl[0].shape)
-			return enc_vectr
+		#Find the direction for each game with highest EV 
+		next_dirs = torch.argmax(model_out,dim=1)
 
-		elif self.encoding_type == "6_channel":
-			enc_vectr = torch.zeros((6,self.grid_h,self.grid_w))
-			flag= False
+		#Update direction vectors accordingly 
+		self.direction_vectors = [self.movements[dir_i] for dir_i in next_dirs]
 
-			#Old SNAKE
-			#Place head (ch0)
-			enc_vectr[0][self.prev_snake[0][1]][self.prev_snake[0][0]] = 1
-			#Place body (ch1)
-			for pos in self.prev_snake[1:]:
-				x = pos[0]
-				y = pos[1]
-				enc_vectr[1][y][x] = 1
-			#Place food (ch2)
-			enc_vectr[2][self.prev_food[1]][self.prev_food[0]] = 1
 
-			#Cur SNAKE
-			#Place head (ch3)
-			enc_vectr[3][self.snake[0][1]][self.snake[0][0]] = 1
-			#Place body (ch4)
-			for pos in self.snake[1:]:
-				x = pos[0]
-				y = pos[1]
-				enc_vectr[4][y][x] = 1
-			#Place food (ch5)
-			enc_vectr[5][self.food[1]][self.food[0]] = 1
+	#	STEP SNAKE 
+	#	Move each snake in the direction that dir points 
+	#	Ensure we only touch active games
+	def step_snake(self):
 
-			ret =  torch.reshape(enc_vectr,(6,self.grid_h,self.grid_w))
-			return ret
+		mark_del = []
+		
+		for s_i in self.active_games:
+			next_x = self.snake_tracker[s][0][0]+self.direction_vectors[s][0]
+			next_y = self.snake_tracker[s][0][1]+self.direction_vectors[s][1]
+			next_head = [next_x,next_y]
 
-		elif self.encoding_type == "one_hot":
-			#Build x by y vector for snake
-			snake_body = [[0 for x in range(self.grid_w)] for y in range(self.grid_h)]
-			snake_head = [[0 for x in range(self.grid_w)] for y in range(self.grid_h)]
+			#Check if this snake lost 
+			if next_x < 0 or next_y < 0 or next_x == self.grid_w or next_y == self.grid_h or next_head in self.snake_tracker[s_i]:
+				
+				#Mark for delete and cleanup
+				mark_del.append(s_i)
+				self.game_collection[s_i]['status'] = "done"
 
-			#Head of snake == 1
-			snake_head[self.snake[0][1]][self.snake[0][0]] = 1
+				#Add final experience
+				self.game_collection[s_i]["step_reward"] = self.reward['die']
+			
+			#Check if snake ate food
+			elif next_head == self.food_vectors[s_i]:
+				#Roll vector 
+				
+				self.game_vectors[:,0] = numpy.roll(self.game_vectors[:,0],1,axis=0) 
+				#Change location of the food and edit food numpy vector
 
-			#Rest of snake
-			for piece in self.snake[1:]:
-				snake_body[piece[1]][piece[0]] = 1
+				#Set snake reward to be food 
 
-			#Food
-			food_placement = [[0 for x in range(self.grid_w)] for y in range(self.grid_h)]
-			food_placement[self.food[1]][self.food[0]] = 1
+				#Grow the snake by 1 length and edit snake numpy vector
 
-			input_vector = snake_head + snake_body + food_placement
-		#Translate to numpy and flatten
-		np_array = np.ndarray.flatten(np.array(input_vector))
+			#Check if  
 
-		#Translate to tensor
-		tensr = torch.tensor(np_array,dtype=torch.float,device=self.device)
-		return torch.tensor(np_array,dtype=torch.float,device=self.device)
 
+
+				
+
+		self.snake_tracker = [[[self.snake_tracker[s][0][0]+self.direction_vectors[s][0],self.snake_tracker[s][0][1]+self.direction_vectors[s][1]]] + self.snake_tracker[s][1:] for s in range(self.simul_games)]
+
+	#	CHECK SNAKE
+	#	Apply game logic to see which snakes died,
+	# 	which eat, and which survive 
+	def check(self):
+		next_neads = 0
+
+if __name__ == "__main__":
+	s = Snake(13,13,None)
+	t0 = time.time()
+	for i in range(100000):
+		s.explore()
+		s.step_snake()
+	print(f"list took {(time.time()-t0)}")
+	
+	s = Snake(13,13,None)
+	s.active_games = {i:True for i in range(32)}
+	t0 = time.time()
+	for i in range(100000):
+		s.explore()
+		s.step_snake()
+	print(f"dict took {(time.time()-t0)}")

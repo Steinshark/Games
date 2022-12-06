@@ -20,8 +20,8 @@ import traceback
 import tkinter as tk
 from tkinter import scrolledtext as tk_st
 
-_WIDTH = 1100 * 2 / 3  
-_HEIGHT = 1100 * 2 / 3
+_WIDTH = 1600 * 2 / 3  
+_HEIGHT = 1300 * 2 / 3
 
 class SnakeGame:
 
@@ -201,12 +201,12 @@ class SnakeGame:
 
 		self.direction = max(self.movement_choices,key=self.movement_choices.get)
 
-	def train_on_game(self,model,visible=True,epsilon=.2,bad_opps=True):
+	def train_on_game(self,model,visible=True,epsilon=.2,bad_opps=True): 
 		global _WIDTH
 		global _HEIGHT
 		window_x, window_y = ( _WIDTH, _HEIGHT)
 		experiences = []
-		rewards = {"die":-1,"food":1,"idle":-.01}
+		rewards = {"die":-1,"food":1,"idle":-.025}
 		score = 0
 		
 		#setup
@@ -240,6 +240,7 @@ class SnakeGame:
 					self.direction = (x,y)
 			else:
 				input_vector = torch.reshape(input_vector,(1,6,self.height,self.width))
+				input_vector = input_vector.to(self.device)
 				movement_values = model.forward(input_vector)
 				try:
 					w,s,a,d = movement_values.cpu().detach().numpy()
@@ -264,7 +265,7 @@ class SnakeGame:
 
 			#Check lose
 			if next_head[0] >= self.width or next_head[1] >= self.height or next_head[0] < 0 or next_head[1] < 0 or next_head in self.snake or (bad_opps and (old_dir[0]*-1,old_dir[1]*-1) == self.direction):
-				experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':'terminal'})
+				experiences.append({'s':input_vector,'r':rewards['die'],'a':self.direction,'s`':input_vector,'done':1})
 				return experiences, score,lived
 
 			#Check eat food
@@ -284,14 +285,14 @@ class SnakeGame:
 
 			#Add to experiences
 
-			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector()})
+			experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`': self.get_state_vector(),"done":0})
 
 			eaten_since += 1
 
 			#Check if lived too long
-			if eaten_since > self.width*self.height*2:
+			if eaten_since > self.width*self.height*1.5:
 				reward = rewards['idle']
-				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector()})
+				experiences.append({'s':input_vector,'r':reward,'a':self.direction,'s`':self.get_state_vector(),"done":0})
 				return experiences, score, lived
 		return experiences, score, lived
 
@@ -330,7 +331,7 @@ class SnakeGame:
 			return enc_vectr
 
 		elif self.encoding_type == "6_channel":
-			enc_vectr = torch.zeros((6,self.height,self.width))
+			enc_vectr = torch.zeros((6,self.height,self.width),device=self.device)
 			flag= False
 
 			#Old SNAKE
@@ -355,8 +356,7 @@ class SnakeGame:
 			#Place food (ch5)
 			enc_vectr[5][self.food[1]][self.food[0]] = 1
 
-			ret =  torch.reshape(enc_vectr,(6,self.height,self.width))
-			return ret
+			return enc_vectr
 
 		elif self.encoding_type == "one_hot":
 			#Build x by y vector for snake
@@ -389,7 +389,7 @@ class Trainer:
 		self.PATH = PATH
 		self.fname = name
 		self.m_type = m_type
-		self.input_dim = game_w * game_h * 3
+		self.input_dim = game_w * game_h * 6
 
 		if m_type == "FCN":
 			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
@@ -397,9 +397,9 @@ class Trainer:
 			self.encoding_type = "one_hot"
 
 		elif m_type == "CNN":
-			self.input_shape = (1,3,game_w,game_h)
-			self.target_model 	= networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
-			self.learning_model = networks.ConvolutionalNetwork(channels=3,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
+			self.input_shape = (1,6,game_w,game_h)
+			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
+			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.encoding_type = "6_channel"
 
 		self.w = game_w
@@ -425,18 +425,10 @@ class Trainer:
 		self.epsilon = epsilon
 		self.e_0 = self.epsilon
 		self.architecture = architecture
-		settings = {
-			"arch" : architecture,
-			"loss_fn" : self.loss_fn,
-			"optim_fn": self.optimizer_fn,
-			"lr"		: self.lr,
-			"wd"		: self.wd,
-			"epsilon"	: self.epsilon,
-			"y"			: self.gamma
-		}
+
 		import pprint
 
-	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2000,verbose=True,iters=3):
+	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2000,verbose=True,iters=3,picking=True):
 		scored = [] 
 		lived = [] 
 		
@@ -453,7 +445,6 @@ class Trainer:
 			scores = []
 			lives = []
 
-			picking = False
 			for e_i in range(int(episodes)):
 				#Play a game and collect the experiences
 				game = SnakeGame(self.w,self.h,fps=100000,encoding_type=self.encoding_type,device=self.device)
@@ -492,11 +483,11 @@ class Trainer:
 
 					if picking:
 						blacklist = []
-						indices = [i for i, item in enumerate(experiences) if not item['r'] < 0]
+						indices = [i for i, item in enumerate(experiences) if item['r'] in [-2,2] ]
 						quality = 100 * len(indices) / sample_size
 
-						if verbose and e_i % 1000 == 0:
-							print(f"quality of exps is {(100*quality / len(indices)):.2f}%")
+						if verbose and e_i % 1024 == 0:
+							print(f"quality of exps is {(100*quality / len(indices)+.1):.2f}%")
 						while not len(best_sample) == sample_size:
 							if random.uniform(0,1) < .5:
 								if len(indices) > 0:
@@ -513,8 +504,8 @@ class Trainer:
 									while  rand_i in blacklist:
 										rand_i = random.randint(0,len(experiences)-1)
 									best_sample.append(experiences[rand_i])
-						if verbose and e_i % 1000 == 0:
-							quality = sum(map(lambda x : int(not x['r'] in [0]),best_sample))
+						if verbose and e_i % 1024 == 0:
+							quality = sum(map(lambda x : int(x['r'] in [-2,2]),best_sample))
 							print(f"quality score {(100*quality/len(best_sample)):.2f}%")
 					else:
 						best_sample = random.sample(experiences,sample_size)
@@ -557,7 +548,7 @@ class Trainer:
 		#Save fig to figs directory
 		if not os.path.isdir("figs"):
 			os.mkdir("figs")
-		fig.savefig(os.path.join("figs",f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-wd{self.wd}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}.png"),dpi=100)
+		fig.savefig(os.path.join("figs",f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-wd{self.wd}-bs{batch_size}-te{train_every}-rb{replay_buffer}-ss{sample_size}-p={picking}.png"),dpi=100)
 
 
 		#Return the best score, high scores of all episode blocks, scores, and steps lived
@@ -571,7 +562,14 @@ class Trainer:
 			next_percent = .02
 
 			#Batch the sample set
-			batches = [[big_set[i * n] for n in range(batch_size)] for i in range(int(len(big_set)/batch_size))]
+			n_batches = int(len(big_set)/batch_size)
+			batches = [[big_set[i * n] for n in range(batch_size)] for i in range(n_batches)]
+			init_states = torch.zeros(size=(n_batches,batch_size,6,self.h,self.w),device=self.device)
+
+			for i in range(int(len(big_set)/batch_size)):
+				#Create the batch init states and batch 
+				for j in range(batch_size):
+					init_states[i,j] = big_set[i*j]["s`"]
 
 			#Measrure losses and prepare for early stopping
 			c_loss = 0
@@ -581,8 +579,8 @@ class Trainer:
 			for i,batch in enumerate(batches):
 
 				#Get a list (tensor) of all initial game states
-				initial_states = torch.stack(([torch.reshape(exp['s'],(6,self.h,self.w)) for exp in batch]))
-				#input(f"shape of one is {initial_states[0].shape}")
+				initial_states = init_states[i]
+
 				#Make predictions of current states
 				predictions = self.learning_model(initial_states)
 				#Print progress of epoch
@@ -595,19 +593,20 @@ class Trainer:
 				chosen_action = [self.movement_repr_tuples.index(exp['a']) for exp in batch]
 
 				# prepare for the adjusted values
-				vals_target_adjusted = torch.zeros((batch_size,4))
-				#input(f"init vta with size {vals_target_adjusted}")
+				vals_target_adjusted = torch.zeros((batch_size,4),device=self.device)
 
 				#Apply Bellman
 				for index,action in enumerate(chosen_action):
 
 					# If state was terminal, use target reward
-					if batch[index]['s`'] == 'terminal' or batch[index]['r'] > 0:
+					if batch[index]['done']:
 						target = batch[index]['r']
+
 					# If not terminal, use Bellman Equation
 					else:
-						next_state_val = torch.max(self.target_model(torch.reshape(batch[index]['s`'],(1,6,self.h,self.w))))
-						target = batch[index]['r'] + (self.gamma * next_state_val)
+						vect = torch.reshape(batch[index]['s`'],(1,6,self.h,self.w))
+						#   Q' <-       r          +    γ       *             max Q(s`) 
+						target = batch[index]['r'] + self.gamma * torch.max(self.target_model(vect))
 
 					#Update with corrected value
 					vals_target_adjusted[index,action] = target
@@ -643,23 +642,23 @@ class Trainer:
 			if self.m_type == "FCN":
 				self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
 			elif self.m_type == "CNN":
-				self.target_model = networks.ConvolutionalNetwork(channels=3,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture,input_shape=self.input_shape)
+				self.target_model = networks.ConvolutionalNetwork(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture,input_shape=self.input_shape)
 
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
 			self.target_model.to(self.device)
 
 
-def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,optimizer_fn,lr,wd,epsilon,epochs,episodes,train_every,replay_buffer,sample_size,batch_size,gamma,early_stopping,model_type):
+def run_iteration(name,width,height,visible,loading,path,architecture,loss_fn,optimizer_fn,lr,wd,epsilon,epochs,episodes,train_every,replay_buffer,sample_size,batch_size,gamma,early_stopping,model_type,picking):
 	try:
 		t1 = time.time()
 		print(f"starting process {name}")
 		trainer = Trainer(width,height,visible=visible,loading=loading,PATH=path,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,name=name,gamma=gamma,architecture=architecture,epsilon=epsilon,m_type=model_type)
-		avg_scores,lived = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=True)
-		print(f"\t{name} scored {best_score} in {(time.time()-t1):.2f}s")
+		avg_scores,lived = trainer.train(episodes=episodes,train_every=train_every,replay_buffer=replay_buffer,sample_size=sample_size,batch_size=batch_size,epochs=epochs,early_stopping=early_stopping,verbose=True,picking=picking,iters=5)
+		print(f"\t{name} scored {sum(avg_scores)/len(avg_scores)} in {(time.time()-t1):.2f}s")
 	except Exception as e:
 		traceback.print_exception(e)
  
-	return {"time":time.time()-t1,"loss_fn":str(loss_fn).split(".")[-1].split("'")[0],"optimizer_fn":str(optimizer_fn).split(".")[-1].split("'")[0],"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"best_score":best_score,"all_scores":all_scores,"avg_scores":avg_scores,"lived":lived}
+	return {"time":time.time()-t1,"loss_fn":str(loss_fn).split(".")[-1].split("'")[0],"optimizer_fn":str(optimizer_fn).split(".")[-1].split("'")[0],"lr":lr,"wd":wd,"epsilon":epsilon,"epochs":epochs,"episodes":episodes,"train_every":train_every,"replay_buffer":replay_buffer,"sample_size":sample_size, "batch_size":batch_size,"gamma":gamma,"architecture":architecture,"avg_scores":avg_scores,"lived":lived,"dim":(width,height)}
 
 
 if __name__ == "__main__" and True :
@@ -679,32 +678,32 @@ if __name__ == "__main__" and True :
 	#l = trainer.train(episodes=100e4 ,train_every=16,replay_buffer=1024,sample_size=32,batch_size=16,epochs=1,transfer_models_every=128)
 
 	#Short Model, long Training 
-	#trainer = Trainer(17,14,visible=False,loading=False,PATH="models",architecture=[[6,16,5],[16,8,5],[1904,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,name="ShortModelL",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
-	#l = trainer.train(episodes=2.5e4 ,train_every=512,replay_buffer=1024*8,sample_size=1024,batch_size=16,epochs=1,transfer_models_every=1024)
-	#scores, lives = l[0],l[1]
-	#import json
-	#import sys
-	#fname = os.path.join("sessions","saved_states2.txt")
-	#if len(sys.argv) > 1:
-	#	fname = os.path.join("sessions",sys.argv[1])
-	#with open(fname,"w") as file:
-	#	file.write(json.dumps(l))
-	#exit()
+	trainer = Trainer(16,11,visible=False,loading=False,PATH="models",architecture=[[6,16,9],[16,16,5],[16,8,3],[1008,4]],loss_fn=torch.nn.HuberLoss ,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,name="ShortModelL",gamma=.97,epsilon=.4,m_type="CNN",gpu_acceleration=False)
+	l = trainer.train(episodes=2e5  ,train_every=1024*1/8,replay_buffer=4096*2,sample_size=256,batch_size=16,epochs=1,transfer_models_every=1024,iters=1,picking=False)
+	scores, lives = l[0],l[1]
+	import json
+	import sys
+	fname = os.path.join("sessions","saved_states2.txt")
+	if len(sys.argv) > 1:
+		fname = os.path.join("sessions",sys.argv[1])
+	with open(fname,"w") as file:
+		file.write(json.dumps(l))
+	exit()
 	loss_fns = [torch.nn.HuberLoss]#,torch.nn.L1Loss]
 	optimizers = [torch.optim.Adam]
 
-	learning_rates = [1e-3,1e-4,1e-6]
+	learning_rates = [1e-3,5e-5]
 	episodes = 2e5
-
+	picking = [False]
 	gamma = [.97]
 	epsilon=[.4]
-	train_every = [1024]
-	replay_buffer =[4096*4]
-	sample_size = [2048,2048*2]
-	batch_sizes = [16,32]#2,16,32,64]#,4,32]
+	train_every = [128]
+	replay_buffer =[4096*2]
+	sample_size = [512]
+	batch_sizes = [16]#2,16,32,64]#,4,32]
 	epochs = [1]
-	w_d = [0,1e-6]
-	architectures = [[[6,32,5],[7072,64],[64,4]],[[6,16,5],[16,16,5],[16,8,3],[2280,4]],[[6,64,3],[64,16,5],[4560,4]]]
+	w_d = [0]
+	architectures = [[[6,32,9],[32,16,5],[16,8,3],[1008,4]],[[6,32,9],[32,16,5],[16,8,3],[1008,256],[256,32],[32,4]]]
 	i = 0
 	args = []
 	processes = []
@@ -721,11 +720,12 @@ if __name__ == "__main__" and True :
 											for a in architectures:
 												for h in epsilon:
 													for w in w_d:
-														if r < s or r < b or s < b:
-															pass
-														else:
-															args.append((i,17,13,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN"))
-															i += 1
+														for p in picking:
+															if r < s or r < b or s < b:
+																pass
+															else:
+																args.append((i,16,11,False,False,"models",a,l,o,lr,w,h,e,episodes,t,r,s,b,y,True,"CNN",p))
+																i += 1
 
 	if not input(f"testing {len(args)} trials, est. completion in {(.396 * (len(args)*episodes / 40)):.1f}s [{(.396*(1/3600)*(len(args)*episodes / 40)):.2f}hrs]. Proceed? [y/n] ") in ["Y","y","Yes","yes","YES"]: exit()
 
