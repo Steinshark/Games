@@ -111,6 +111,7 @@ class ConvolutionalNetwork(nn.Module):
 		self.model = nn.Sequential(o_d)
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
+		
 	def train(self,x_input,y_actual,epochs=10,in_shape=(1,6,10,10)):
 
 		#Run epochs
