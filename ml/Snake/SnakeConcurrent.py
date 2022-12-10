@@ -16,7 +16,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-1,"food":5,"step":-.05}):
+	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-5,"food":5,"step":0}):
 
 
 		#Set global Vars
@@ -198,14 +198,16 @@ class Snake:
 			#if snake_i == i and  print(f"snake {i} - {self.snake_tracker[i]}\ninit dir {self.movements[self.direction_vectors[i]]}\ninit food {self.food_vectors[i]}\ninit state:\n{self.game_vectors[snake_i]}"): pass
 			
 
-
+			#	Find next location of snake 
 			chosen_action = self.direction_vectors[snake_i]
 			dx,dy = self.movements[chosen_action]
 			next_x = self.snake_tracker[snake_i][0][0]+dx
 			next_y = self.snake_tracker[snake_i][0][1]+dy
 			next_head = [next_x,next_y]
+			
 			#Check if this snake lost 
 			if next_x < 0 or next_y < 0 or next_x == self.grid_w or next_y == self.grid_h or next_head in self.snake_tracker[snake_i] or self.game_collection[snake_i]['eaten_since'] > self.move_threshold or self.check_opposite(snake_i):
+				
 				#Mark for delete and cleanup
 				mark_del.append(snake_i)
 				self.game_collection[snake_i]['status'] = "done"
@@ -213,12 +215,12 @@ class Snake:
 				self.game_collection[snake_i]["lived_for"] = self.cur_step
 
 				#Add final experience
-				experience = {"s":self.game_vectors.narrow(0,snake_i,1),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1),'done':True}
+				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':True}
 				self.experiences.append(experience)
 				continue
 			
 			#	START EXP CREATION 
-			experience = {"s":self.game_vectors.narrow(0,snake_i,1),"a":chosen_action,"r":None,'s`':None,'done':False}
+			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':None,'done':False}
 			
 			#	ROLL VECTORS 
 			#	Since the snake has survived, we can roll 3 channels down to be written with 
@@ -228,6 +230,10 @@ class Snake:
 
 			#Check if snake ate food
 			if next_head == self.food_vectors[snake_i]:
+				
+				#Save food in exp 
+				experience["s`"]
+
 				#Change location of the food
 				self.spawn_new_food(snake_i)
 				
@@ -267,7 +273,7 @@ class Snake:
 
 
 			#	Add s` to the experience 
-			experience['s`'] = self.game_vectors.narrow(0,snake_i,1)
+			experience['s`'] = self.game_vectors.narrow(0,snake_i,1).clone()
 			self.experiences.append(experience)
 			
 
@@ -305,6 +311,7 @@ class Snake:
 			food_loc = [next_x,next_y] 
 
 		self.food_vectors[snake_i] = food_loc 
+		self.game_vectors[snake_i][2][next_y][next_x] = 1
 		return next_x,next_y
 
 

@@ -82,7 +82,7 @@ class FullyConnectedNetwork(nn.Module):
 
 class ConvolutionalNetwork(nn.Module):
 	
-	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
+	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
 		super(ConvolutionalNetwork,self).__init__()
 		self.model = []
 		switched = False 

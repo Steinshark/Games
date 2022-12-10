@@ -93,7 +93,7 @@ class Trainer:
 						self.epsilon = self.e_0 - (self.e_0 * e_range_percent_complete)
 
 					if verbose and e_i % 1024 == 0:
-						print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lives[-1000:])/len(lives[-1000:]):.2f} score_avg: {sum(scores[-1000:])/len(scores[-1000:]):.2f}")
+						print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lives[-1*train_every:])/len(lives[-1*train_every:]):.2f} score_avg: {sum(scores[-1*train_every:])/len(scores[-1*train_every:]):.2f}")
 					t0 = time.time()
 
 					#Check score
@@ -242,18 +242,19 @@ class Trainer:
 
 		#	block_reduce lists 
 		#plot up to 500
-		averager = int(len(all_scores)/500)
+		smooth_factor = 500
+		averager = int(len(all_scores)/smooth_factor)
 		blocked_scores = []
 		blocked_lived = []
-		for block_i in range(averager):
-			blocked_scores.append(sum(all_scores[block_i*averager:block_i*averager+block_i])/averager)
-			blocked_lived.append(sum(all_lived[block_i*averager:block_i*averager+block_i])/averager)
+		for block_i in range(smooth_factor):
+			blocked_scores.append(sum(all_scores[block_i*averager:block_i*averager+block_i])/smooth_factor)
+			blocked_lived.append(sum(all_lived[block_i*averager:block_i*averager+block_i])/smooth_factor)
 		
 		fig, axs = plt.subplots(2,1)
 		fig.set_size_inches(19.2,10.8)
 
-		axs[0].plot(blocked_scores)
-		axs[1].plot(blocked_lived)
+		axs[0].plot(blocked_scores,label="avg scores",color="cyan")
+		axs[1].plot(blocked_lived,label="avg steps",color="green")
 		axs[0].legend()
 		axs[1].legend()
 		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-mem{memory_size}-ss{sample_size}")
@@ -383,7 +384,7 @@ class Trainer:
 						printed+=1
 
 				#One run of this for loop will be one batch run
-				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False) * -.01
+				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False)
 
 				#Update the weights of the experience
 				for item_i in range(batch_size):
@@ -400,6 +401,16 @@ class Trainer:
 					else:
 						target 										= reward + self.gamma * torch.max(self.target_model.model(exp["s`"]))
 						final_target_values[item_i,chosen_action] 	= target
+
+						if reward > 0 and False:
+							print("snake at here")
+							print(exp["s"][0][0])
+							print(exp["s"][0][1])
+							input(exp["s"][0][2])
+							print("after eat:")
+							print(exp["s`"][0][0])
+							print(exp["s`"][0][1])
+							input(exp["s`"][0][2])
 
 				#	BATCH GRADIENT DESCENT
 				i_start 					= batch_i*batch_size
