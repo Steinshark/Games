@@ -5,6 +5,7 @@ import time
 import SnakeConcurrent
 import random 
 from matplotlib import pyplot as plt 
+import numpy 
 
 class Trainer:
 
@@ -178,7 +179,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True):
+	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-5,"food":5,"step":-.2}):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -203,7 +204,7 @@ class Trainer:
 
 
 			#	GET EXPERIENCES
-			metrics, experiences = SnakeConcurrent.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards={"die":-1,"food":1,"step":-.01}).play_out_games(epsilon=e)
+			metrics, experiences = SnakeConcurrent.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards=rewards).play_out_games(epsilon=e)
 
 
 			#	UPDATE MEMORY POOL 
@@ -242,27 +243,39 @@ class Trainer:
 
 		#	block_reduce lists 
 		#plot up to 500
-		smooth_factor = 500
-		averager = int(len(all_scores)/smooth_factor)
-		blocked_scores = []
-		blocked_lived = []
-		for block_i in range(smooth_factor):
-			blocked_scores.append(sum(all_scores[block_i*averager:block_i*averager+block_i])/smooth_factor)
-			blocked_lived.append(sum(all_lived[block_i*averager:block_i*averager+block_i])/smooth_factor)
+		averager = int(len(all_scores)/500)
+		
+		while True:
+			try:
+				blocked_scores = numpy.average(numpy.array(all_scores).reshape(-1,averager),axis=1)
+				blocked_lived = numpy.average(numpy.array(all_lived).reshape(-1,averager),axis=1)
+				break 
+			except ValueError:
+				averager += 1
+
+
+
+		x_scale = [averager*i for i in range(len(blocked_scores))] 
 		
 		fig, axs = plt.subplots(2,1)
 		fig.set_size_inches(19.2,10.8)
 
-		axs[0].plot(blocked_scores,label="avg scores",color="cyan")
-		axs[1].plot(blocked_lived,label="avg steps",color="green")
+		axs[0].plot(x_scale,blocked_scores,label="avg scores",color="cyan")
+		axs[1].plot(x_scale,blocked_lived,label="avg steps",color="green")
 		axs[0].legend()
+		axs[0].set_title("Average Score")
 		axs[1].legend()
-		axs[0].set_title(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-mem{memory_size}-ss{sample_size}")
+		axs[1].set_title("Average Steps")
 
+		axs[0].set_xlabel("Game Number")
+		axs[0].set_ylabel("Score")
+		axs[1].set_xlabel("Game Number")
+		axs[1].set_ylabel("Steps Taken")
+		fig.suptitle(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-mem{memory_size}-ss{sample_size}")
 		#Save fig to figs directory
 		if not os.path.isdir("figs"):
 			os.mkdir("figs")
-		fig.savefig(os.path.join("figs",f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-wd{self.wd}-bs{batch_size}-te{train_every}-mem{memory_size}-ss{sample_size}-p={picking}.png"),dpi=100)
+		fig.savefig(os.path.join("figs",f"{self.architecture}-iters{iters*train_every}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-wd{self.wd}-bs{batch_size}-te{train_every}-mem{memory_size}-ss{sample_size}-p={picking}.png"),dpi=100)
 
 
 
@@ -356,8 +369,6 @@ class Trainer:
 
 
 	def train_on_experiences_better(self,big_set,epochs=1,batch_size=8,channels=6,early_stopping=True,verbose=False):
-
-
 		print(f"TRAINING:")
 		print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'early-stop'.ljust(12)}: {early_stopping}\n")
 		for epoch_i in range(epochs):
