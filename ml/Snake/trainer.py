@@ -7,26 +7,33 @@ import random
 from matplotlib import pyplot as plt 
 import numpy 
 
+
+_FCN1 = 
 class Trainer:
 
 	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="models",memory_size=4,loss_fn=torch.nn.HuberLoss,optimizer_fn=torch.optim.Adam,lr=5e-4,wd=0,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2,m_type="CNN"):
 		self.PATH = PATH
 		self.fname = name
 		self.m_type = m_type
-		self.input_dim = game_w * game_h * 6
+		self.input_dim = game_w * game_h * memory_size
 
 		if m_type == "FCN":
+			self.input_dim *= 3
 			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
 			self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
 			self.encoding_type = "one_hot"
+			
+
 
 		elif m_type == "CNN":
 			self.input_shape = (1,architecture[0][0],game_w,game_h)
 			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.encoding_type = "6_channel"
+		total_params = sum(param.numel() for param in self.learning_model.model.parameters())
 
-		self.w = game_w
+		input(f"{m_type} model has {total_params} parameters")
+		self.w = game_w	
 		self.h = game_h
 		self.gpu_acceleration = gpu_acceleration
 
@@ -374,6 +381,7 @@ class Trainer:
 		for epoch_i in range(epochs):
 			#	Telemetry Vars 
 			t0 			= time.time()
+			t_gpu 		= 0
 			num_equals 	= 50 
 			printed 	= 0
 			total_loss	= 0
@@ -394,9 +402,9 @@ class Trainer:
 						print("=",end='',flush=True)
 						printed+=1
 
-				#One run of this for loop will be one batch run
 				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False)
 
+				#One run of this for loop will be one batch run
 				#Update the weights of the experience
 				for item_i in range(batch_size):
 					
@@ -410,9 +418,10 @@ class Trainer:
 					if exp["done"]:	
 						final_target_values[item_i,chosen_action] 	= reward
 					else:
-						target 										= reward + self.gamma * torch.max(self.target_model.model(exp["s`"]))
+						t1 = time.time()
+						target 										= reward + self.gamma * torch.max(self.target_model.forward(exp["s`"]))
 						final_target_values[item_i,chosen_action] 	= target
-
+						t_gpu += time.time() - t1
 						if reward > 0 and False:
 							print("snake at here")
 							print(exp["s"][0][0])
@@ -430,17 +439,18 @@ class Trainer:
 				#	Calculate Loss
 				self.learning_model.optimizer.zero_grad()
 				inputs 						= torch.stack([exp["s"][0] for exp in big_set[i_start:i_end]])
-				this_batch 					= self.learning_model.model(inputs)
+				t1 = time.time()
+				this_batch 					= self.learning_model.forward(inputs)
 				batch_loss 					= self.learning_model.loss(final_target_values,this_batch)
 				total_loss += batch_loss.item()
 
 				#Back Propogate
 				batch_loss.backward()
 				self.learning_model.optimizer.step()
-			
+				t_gpu += time.time() - t1
 			#	Telemetry
 			if verbose:
-				print(f"]\ttime: {(time.time()-t0):.2f}s\tloss: {(total_loss/num_batches):.6f}")
+				print(f"]\ttime: {(time.time()-t0):.2f}s\tt_gpu:{(t_gpu):.2f}\tloss: {(total_loss/num_batches):.6f}")
 		if verbose:
 			print("\n\n")
 

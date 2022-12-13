@@ -169,7 +169,7 @@ class Snake:
 		
 		if mode == 'All':
 			with torch.no_grad():
-				model_out = self.learning_model.model(self.game_vectors)
+				model_out = self.learning_model.forward(self.game_vectors)
 				#Find the direction for each game with highest EV 
 				next_dirs = torch.argmax(model_out,dim=1)
 
@@ -179,7 +179,7 @@ class Snake:
 		elif mode == 'Alive':
 			with torch.no_grad():
 				for snake_i in self.active_games:
-					model_out 	= self.learning_model.model(self.game_vectors.narrow(0,snake_i,1))
+					model_out 	= self.learning_model.forward(self.game_vectors.narrow(0,snake_i,1))
 					next_dir 	= torch.argmax(model_out)
 					self.direction_vectors[snake_i] = next_dir
 

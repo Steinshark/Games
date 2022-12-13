@@ -1,4 +1,3 @@
-from platform import architecture
 from typing import OrderedDict
 import torch
 import torch.nn as nn
@@ -10,18 +9,20 @@ import math
 import random
 
 class FullyConnectedNetwork(nn.Module):
-	def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[512,32,16]):
+	def __init__(self,input_dim,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[512,32,16]):
 		super(FullyConnectedNetwork,self).__init__()
 
-		self.model = nn.Sequential(nn.Linear(input_size,architecture[0]))
-		self.model.append(nn.LeakyReLU(.5))
+		self.model = [nn.Linear(input_dim,architecture[0])]
+		self.model.append(nn.LeakyReLU(.2))
 
 		for i,size in enumerate(architecture[:-1]):
-
+			
 			self.model.append(nn.Linear(size,architecture[i+1]))
-			self.model.append(nn.LeakyReLU(.5))
+			self.model.append(nn.LeakyReLU(.1))
 		self.model.append(nn.Linear(architecture[-1],output_size))
-		self.model.append(nn.Softmax(dim=0))
+
+		od = OrderedDict({str(i):self.model[i] for i in range(len(self.model))})
+		self.model = nn.Sequential(od)
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr,weight_decay=wd)
 		self.loss = loss_fn()
 
@@ -76,6 +77,7 @@ class FullyConnectedNetwork(nn.Module):
 
 
 	def forward(self,x_list):
+		x_list = torch.flatten(x_list,start_dim=1)
 		return self.model(x_list)
 		#	y_predicted.append(y_pred.cpu().detach().numpy())
 
