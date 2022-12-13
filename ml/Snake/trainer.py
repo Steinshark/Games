@@ -8,7 +8,6 @@ from matplotlib import pyplot as plt
 import numpy 
 
 
-_FCN1 = 
 class Trainer:
 
 	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="models",memory_size=4,loss_fn=torch.nn.HuberLoss,optimizer_fn=torch.optim.Adam,lr=5e-4,wd=0,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2,m_type="CNN"):
@@ -32,7 +31,7 @@ class Trainer:
 			self.encoding_type = "6_channel"
 		total_params = sum(param.numel() for param in self.learning_model.model.parameters())
 
-		input(f"{m_type} model has {total_params} parameters")
+		#input(f"{m_type} model has {total_params} parameters")
 		self.w = game_w	
 		self.h = game_h
 		self.gpu_acceleration = gpu_acceleration
@@ -402,7 +401,7 @@ class Trainer:
 						print("=",end='',flush=True)
 						printed+=1
 
-				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False)
+				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False) * -.1
 
 				#One run of this for loop will be one batch run
 				#Update the weights of the experience
