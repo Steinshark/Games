@@ -185,7 +185,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-5,"food":5,"step":-.2}):
+	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-1,"food":2,"step":-.0025},random_pick=False):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -235,12 +235,44 @@ class Trainer:
 
 			#	UPDATE VERBOSE 
 			if verbose:
-				print(f"[Episode {str(i*train_every).rjust(len(str(iters*train_every)))}/{int(iters*train_every)}  -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}] lived_avg: {(sum(all_lived[-1000:])/1000):.2f} score_avg: {(sum(all_scores[-1000:])/1000):.2f}")
+				print(f"[Episode {str(i*train_every).rjust(15)}/{int(iters*train_every)}  -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(all_lived[-1000:])/1000):.2f} score_avg: {(sum(all_scores[-1000:])/1000):.2f}")
 
 			# 	GET TRAINING SAMPLES
 			#	AND TRAIN MODEL 
 			if window_i > sample_size:
-				training_set 	= random.sample(memory_pool,sample_size) 
+
+				if random_pick:
+					training_set 	= random.sample(memory_pool,sample_size) 
+					
+				else:
+					training_set 	= []
+					training_ind	= []
+					drop_rate = .75
+
+					#Drop non-food examples with rate .75
+					while len(training_set) < sample_size: 
+
+						cur_i = random.randint(0,len(memory_pool)-1)
+						while cur_i in training_ind:
+							cur_i = random.randint(0,len(memory_pool)-1)
+
+						if not memory_pool[cur_i]['r'] > 0: 
+
+							if random.random() < drop_rate:
+								continue 
+							else:
+								training_ind.append(cur_i)
+								training_set.append(memory_pool[cur_i])
+						else:
+							training_set.append(memory_pool[cur_i])
+							training_ind.append(cur_i)
+
+				qual 		= 100*sum([int(t['r'] > 0) for t in training_set]) / len(training_set)
+				bad_set 	= random.sample(memory_pool,sample_size)
+				bad_qual 	= f"{(100*sum([int(t['r'] > 0) for t in bad_set]) / len(bad_set)):.2f}"
+
+				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
+				print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
 				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,channels=12,early_stopping=False,verbose=True)
 
 			#	UPDATE MODELS 

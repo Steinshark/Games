@@ -9,8 +9,8 @@ import json
 import time 
 ## >>>>>>>>>>>>>>>>>>>>>>>>>>>> BEGIN DEFAULT DEFINITIONS <<<<<<<<<<<<<<<<<<<<<<<<<<<< ##
 
-DB_NEWS_PATH = r"S:\Data\market\news"
-DB_DATA_PATH = r"S:\Data\market\data"
+DB_NEWS_PATH = r"//FILESERVER/S Drive/Data/market/news"
+DB_DATA_PATH = r"//FILESERVER/S Drive/Data/market/data"
 DOWNLOAD_LINK_LIST  = []
 
 DEFAULT_STOCKS      = ["MMM","AAPL","AXP","CAT","KO","V"]
