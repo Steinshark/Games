@@ -185,7 +185,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-1,"food":2,"step":-.0025},random_pick=False):
+	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-1,"food":1,"step":-.01},random_pick=False):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -235,7 +235,7 @@ class Trainer:
 
 			#	UPDATE VERBOSE 
 			if verbose:
-				print(f"[Episode {str(i*train_every).rjust(15)}/{int(iters*train_every)}  -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(all_lived[-1000:])/1000):.2f} score_avg: {(sum(all_scores[-1000:])/1000):.2f}")
+				print(f"[Episode {str(i*train_every).rjust(15)}/{int(iters*train_every)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(all_lived[-1000:])/1000):.2f} score_avg: {(sum(all_scores[-1000:])/1000):.2f}")
 
 			# 	GET TRAINING SAMPLES
 			#	AND TRAIN MODEL 
@@ -505,6 +505,10 @@ class Trainer:
 	@staticmethod
 	def update_epsilon(percent):
 		radical = -.0299573*100*percent -.916290 
-		return pow(2.7182,radical)
+
+		if percent > .66:
+			return 0
+		else:
+			return pow(2.7182,radical)
 	
 

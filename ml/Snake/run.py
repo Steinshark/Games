@@ -11,19 +11,22 @@ FCN_1 = {   "type":"FCN",
 CNN_1 = {   "type":"CNN",
             "arch":[[3,32,7],[32,16,3],[6400,256],[256,4]]}
 
+CNN_2 = {   "type":"CNN",
+            "arch":[[3,32,5],[12800,1024],[1024,4]]}
 
 #DICT ORGANIZER
-MODELS = {"CNN1" : CNN_1,"FCN1" : FCN_1}
+MODELS = {"CNN1" : CNN_1,"FCN1" : FCN_1,"CNN2" : CNN_2}
 
 
 #SETTINGS 
 settings = {
     "x"     : 20,
     "y"     : 20,
-    "it"    : 2048*2,
-    "te"    : 512,
+    "lr"    : 1e-3,
+    "it"    : 4096,
+    "te"    : 128,
     "ms"    : 1024*32,
-    "ss"    : 1024*4,
+    "ss"    : 32*8,
     "bs"    : 32,
     "ep"    : 1,
     "me"    : 3,
@@ -71,6 +74,5 @@ if( not input(f"Proceed? [y/n]: ") in ["Y","y","Yes","yes"]): exit(0)
 
 
 if __name__ == "__main__":
-    for lr in [.001]:
-        t = Trainer(settings['x'],settings['y'],visible=False,loading=False,memory_size=settings['me'],loss_fn=torch.nn.MSELoss,architecture=settings['arch']["arch"],gpu_acceleration=True,lr=lr,m_type=settings['arch']["type"])
-        t.train_concurrent(iters=settings["it"],train_every=settings["te"],memory_size=settings["ms"],sample_size=settings["ss"],batch_size=settings["bs"],epochs=settings["ep"])
+    t = Trainer(settings['x'],settings['y'],visible=False,loading=False,memory_size=settings['me'],loss_fn=torch.nn.MSELoss,architecture=settings['arch']["arch"],gpu_acceleration=True,lr=settings['lr'],m_type=settings['arch']["type"])
+    t.train_concurrent(iters=settings["it"],train_every=settings["te"],memory_size=settings["ms"],sample_size=settings["ss"],batch_size=settings["bs"],epochs=settings["ep"])
