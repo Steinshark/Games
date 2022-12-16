@@ -14,8 +14,10 @@ CNN_1 = {   "type":"CNN",
 CNN_2 = {   "type":"CNN",
             "arch":[[3,32,5],[12800,1024],[1024,4]]}
 
+CNN_3 = {   "type":"CNN",
+            "arch":[[3,32,5],[32,8,3],[3872,512],[512,4]]}
 #DICT ORGANIZER
-MODELS = {"CNN1" : CNN_1,"FCN1" : FCN_1,"CNN2" : CNN_2}
+MODELS = {"CNN1" : CNN_1,"FCN1" : FCN_1,"CNN2" : CNN_2, "CNN3" : CNN_3}
 
 
 #SETTINGS 

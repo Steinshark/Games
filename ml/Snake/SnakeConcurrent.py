@@ -219,7 +219,7 @@ class Snake:
 				
 				#Dont penalize fully for threshold
 				if self.game_collection[snake_i]['eaten_since'] > self.move_threshold:
-					experience['s'] = self.reward['step'] * 5
+					experience['r'] = self.reward['step'] * 5
 
 				self.experiences.append(experience)
 				continue
