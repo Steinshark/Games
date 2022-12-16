@@ -75,5 +75,5 @@ if( not input(f"Proceed? [y/n]: ") in ["Y","y","Yes","yes"]): exit(0)
 
 
 if __name__ == "__main__":
-    t = Trainer(settings['x'],settings['y'],visible=False,loading=False,memory_size=settings['me'],loss_fn=torch.nn.MSELoss,architecture=settings['arch']["arch"],gpu_acceleration=True,lr=settings['lr'],m_type=settings['arch']["type"],max_steps=settings["mx"])
-    t.train_concurrent(iters=settings["it"],train_every=settings["te"],memory_size=settings["ms"],sample_size=settings["ss"],batch_size=settings["bs"],epochs=settings["ep"])
+    t = Trainer(settings['x'],settings['y'],visible=False,loading=False,memory_size=settings['me'],loss_fn=torch.nn.MSELoss,architecture=settings['arch']["arch"],gpu_acceleration=True,lr=settings['lr'],m_type=settings['arch']["type"])
+    t.train_concurrent(iters=settings["it"],train_every=settings["te"],memory_size=settings["ms"],sample_size=settings["ss"],batch_size=settings["bs"],epochs=settings["ep"],max_steps=settings["mx"])

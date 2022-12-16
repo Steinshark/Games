@@ -185,7 +185,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-1,"food":1,"step":-.01},random_pick=False):
+	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-5,"food":5,"step":-.075},max_steps=100,random_pick=False):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -210,7 +210,7 @@ class Trainer:
 
 
 			#	GET EXPERIENCES
-			metrics, experiences = SnakeConcurrent.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards=rewards).play_out_games(epsilon=e)
+			metrics, experiences = SnakeConcurrent.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards=rewards,max_steps=max_steps).play_out_games(epsilon=e)
 
 
 			#	UPDATE MEMORY POOL 
