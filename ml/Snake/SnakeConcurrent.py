@@ -16,7 +16,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-5,"food":5,"step":0}):
+	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-5,"food":5,"step":-.1},max_steps=200):
 
 
 		#Set global Vars
@@ -84,7 +84,7 @@ class Snake:
 		
 		#	A very important hyper-parameter: the reward made for each action
 		self.reward 			= rewards 
-		self.move_threshold  	= self.grid_w * self.grid_h * 2
+		self.move_threshold  	= max_steps
 		self.movements 			= [(0,-1),(0,1),(-1,0),(1,0)]
 
 
@@ -215,7 +215,12 @@ class Snake:
 				self.game_collection[snake_i]["lived_for"] = self.cur_step
 
 				#Add final experience
-				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':True}
+				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':True}\
+				
+				#Dont penalize fully for threshold
+				if self.game_collection[snake_i]['eaten_since'] > self.move_threshold:
+					experience['s'] = self.reward['step'] * 5
+
 				self.experiences.append(experience)
 				continue
 			
