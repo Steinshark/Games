@@ -6,15 +6,17 @@ import SnakeConcurrent
 import random 
 from matplotlib import pyplot as plt 
 import numpy 
-
+from gameViewer import plot_game
 
 class Trainer:
 
-	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="models",memory_size=4,loss_fn=torch.nn.HuberLoss,optimizer_fn=torch.optim.Adam,lr=5e-4,wd=0,name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2,m_type="CNN"):
+	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="models",memory_size=4,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,lr=5e-4,wd=0,fname="experiences",name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2,m_type="CNN",save_fig_now=False):
 		self.PATH = PATH
-		self.fname = name
+		self.fname = fname
+		self.name = name 
 		self.m_type = m_type
 		self.input_dim = game_w * game_h * memory_size
+		self.save_fig = save_fig_now
 
 		if m_type == "FCN":
 			self.input_dim *= 3
@@ -185,7 +187,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,memory_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-5,"food":5,"step":-.075},max_steps=100,random_pick=False):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-5,"food":5,"step":-.075},max_steps=100,random_pick=False,blocker=256):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -218,9 +220,9 @@ class Trainer:
 			# 	exp instead of copying the list every time 
 			#	Is more efficient when memory_size >> len(experiences)
 			for exp in experiences:
-				if window_i < memory_size:
+				if window_i < pool_size:
 					memory_pool.append(None)
-				memory_pool[window_i%memory_size] = exp 
+				memory_pool[window_i%pool_size] = exp 
 				window_i += 1
 
 
@@ -272,6 +274,8 @@ class Trainer:
 				bad_qual 	= f"{(100*sum([int(t['r'] > 0) for t in bad_set]) / len(bad_set)):.2f}"
 
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
+				
+				
 				print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
 				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,channels=12,early_stopping=False,verbose=True)
 
@@ -281,7 +285,7 @@ class Trainer:
 
 		#	block_reduce lists 
 		#plot up to 500
-		averager = int(len(all_scores)/500)
+		averager = int(len(all_scores)/blocker)
 		
 		while True:
 			try:
@@ -295,26 +299,12 @@ class Trainer:
 
 		x_scale = [averager*i for i in range(len(blocked_scores))] 
 		
-		fig, axs = plt.subplots(2,1)
-		fig.set_size_inches(19.2,10.8)
+		graph_name = f"{self.name}_[{str(self.loss_fn).split('.')[-1][:-2]},{str(self.optimizer_fn).split('.')[-1][:-2]}@{self.lr}] x [{iters*train_every},{train_every}] mem size {pool_size} taking [{sample_size},{batch_size}]"
 
-		axs[0].plot(x_scale,blocked_scores,label="avg scores",color="cyan")
-		axs[1].plot(x_scale,blocked_lived,label="avg steps",color="green")
-		axs[0].legend()
-		axs[0].set_title("Average Score")
-		axs[1].legend()
-		axs[1].set_title("Average Steps")
+		if self.save_fig:
+			plot_game(blocked_scores,blocked_lived,graph_name,x_scale)
 
-		axs[0].set_xlabel("Game Number")
-		axs[0].set_ylabel("Score")
-		axs[1].set_xlabel("Game Number")
-		axs[1].set_ylabel("Steps Taken")
-		fig.suptitle(f"{self.architecture}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-bs{batch_size}-te{train_every}-mem{memory_size}-ss{sample_size}")
-		#Save fig to figs directory
-		if not os.path.isdir("figs"):
-			os.mkdir("figs")
-		fig.savefig(os.path.join("figs",f"{self.architecture}-iters{iters*train_every}-{str(self.loss_fn).split('.')[-1][:-2]}-{str(self.optimizer_fn).split('.')[-1][:-2]}-ep{epochs}-lr{self.lr}-wd{self.wd}-bs{batch_size}-te{train_every}-mem{memory_size}-ss{sample_size}-p={picking}.png"),dpi=100)
-
+		return blocked_scores,blocked_lived,best_score,x_scale,graph_name
 
 
 	def train_on_experiences(self,big_set,epochs=100,batch_size=8,channels=6,early_stopping=True,verbose=False):
@@ -506,7 +496,7 @@ class Trainer:
 	def update_epsilon(percent):
 		radical = -.0299573*100*percent -.916290 
 
-		if percent > .66:
+		if percent > .90:
 			return 0
 		else:
 			return pow(2.7182,radical)

@@ -2,11 +2,15 @@
 from trainer import Trainer  
 import torch
 import sys 
+from gameViewer import plot_game
+import numpy 
+import copy 
 
-
+variant_key = "x" 
+arch_used   = 'Blank'
 #MODELS 
 FCN_1 = {   "type":"FCN",
-            "arch":[384,1024,128,4]}
+            "arch":[3,1024,128,4]}
 
 CNN_1 = {   "type":"CNN",
             "arch":[[3,32,7],[32,16,3],[6400,256],[256,4]]}
@@ -16,8 +20,18 @@ CNN_2 = {   "type":"CNN",
 
 CNN_3 = {   "type":"CNN",
             "arch":[[3,32,5],[32,8,3],[3872,512],[512,4]]}
+
+CNN_4 = {   "type":"CNN",
+            "arch":[[3,8,9],[8,8,5],[8,4,3],[1296,512],[512,4]]}
+
+
 #DICT ORGANIZER
-MODELS = {"CNN1" : CNN_1,"FCN1" : FCN_1,"CNN2" : CNN_2, "CNN3" : CNN_3}
+MODELS = {  "CNN1" : CNN_1,
+            "FCN1" : FCN_1,
+            "CNN2" : CNN_2,
+            "CNN3" : CNN_3,
+            "CNN4" : CNN_4}
+
 
 
 #SETTINGS 
@@ -25,34 +39,59 @@ settings = {
     "x"     : 20,
     "y"     : 20,
     "lr"    : 1e-3,
-    "it"    : 4096,
-    "te"    : 128,
-    "ms"    : 1024*32,
-    "ss"    : 32*8,
-    "bs"    : 32,
+    "it"    : 512,
+    "te"    : 64,
+    "ps"    : 1024*8,
+    "ss"    : 16*16,
+    "bs"    : 16,
     "ep"    : 1,
-    "me"    : 3,
-    "mx"    : 250,
-    "arch"  : {"CNN" : CNN_1,"FCN":FCN_1}
+    "ms"    : 2,
+    "mx"    : 150,
+    "mi"    : 1,
+    "arch"  : MODELS
 }
 
+
+reverser = {
+    "x"     : "width",
+    "y"     : "height",
+    "lr"    : "learning rate",
+    "it"    : "iterations",
+    "te"    : "train every",
+    "ps"    : "pool size",
+    "ss"    : "sample size",
+    "bs"    : "batch size",
+    "ep"    : "epochs",
+    "ms"    : "memory",
+    "mx"    : "max steps",
+    "mi"    : 1,
+    "arch"  : "architecture"
+}
 #ARG PARSER 
 if len(sys.argv) > 1:
     i = 1 
     while True:
         try:
+
+            #get key and val pair from command line 
             key = sys.argv[i]
             val = sys.argv[i+1]
+            
 
             if not key in settings:
-                print("\n\nPlease chose from one of the settings:")
+                print("\n\nPlease choose from one of the settings:")
                 print(list(settings.keys()))
                 exit(0)
 
             if not key == "arch":
                 settings[key] = eval(val)
+                if isinstance(eval(val),list):
+                    variant_key = key
             else:
-                settings[key] = MODELS[val]
+                # settings[key] = MODELS[val]
+                settings[key] = eval(val)
+                variant_key = key
+                arch_used = val
 
             i += 2 
         except IndexError:
@@ -60,22 +99,121 @@ if len(sys.argv) > 1:
 
 
 
-if "CNN" in settings['arch']['type']:
-    settings['arch']['arch'][0][0] *= settings['me']
-elif "FCN" in settings['arch']['type']:
-    settings['arch']['arch'][0] = settings['me'] * 3 * settings['x'] * settings['y']
-
-
+if not isinstance(settings[variant_key],list):
+    settings[variant_key] = [settings[variant_key]]
+for setting in settings:
+    if  setting == variant_key or setting == "mi":
+        continue 
+    v_0 = settings[setting]
+    v_list = [copy.copy(v_0) for i in range( len(settings[variant_key]) if variant_key else 1)]
+    settings[setting] = v_list
 
 # RUN IT 
-print(f"Running with settings:")
-print()
 import pprint 
 pprint.pp(settings)
 if( not input(f"Proceed? [y/n]: ") in ["Y","y","Yes","yes"]): exit(0)
 
 
-
 if __name__ == "__main__":
-    t = Trainer(settings['x'],settings['y'],visible=False,loading=False,memory_size=settings['me'],loss_fn=torch.nn.MSELoss,architecture=settings['arch']["arch"],gpu_acceleration=True,lr=settings['lr'],m_type=settings['arch']["type"])
-    t.train_concurrent(iters=settings["it"],train_every=settings["te"],memory_size=settings["ms"],sample_size=settings["ss"],batch_size=settings["bs"],epochs=settings["ep"],max_steps=settings["mx"])
+
+    variant_sessions = {k : {'avg_scores':[],"avg_steps":[],'name':[],'x_scale':[]} for k in settings[variant_key]}
+    big_name = f"{arch_used}_[MSE,Adam] @ {set(settings['lr'])} x [{settings['it'][0] * settings['te'][0]},{set(settings['te'])}] pool size {set(settings['ps'])} taking [{set(settings['ss'])},{set(settings['bs'])}]"
+
+    for v_i in range(len(settings[variant_key])):
+        grid_x          = settings["x"][v_i]
+        grid_y          = settings["y"][v_i]
+        memory_size     = settings["ms"][v_i]
+        model_arch      = settings["arch"][v_i]["arch"]
+        learning_rate   = settings["lr"][v_i]
+        model_type      = settings["arch"][v_i]["type"]
+        iters           = settings['it'][v_i]
+        train_every     = settings["te"][v_i]
+        pool_size       = settings["ps"][v_i]
+        sample_size     = settings["ss"][v_i]
+        batch_size      = settings["bs"][v_i]
+        epochs          = settings["ep"][v_i]
+        max_steps       = settings["mx"][v_i]
+        model_dict      = copy.copy(settings["arch"][v_i])
+
+        #Correct model input 
+        if "CNN" in model_type:
+            model_arch[0][0] *= memory_size
+
+        elif "FCN" in model_type:
+            model_arch[0] = settings['ms'] * 3 * settings['x'] * settings['y']
+
+
+        score_list  = [] 
+        steps_list  = [] 
+        best_scores = []
+        x_scales    = []
+        name        = None 
+
+        #   Run the iters of this settings variant batch 
+        for i in range(settings['mi']):
+            print(f"running with {model_arch}")
+            t = Trainer(grid_x,
+                        grid_y,
+                        visible=False,
+                        loading=False,
+                        memory_size=memory_size,
+                        architecture=model_arch,
+                        gpu_acceleration=True,
+                        lr=learning_rate,
+                        m_type=model_type,
+                        name=arch_used)
+
+            scores,steps,best,x_scale,graph_name = t.train_concurrent( iters=iters,
+                                                                        train_every=train_every,
+                                                                        pool_size=pool_size,
+                                                                        sample_size=sample_size,
+                                                                        batch_size=batch_size,
+                                                                        epochs=epochs,
+                                                                        max_steps=max_steps,
+                                                                        blocker=256) 
+
+            score_list.append(scores)
+            steps_list.append(steps)
+            best_scores.append(best)
+            name = graph_name 
+            x_scales.append(x_scale)
+        
+        avg_scores = []
+        for i in range(max([len(x) for x in score_list])):
+            avg_scores.append(0)
+            existed = 0 
+            for sl in score_list:
+                try:
+                    avg_scores[-1] += sl[i]
+                    existed += 1 
+                except IndexError:
+                    pass 
+
+        avg_steps = []
+        for i in range(max([len(x) for x in steps_list])):
+            avg_steps.append(0)
+            existed = 0 
+            for sl in steps_list:
+                try:
+                    avg_steps[-1] += sl[i]
+                    existed += 1 
+                except IndexError:
+                    pass 
+
+        x_scale_lengths = [len(x) for x in x_scales]
+        print(f"max of {x_scale_lengths} is {numpy.argmax(x_scale_lengths)}")
+        x_scale = x_scales[numpy.argmax(x_scale_lengths)]
+
+        variant_sessions[settings[variant_key][v_i]]["avg_scores"] = avg_scores
+        variant_sessions[settings[variant_key][v_i]]["avg_steps"]  = avg_steps
+        variant_sessions[settings[variant_key][v_i]]["name"]       = name 
+        variant_sessions[settings[variant_key][v_i]]["x_scale"]    = x_scale
+
+
+    print([x for x in variant_sessions])
+    plot_game(  scores_list     = [x["avg_steps"] for x in variant_sessions.values()],
+                steps_list      = [x["avg_scores"] for x in variant_sessions.values()],
+                series_names    = [f"{reverser[variant_key]} - {k}" for k in variant_sessions],
+                x_scales        = [x["x_scale"] for x in variant_sessions.values()],
+                graph_name      = big_name,
+                f_name          = f"{settings['mi']} Results")
