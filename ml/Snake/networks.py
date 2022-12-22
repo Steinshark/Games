@@ -102,8 +102,10 @@ class ConvolutionalNetwork(nn.Module):
 			else:
 				in_size, out_size = layer[0],layer[1]
 				if not switched:
+					f = nn.Sequential(OrderedDict({str(i) : n for i,n in enumerate(self.model)}))(torch.ones(size=input_shape)).size()
 					self.model.append(nn.Flatten(1))
 					switched = True 
+					in_size = math.prod(f)
 				self.model.append(nn.Linear(in_size,out_size))
 				if not i == len(architecture)-1 :
 					self.model.append(self.activation['relu']())
@@ -118,7 +120,7 @@ class ConvolutionalNetwork(nn.Module):
 
 		#Run epochs
 		for i in range(epochs):
-
+			
 			#Predict on x : M(x) -> y
 			y_pred = self.model(x_input)
 			#Find loss  = y_actual - y

@@ -16,7 +16,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-5,"food":5,"step":-.1},max_steps=200):
+	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-1,"food":1,"step":-.01},max_steps=200):
 
 
 		#Set global Vars
@@ -128,7 +128,7 @@ class Snake:
 			
 			#	Step
 			self.step_snake()
-
+			 
 			# 	Check if we are done 
 			if len(self.active_games) == 0:
 				return self.cleanup()
@@ -215,7 +215,7 @@ class Snake:
 				self.game_collection[snake_i]["lived_for"] = self.cur_step
 
 				#Add final experience
-				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':True}\
+				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':0}\
 				
 				#Dont penalize fully for threshold
 				if self.game_collection[snake_i]['eaten_since'] > self.move_threshold:
@@ -225,7 +225,7 @@ class Snake:
 				continue
 			
 			#	START EXP CREATION 
-			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':None,'done':False}
+			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':-1,'done':1}
 			
 			#	ROLL VECTORS 
 			#	Since the snake has survived, we can roll 3 channels down to be written with 
@@ -236,9 +236,6 @@ class Snake:
 			#Check if snake ate food
 			if next_head == self.food_vectors[snake_i]:
 				
-				#Save food in exp 
-				experience["s`"]
-
 				#Change location of the food
 				self.spawn_new_food(snake_i)
 				
@@ -342,7 +339,7 @@ if __name__ == "__main__":
 	w = 4 
 	h = 4
 	model 	= ConvolutionalNetwork(loss_fn=torch.nn.HuberLoss,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,architecture=[[12,4,3],[144,4]],input_shape=(1,12,4,4))
-	s = Snake(w,h,model)
+	s = Snake(w,h,model,device=torch.device("cpu"))
 	#t0 = time.time()
 	#s.play_out_games()
 

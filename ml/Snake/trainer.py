@@ -6,7 +6,6 @@ import SnakeConcurrent
 import random 
 from matplotlib import pyplot as plt 
 import numpy 
-from gameViewer import plot_game
 
 class Trainer:
 
@@ -187,7 +186,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-5,"food":5,"step":-.075},max_steps=100,random_pick=False,blocker=256):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-1,"food":1,"step":-.01},max_steps=100,random_pick=False,blocker=256):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -202,7 +201,8 @@ class Trainer:
 		all_lived		= []
 
 		#	Train 
-		for i in range(iters):
+		i = 0 
+		while i < iters:
 			#	Keep some performance variables 
 			t0 				= time.time() 
 
@@ -237,7 +237,7 @@ class Trainer:
 
 			#	UPDATE VERBOSE 
 			if verbose:
-				print(f"[Episode {str(i*train_every).rjust(15)}/{int(iters*train_every)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(all_lived[-1000:])/1000):.2f} score_avg: {(sum(all_scores[-1000:])/1000):.2f}")
+				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(all_lived[-1000:])/1000):.2f} score_avg: {(sum(all_scores[-1000:])/1000):.2f}")
 
 			# 	GET TRAINING SAMPLES
 			#	AND TRAIN MODEL 
@@ -277,12 +277,13 @@ class Trainer:
 				
 				
 				print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
-				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,channels=12,early_stopping=False,verbose=True)
+				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=True)
 
 			#	UPDATE MODELS 
-			if i % transfer_models_every == 0:
-				self.transfer_models(transfer=True,verbose=False)
-
+			if i/train_every % transfer_models_every == 0:
+				self.transfer_models(transfer=True,verbose=True)
+			
+			i += train_every
 		#	block_reduce lists 
 		#plot up to 500
 		averager = int(len(all_scores)/blocker)
@@ -396,14 +397,15 @@ class Trainer:
 			print("\n\n\n")
 
 
-	def train_on_experiences_better(self,big_set,epochs=1,batch_size=8,channels=6,early_stopping=True,verbose=False):
+	def train_on_experiences_better(self,big_set,epochs=1,batch_size=8,early_stopping=True,verbose=False):
 		print(f"TRAINING:")
 		print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'early-stop'.ljust(12)}: {early_stopping}\n")
+
 		for epoch_i in range(epochs):
 			#	Telemetry Vars 
 			t0 			= time.time()
 			t_gpu 		= 0
-			num_equals 	= 50 
+			num_equals 	= 53 
 			printed 	= 0
 			total_loss	= 0
 			#	Telemetry
@@ -422,36 +424,28 @@ class Trainer:
 					while (printed / num_equals) < percent:
 						print("=",end='',flush=True)
 						printed+=1
+				
+				#Init final values for actual reward values 
+				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False)
 
-				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False) * -.1
+				#Run all of batch through the network 
+				batch_set 				= big_set[batch_i*batch_size:batch_i*batch_size+batch_size]
+				exp_set 				= torch.stack([exp['s`'][0] for exp in batch_set])
+				target_expected_values 	= torch.max(self.target_model.forward(exp_set),dim=1)[0]
+
 
 				#One run of this for loop will be one batch run
 				#Update the weights of the experience
 				for item_i in range(batch_size):
 					
 					#Pre calc some reused values
-					i 				= item_i + (batch_i*batch_size)
-					exp 			= big_set[i]
-					chosen_action 	= exp["a"]
-					reward 			= exp["r"]
+					i 					= item_i + (batch_i*batch_size)
+					exp 				= big_set[i]
 
 					#Calculate Bellman 
-					if exp["done"]:	
-						final_target_values[item_i,chosen_action] 	= reward
-					else:
-						t1 = time.time()
-						target 										= reward + self.gamma * torch.max(self.target_model.forward(exp["s`"]))
-						final_target_values[item_i,chosen_action] 	= target
-						t_gpu += time.time() - t1
-						if reward > 0 and False:
-							print("snake at here")
-							print(exp["s"][0][0])
-							print(exp["s"][0][1])
-							input(exp["s"][0][2])
-							print("after eat:")
-							print(exp["s`"][0][0])
-							print(exp["s`"][0][1])
-							input(exp["s`"][0][2])
+					final_target_values[item_i,exp["a"]] 	= exp["r"] + (exp['done'] * self.gamma * target_expected_values[item_i])
+
+
 
 				#	BATCH GRADIENT DESCENT
 				i_start 					= batch_i*batch_size
@@ -463,14 +457,14 @@ class Trainer:
 				t1 = time.time()
 				this_batch 					= self.learning_model.forward(inputs)
 				batch_loss 					= self.learning_model.loss(final_target_values,this_batch)
-				total_loss += batch_loss.item()
+				total_loss 					+= batch_loss.item()
 
 				#Back Propogate
 				batch_loss.backward()
 				self.learning_model.optimizer.step()
 				t_gpu += time.time() - t1
 			#	Telemetry
-			if verbose:
+			if verbose :
 				print(f"]\ttime: {(time.time()-t0):.2f}s\tt_gpu:{(t_gpu):.2f}\tloss: {(total_loss/num_batches):.6f}")
 		if verbose:
 			print("\n\n")
@@ -482,6 +476,9 @@ class Trainer:
 				print("\ntransferring models\n\n")
 			#Save the models
 
+			#Check for dir 
+			if not os.path.isdir(self.PATH):
+				os.mkdir(self.PATH)
 			torch.save(self.learning_model.state_dict(),os.path.join(self.PATH,f"{self.fname}_lm_state_dict"))
 			#Load the learning model as the target model
 			if self.m_type == "FCN":
@@ -499,6 +496,6 @@ class Trainer:
 		if percent > .90:
 			return 0
 		else:
-			return pow(2.7182,radical)
+			return pow(2.7182,radical) * .25
 	
 
