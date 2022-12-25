@@ -76,7 +76,7 @@ class Snake:
 		#	The snake is tracked in this list 
 		#	Used to update Numpy Arrays in a more efficient manner.
 		self.snake_tracker		= [ [[0,0]] for _ in range(simul_games) ]
-
+		self.full_game_tracker 	= [[] for _ in range(simul_games)]
 
 		#	Store all experiences in a list of 
 		#	dictionaries that will be returned to the training class
@@ -117,6 +117,9 @@ class Snake:
 			
 			# 	The model for this dropoff will probably change and is 
 			#	open to exploration
+			for snake_i in self.active_games:
+				self.full_game_tracker[snake_i].append({"snake":self.snake_tracker[snake_i],"food":self.food_vectors[snake_i]})
+
 			if random.random() < epsilon:
 				self.explore()
 			else:
@@ -262,7 +265,8 @@ class Snake:
 			for snake_body_pos in self.snake_tracker[snake_i][:-1]:
 				x,y = snake_body_pos[0],snake_body_pos[1] 
 				self.game_vectors[snake_i][1][y][x] = 1
-			
+			#self.game_vectors[snake_i][1][next_head[1]][next_head[0]]
+
 			#Update the food location vector 
 			food_x,food_y = self.food_vectors[snake_i]
 			self.game_vectors[snake_i][2][food_y][food_x] = 1
@@ -327,7 +331,7 @@ class Snake:
 
 	#	RETURN TO TRAINER
 	def cleanup(self):
-		return self.game_collection,self.experiences
+		return self.game_collection,self.experiences,self.full_game_tracker
 
 	def check_opposite(self,snake_i):
 		dir_1 = self.direction_vectors[snake_i]

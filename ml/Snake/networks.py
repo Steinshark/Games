@@ -86,33 +86,19 @@ class ConvolutionalNetwork(nn.Module):
 	
 	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
 		super(ConvolutionalNetwork,self).__init__()
-		self.model = []
-		switched = False 
-		self.input_shape = input_shape
-
-		self.activation = {	"relu" : nn.ReLU,
-							"sigmoid" : nn.Sigmoid}
-
-		for i,layer in enumerate(architecture):
-			if len(layer) == 3:
-				in_c,out_c,kernel = layer[0],layer[1],layer[2]
-				self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=2))
-				self.model.append(self.activation['relu']())
-				
+		self.input_shape 	= input_shape
+		o_d 				= OrderedDict({str(i) : n for i,n in enumerate(architecture)})
+		self.model 			= nn.Sequential(o_d)
+		through 			= torch.ones(size=input_shape)
+		flat_size = 		None
+		for i,module in enumerate(self.model):
+			if "Flatten" in str(module):
+				through = module(through)
+				flat_size = through.size()[1]
+				architecture[i+1] = torch.nn.Linear(flat_size,architecture[i+1].out_features)
+				break
 			else:
-				in_size, out_size = layer[0],layer[1]
-				if not switched:
-					f = nn.Sequential(OrderedDict({str(i) : n for i,n in enumerate(self.model)}))(torch.ones(size=input_shape)).size()
-					self.model.append(nn.Flatten(1))
-					switched = True 
-					in_size = math.prod(f)
-				self.model.append(nn.Linear(in_size,out_size))
-				if not i == len(architecture)-1 :
-					self.model.append(self.activation['relu']())
-
-		#self.model.append(nn.Softmax(1))
-		o_d = OrderedDict({str(i) : n for i,n in enumerate(self.model)})
-		self.model = nn.Sequential(o_d)
+				through = module(through)
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
 		

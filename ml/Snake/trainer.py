@@ -6,16 +6,53 @@ import SnakeConcurrent
 import random 
 from matplotlib import pyplot as plt 
 import numpy 
+import sys 
+import tkinter as tk
+from snakeAI import SnakeGame
 
 class Trainer:
 
-	def __init__(self,game_w,game_h,visible=True,loading=True,PATH="models",memory_size=4,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,lr=5e-4,wd=0,fname="experiences",name="generic",gamma=.98,architecture=[256,32],gpu_acceleration=False,epsilon=.2,m_type="CNN",save_fig_now=False):
+	def __init__(	self,game_w,game_h,
+					visible=True,
+					loading=True,
+					PATH="models",
+					memory_size=4,
+					loss_fn=torch.nn.MSELoss,
+					optimizer_fn=torch.optim.Adam,
+					lr=5e-4,
+					wd=0,
+					fname="experiences",
+					name="generic",
+					gamma=.98,
+					architecture=[256,32],
+					gpu_acceleration=False,
+					epsilon=.2,
+					m_type="CNN",
+					save_fig_now=False,
+					progress_var=None,
+					output=sys.stdout,
+					steps=None,
+					scored=None,
+					score_tracker=[],
+					step_tracker=[],
+					parent_instance=None,
+					game_tracker = []):
+
 		self.PATH = PATH
 		self.fname = fname
 		self.name = name 
 		self.m_type = m_type
 		self.input_dim = game_w * game_h * memory_size
 		self.save_fig = save_fig_now
+		self.progress_var = progress_var
+		self.cancelled = False
+		self.output = output
+		self.steps_out = steps
+		self.score_out= scored
+		self.all_scores = score_tracker
+		self.all_lived = step_tracker
+		self.parent_instance = parent_instance
+		self.game_tracker = game_tracker
 
 		if m_type == "FCN":
 			self.input_dim *= 3
@@ -26,13 +63,18 @@ class Trainer:
 
 
 		elif m_type == "CNN":
-			self.input_shape = (1,architecture[0][0],game_w,game_h)
+			self.input_shape = (1,architecture[0].in_channels,game_w,game_h)
+			print(f"in shape is {self.input_shape}")
 			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.encoding_type = "6_channel"
+			print(self.learning_model)
+
 		total_params = sum(param.numel() for param in self.learning_model.model.parameters())
 
-		#input(f"{m_type} model has {total_params} parameters")
+		#input(f"{m_type}/'
+		# """'
+		# '" model has {total_params} parameters")
 		self.w = game_w	
 		self.h = game_h
 		self.gpu_acceleration = gpu_acceleration
@@ -102,6 +144,8 @@ class Trainer:
 
 					if verbose and e_i % 1024 == 0:
 						print(f"[Episode {str(e_i).rjust(len(str(episodes)))}/{int(episodes)}  -  {(100*e_i/episodes):.2f}% complete\t{(time.time()-t0):.2f}s\te: {self.epsilon:.2f}\thigh_score: {self.high_score}] lived_avg: {sum(lives[-1*train_every:])/len(lives[-1*train_every:]):.2f} score_avg: {sum(scores[-1*train_every:])/len(scores[-1*train_every:]):.2f}")
+					self.steps_out.insert(0,f"{sum(lives[-1*train_every:])/len(lives[-1*train_every:]):.2f}")
+					self.score_out.insert(0,f"{sum(scores[-1*train_every:])/len(scores[-1*train_every:]):.2f}")
 					t0 = time.time()
 
 					#Check score
@@ -186,7 +230,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=True,picking=True,rewards={"die":-1,"food":1,"step":-.01},max_steps=100,random_pick=False,blocker=256):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False,picking=True,rewards={"die":-1,"food":1,"step":-.01},max_steps=100,random_pick=False,blocker=256):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -197,22 +241,21 @@ class Trainer:
 
 		#	Keep track of models progress throughout the training 
 		best_score 		= 0 
-		all_scores		= []
-		all_lived		= []
 
 		#	Train 
 		i = 0 
-		while i < iters:
+		while i < iters and not self.cancelled:
 			#	Keep some performance variables 
 			t0 				= time.time() 
 
 
 			#	UPDATE EPSILON
 			e 				= self.update_epsilon(i/(iters))	
-
+			self.progress_var.set(i/iters)
 
 			#	GET EXPERIENCES
-			metrics, experiences = SnakeConcurrent.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards=rewards,max_steps=max_steps).play_out_games(epsilon=e)
+			metrics, experiences, new_games = SnakeConcurrent.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards=rewards,max_steps=max_steps).play_out_games(epsilon=e)
+
 
 
 			#	UPDATE MEMORY POOL 
@@ -227,18 +270,23 @@ class Trainer:
 
 
 			#Update metrics 
-			for metr_dict in metrics: 
-				all_scores.append(metr_dict["highscore"])
-				if all_scores[-1] > best_score:
-					best_score = all_scores[-1]
+			for game_i,metr_dict in enumerate(metrics): 
+				self.all_scores.append(metr_dict["highscore"])
+				if self.all_scores[-1] > best_score:
+					best_score = self.all_scores[-1]
+					best_scorer = game_i
+					self.output.insert(tk.END,f"  new hs: {best_score}\n")
 
-				all_lived.append(metr_dict["lived_for"])
+				self.all_lived.append(metr_dict["lived_for"])
 			
+			self.game_tracker.append(new_games[game_i])
 
 			#	UPDATE VERBOSE 
 			if verbose:
-				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(all_lived[-1000:])/1000):.2f} score_avg: {(sum(all_scores[-1000:])/1000):.2f}")
-
+				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(self.all_lived[-1000:])/1000):.2f} score_avg: {(sum(self.all_scores[-1000:])/1000):.2f}")
+			self.steps_out.set(f"{(sum(self.all_lived[-1000:])/1000):.2f}")
+			self.score_out.set(f"{(sum(self.all_scores[-1000:])/1000):.2f}")
+			
 			# 	GET TRAINING SAMPLES
 			#	AND TRAIN MODEL 
 			if window_i > sample_size:
@@ -249,7 +297,7 @@ class Trainer:
 				else:
 					training_set 	= []
 					training_ind	= []
-					drop_rate = .75
+					drop_rate = .8
 
 					#Drop non-food examples with rate .75
 					while len(training_set) < sample_size: 
@@ -258,7 +306,7 @@ class Trainer:
 						while cur_i in training_ind:
 							cur_i = random.randint(0,len(memory_pool)-1)
 
-						if not memory_pool[cur_i]['r'] > 0: 
+						if not memory_pool[cur_i]['r'] > 0 or not memory_pool[cur_i]['r'] < .5: 
 
 							if random.random() < drop_rate:
 								continue 
@@ -266,6 +314,9 @@ class Trainer:
 								training_ind.append(cur_i)
 								training_set.append(memory_pool[cur_i])
 						else:
+							if memory_pool[cur_i]['r'] < .5:
+								if random.random < drop_rate*.5:
+									continue
 							training_set.append(memory_pool[cur_i])
 							training_ind.append(cur_i)
 
@@ -276,22 +327,29 @@ class Trainer:
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
 				
 				
-				print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
-				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=True)
+				if verbose:
+					print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
+				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=verbose)
 
 			#	UPDATE MODELS 
 			if i/train_every % transfer_models_every == 0:
-				self.transfer_models(transfer=True,verbose=True)
+				self.transfer_models(transfer=True,verbose=verbose)
 			
 			i += train_every
+			self.parent_instance.place_steps()
+			self.parent_instance.place_scores()
 		#	block_reduce lists 
 		#plot up to 500
-		averager = int(len(all_scores)/blocker)
+
+		if self.cancelled:
+			print("exiting")
+			return
+		averager = int(len(self.all_scores)/blocker)
 		
 		while True:
 			try:
-				blocked_scores = numpy.average(numpy.array(all_scores).reshape(-1,averager),axis=1)
-				blocked_lived = numpy.average(numpy.array(all_lived).reshape(-1,averager),axis=1)
+				blocked_scores = numpy.average(numpy.array(self.all_scores).reshape(-1,averager),axis=1)
+				blocked_lived = numpy.average(numpy.array(self.all_lived).reshape(-1,averager),axis=1)
 				break 
 			except ValueError:
 				averager += 1
@@ -398,8 +456,11 @@ class Trainer:
 
 
 	def train_on_experiences_better(self,big_set,epochs=1,batch_size=8,early_stopping=True,verbose=False):
-		print(f"TRAINING:")
-		print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'early-stop'.ljust(12)}: {early_stopping}\n")
+		
+		#Telemetry 
+		if verbose:
+			print(f"TRAINING:")
+			print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'early-stop'.ljust(12)}: {early_stopping}\n")
 
 		for epoch_i in range(epochs):
 			#	Telemetry Vars 
@@ -437,7 +498,8 @@ class Trainer:
 				#One run of this for loop will be one batch run
 				#Update the weights of the experience
 				for item_i in range(batch_size):
-					
+					if self.cancelled:
+						return
 					#Pre calc some reused values
 					i 					= item_i + (batch_i*batch_size)
 					exp 				= big_set[i]
@@ -492,7 +554,6 @@ class Trainer:
 	@staticmethod
 	def update_epsilon(percent):
 		radical = -.0299573*100*percent -.916290 
-
 		if percent > .90:
 			return 0
 		else:

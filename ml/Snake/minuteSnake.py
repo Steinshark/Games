@@ -3,28 +3,28 @@ import random
 import time 
 
 def snake():
-    screen_w = 600
-    screen_h = 600
-    tile_width = 10
-    tile_height = 10
-    red = (255,0,0)
-    green = (1,255,40)
-    box_width = screen_w / tile_width
-    box_height = screen_h / tile_height
-    direction = (1,0)
+    screen_w        = 1000
+    screen_h        = 1000
+    tile_width      = 20
+    tile_height     = 20
+    red             = (255,0,0)
+    green           = (1,255,40)
+    box_width       = screen_w / tile_width
+    box_height      = screen_h / tile_height
+    direction       = (1,0)
 
-    snake = [(0,0)]
-    food = (5,5)
+    FRAME_TIME      = .04
+    snake           = [(0,0)]
+    food            = (5,5)
 
     pygame.init()
     window = pygame.display.set_mode((screen_w,screen_h))
 
     while True:
         t1 = time.time()
-        while time.time() - t1 < .1:
+        while time.time() - t1 < FRAME_TIME:
             pygame.event.pump()
-        
-        keys = pygame.key.get_pressed()
+            keys = pygame.key.get_pressed()
         keys = {(0,-1) : keys[pygame.K_w],
                 (-1,0) : keys[pygame.K_a],
                 (0,1)  : keys[pygame.K_s],
