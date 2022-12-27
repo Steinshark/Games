@@ -55,6 +55,13 @@ class Trainer:
 		self.parent_instance = parent_instance
 		self.game_tracker = game_tracker
 		self.gui = gui
+		self.gpu_acceleration = gpu_acceleration
+
+		if gpu_acceleration:
+			self.device = torch.device('cuda')
+		else:
+			self.device = torch.device('cpu')
+
 		if m_type == "FCN":
 			self.input_dim *= 3
 			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
@@ -67,8 +74,8 @@ class Trainer:
 			self.input_shape = (1,architecture[0].in_channels*memory_size,game_w,game_h)
 			if self.gui:
 				print(f"in shape is {self.input_shape}")
-			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
-			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
+			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device)
+			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device)
 			self.encoding_type = "6_channel"
 			if self.gui:
 				print(self.learning_model)
@@ -80,13 +87,6 @@ class Trainer:
 		# '" model has {total_params} parameters")
 		self.w = game_w	
 		self.h = game_h
-		self.gpu_acceleration = gpu_acceleration
-
-		if gpu_acceleration:
-			self.device = torch.device('cuda')
-		else:
-			self.device = torch.device('cpu')
-
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
 

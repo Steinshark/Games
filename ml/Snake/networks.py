@@ -84,10 +84,10 @@ class FullyConnectedNetwork(nn.Module):
 
 class ConvolutionalNetwork(nn.Module):
 	
-	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
+	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20),device=torch.device("cpu")):
 		super(ConvolutionalNetwork,self).__init__()
 		self.input_shape 	= input_shape
-		through 			= torch.ones(size=input_shape)
+		through 			= torch.ones(size=input_shape,device=device)
 
 		module  = architecture[0] 
 		ch_in   = input_shape[1]
