@@ -88,6 +88,8 @@ class ConvolutionalNetwork(nn.Module):
 		super(ConvolutionalNetwork,self).__init__()
 		self.input_shape 	= input_shape
 		through 			= torch.ones(size=input_shape,device=device)
+		for module_i in range(len(architecture)):
+			architecture[module_i] = architecture[module_i].to(device)
 
 		module  = architecture[0] 
 		ch_in   = input_shape[1]
@@ -95,19 +97,19 @@ class ConvolutionalNetwork(nn.Module):
 		pad     = module.padding
 		kernel  = module.kernel_size
 		stride  = module.stride
-		architecture[0] = torch.nn.Conv2d(ch_in,ch_out,kernel,stride,pad)
+		architecture[0] = torch.nn.Conv2d(ch_in,ch_out,kernel,stride,pad,device=device)
 		
 		for i,module in enumerate(architecture):
 
 			if "Flatten" in str(module):
 				through = module(through)
 				flat_size = through.size()[1]
-				architecture[i+1] = torch.nn.Linear(flat_size,architecture[i+1].out_features)
+				architecture[i+1] = torch.nn.Linear(flat_size,architecture[i+1].out_features,device=device)
 				break
 			else:
 				through = module(through)
 		o_d 				= OrderedDict({str(i) : n for i,n in enumerate(architecture)})
-		self.model 			= nn.Sequential(o_d)
+		self.model 			= nn.Sequential(o_d,device=device)
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
 		

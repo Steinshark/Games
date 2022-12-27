@@ -392,21 +392,6 @@ class TrainerApp:
         self.cur_game_steps      = [] 
         self.cur_game_scores     = []
 
-        #Correct Model Architecture
-        if "CNN" in self.settings['arch']['type'] and False:
-            print("channel update")
-            module  = self.settings['arch']['arch'][0] 
-            ch_in   = module.in_channels * int(self.settings['ms'])
-            ch_out  = module.out_channels
-            pad     = module.padding
-            kernel  = module.kernel_size
-            stride  = module.stride
-            self.settings['arch']['arch'][0] = Conv2d(ch_in,ch_out,kernel,stride,pad)
-            print(f"{self.settings['arch']['arch'][0].in_channels} channels")
-            
-        elif "FCN" in self.settings['arch']['type']:
-            self.settings['arch']['arch'][0].in_channels = int(self.settings['ms'] * 3 * self.settings['gameX'] * self.settings["gameY"])
-        
         self.trainer = Trainer( int(self.settings["gameX"]),
                                 int(self.settings["gameY"]),
                                 visible         = False,
