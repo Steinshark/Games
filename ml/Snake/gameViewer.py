@@ -78,7 +78,7 @@ class TrainerApp:
         #Build window 
         self.window         = tk.Tk()
         self.window         .geometry(str(width)+ "x" +str(height))
-        self.window.resizable = True
+        self.window.resizable()
         self.window.columnconfigure(0,weight=1)
         self.window.columnconfigure(1,weight=7)
 
@@ -124,7 +124,9 @@ class TrainerApp:
                             "lo"            : None,
                             "op"            : None,
                             "tr"            : None,
-                            "gpu"           : BooleanVar()
+                            "gam"           : None,
+                            "gpu"           : BooleanVar(),
+                            "rew"           : None
         }
         self.settings['gpu'].set(False)
 
@@ -146,7 +148,9 @@ class TrainerApp:
                         "lo"    : Frame(self.control_frame,padx=1,pady=1),
                         "op"    : Frame(self.control_frame,padx=1,pady=1),
                         "tr"    : Frame(self.control_frame,padx=1,pady=1),
-                        "gpu"   : Frame(self.control_frame,padx=1,pady=1)
+                        "gam"   : Frame(self.control_frame,padx=1,pady=1),
+                        "gpu"   : Frame(self.control_frame,padx=1,pady=1),
+                        "rew"   : Frame(self.control_frame,padx=1,pady=1)
         }
         
         for sf in self.setting_frames:
@@ -188,8 +192,12 @@ class TrainerApp:
                                                     text="Optimizer"),
                                 "tr"        :   Label( self.setting_frames["tr"],
                                                     text="Transfer Rate"),
+                                "gam"        :   Label( self.setting_frames["gam"],
+                                                    text="Gamma"),
                                 "gpu"       :   Label( self.setting_frames['gpu'],
-                                                    text="GPU Acceleration")
+                                                    text="GPU Acceleration"),
+                                "rew"       :   Label( self.setting_frames['rew'],
+                                                    text="Reward")
                                         
         }
         self.game_tracker = []
@@ -219,7 +227,9 @@ class TrainerApp:
                                 "lo"        :   Combobox(self.setting_frames["lo"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "op"        :   Combobox(self.setting_frames["op"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "tr"        :   Entry(self.setting_frames["tr"],width=entry_w),
-                                "gpu"       :   Checkbutton(self.setting_frames["gpu"],variable=self.settings['gpu'],onvalue=True,offvalue=False)
+                                "gam"       :   Entry(self.setting_frames['gam'],width=entry_w),
+                                "gpu"       :   Checkbutton(self.setting_frames["gpu"],variable=self.settings['gpu'],onvalue=True,offvalue=False),
+                                "rew"       :   Entry(self.setting_frames['rew'],width=entry_w*3)
         }
 
         #Place all Items
@@ -367,6 +377,8 @@ class TrainerApp:
             elif s_key == "gpu":
                 #print(f"value of gpu is {self.settings['gpu'].get()}")
                 pass
+            elif s_key == 'rew':
+                self.settings[s_key] = eval(self.fields[s_key].get())
             else:
                 self.settings[s_key] = float(eval(self.fields[s_key].get()))
 
@@ -381,7 +393,7 @@ class TrainerApp:
         self.cur_game_scores     = []
 
         #Correct Model Architecture
-        if "CNN" in self.settings['arch']['type']:
+        if "CNN" in self.settings['arch']['type'] and False:
             print("channel update")
             module  = self.settings['arch']['arch'][0] 
             ch_in   = module.in_channels * int(self.settings['ms'])
@@ -391,6 +403,7 @@ class TrainerApp:
             stride  = module.stride
             self.settings['arch']['arch'][0] = Conv2d(ch_in,ch_out,kernel,stride,pad)
             print(f"{self.settings['arch']['arch'][0].in_channels} channels")
+            
         elif "FCN" in self.settings['arch']['type']:
             self.settings['arch']['arch'][0].in_channels = int(self.settings['ms'] * 3 * self.settings['gameX'] * self.settings["gameY"])
         
@@ -413,6 +426,8 @@ class TrainerApp:
                                 step_tracker    = self.cur_game_steps,
                                 parent_instance = self,
                                 game_tracker    = self.game_tracker,
+                                gamma           = self.settings['gam'],
+                                gui=True
                                 ) 
         
         self.telemetry_box.insert(tk.END,"\n\nTrainer Created Successfully\n")
@@ -423,7 +438,8 @@ class TrainerApp:
                                                     "sample_size":int(self.settings['ss']),
                                                     "batch_size":int(self.settings['bs']),
                                                     "epochs":int(self.settings['ep']),
-                                                    "transfer_models_every":int(self.settings['tr'])
+                                                    "transfer_models_every":int(self.settings['tr']),
+                                                    "rewards":self.settings['rew']
                                             },
                                      )
         self.telemetry_box.insert(tk.END,"Starting train thread\n")

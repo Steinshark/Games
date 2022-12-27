@@ -5,26 +5,23 @@ import sys
 from telemetry import plot_game
 import numpy 
 import copy 
+from torch.nn import Conv2d,ReLU,Flatten,Linear,MaxPool2d,Softmax, BatchNorm2d
+from itertools import product
+from matplotlib import pyplot as plt 
+import random 
 
-
-variant_key = "x" 
-arch_used   = 'None'
-use_gpu = False
-
+variant_keys    = []
+arch_used       = 'None'
+use_gpu         = False
+sf              = 1
+chunks          = 256
 #ARCHITECTURES 
-FCN_1 = {   "type":"FCN",
-            "arch":[3,1024,128,4]}
-#Short, med to small kernel _TOP
-CNN_1 = {   "type":"CNN",
-            "arch":[[3,16,7],[16,8,3],[6400,512],[512,4]]}
-#Short, med to small kernel sequence
-CNN_2 = {   "type":"CNN",
-            "arch":[[3,16,9],[16,32,3],[12800,1024],[1024,4]]}
-#Long Filter Sequence 
-CNN_3 = {   "type":"CNN",
-            "arch":[[3,8,11],[8,8,3],[6400,1024],[1024,4]]}
+ARCHITECTURES = {   "smKer"     : {"type":"CNN","arch":[Conv2d(3,16,3,1,1) ,ReLU()          ,Conv2d(16,32,3,1,0),ReLU()                 ,Flatten()  ,Linear(512,128)    ,ReLU()             ,Linear(128,4)                                                  ]},
+                    "medKer"    : {"type":"CNN","arch":[Conv2d(3,8,5,1,1)  ,ReLU()          ,Conv2d(8,16,3,1,0) ,ReLU()                 ,Flatten()  ,Linear(512,256)    ,ReLU()             ,Linear(256,4)                                                  ]},
+                    "lrgKer"    : {"type":"CNN","arch":[Conv2d(3,8,13,1,1) ,ReLU()          ,Conv2d(8,16,3,1,0) ,ReLU()                 ,Flatten()  ,Linear(128,32)     ,ReLU()             ,Linear(32,4)                                                   ]},
 
-
+                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(3,32,5,1,2), BatchNorm2d(32) ,ReLU()             ,MaxPool2d(2, 2)        ,Conv2d(32,64,3,1,1)            ,BatchNorm2d(64)    ,ReLU()         ,MaxPool2d(2, 2)    ,Conv2d(64, 128, 3, 1, 1)   ,BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4)]}
+}
 
 #LOSSES
 HUBER   = torch.nn.HuberLoss
@@ -36,32 +33,26 @@ ADAM    = torch.optim.Adam
 ADAMW   = torch.optim.AdamW
 ADA     = torch.optim.Adamax
 
-#DICT ORGANIZER
-MODELS = {  "FCN1" : FCN_1,
-            "CNN1" : CNN_1,
-            "CNN2" : CNN_2,
-            "CNN3" : CNN_3
-        }
-
 
 #SETTINGS 
 settings = {
-    "x"     : 20,
-    "y"     : 20,
+    "x"     : 12,
+    "y"     : 12,
     "lr"    : 5e-4,
-    "it"    : 1024*512,
-    "te"    : 256,
-    "ps"    : 1024*64,
-    "ss"    : 1024*16,
-    "bs"    : 256,
+    "it"    : 1024*32,
+    "te"    : 128,
+    "ps"    : 1024*32,
+    "ss"    : 1024*2,
+    "bs"    : 32,
     "ep"    : 1,
-    "ms"    : 3,
-    "mx"    : 200,
-    "sf"    : 1,
-    "arch"  : MODELS["CNN3"],
-    "lo"    : HUBER,
-    "op"    : ADAM,
-    "tr"    : 4
+    "ms"    : 2,
+    "mx"    : 100,
+    "arch"  : ARCHITECTURES,
+    "lo"    : MSE,
+    "op"    : ADAMW,
+    "tr"    : 10,
+    "ga"    : .79,
+    "rw"    : {"die":-17,"eat":34,"step":1}
 }
 
 reverser = {
@@ -115,24 +106,24 @@ if len(sys.argv) > 1:
 
 
 #PREPARATION
-print(variant_key)
-if not isinstance(settings[variant_key],list):
-    settings[variant_key] = [settings[variant_key]]
 for setting in settings:
-    if  setting == variant_key or setting == "sf":
+    if isinstance(settings[setting],list):
+        variant_keys.append(setting)
+        continue
+    if setting == "sf":
         continue 
-    v_0 = settings[setting]
-    v_list = [copy.copy(v_0) for i in range( len(settings[variant_key]) if variant_key else 1)]
-    settings[setting] = v_list
+    settings[setting] = [settings[setting]]
 
+print(variant_keys)
+
+#Check for Compatability 
+if len(variant_keys) > 3:
+    print(f"Too many dimensions to test: {len(variant_keys)}, need 3")
+    exit()
 
 # RUN IT?
-import pprint 
-pprint.pp(settings)
-if( not input(f"Proceed? [y/n]: ") in ["Y","y","Yes","yes"]): exit(0)
 
-
-if __name__ == "__main__":
+if __name__ == "__main__" and False :
 
     variant_sessions = {str(k) : {'avg_scores':[],"avg_steps":[],'name':[],'x_scale':[]} for k in settings[variant_key]}
     big_name = f"GRID[{settings['x'][0]},{settings['y'][0]}]-{arch_used}_[{set(settings['lo'])},Adam] @ {set(settings['lr'])} x [{settings['it'][0] * settings['te'][0]},{set(settings['te'])}] pool size {set(settings['ps'])} taking [{set(settings['ss'])},{set(settings['bs'])}]"
@@ -155,10 +146,15 @@ if __name__ == "__main__":
         loss_fn         = settings["lo"][v_i]
         transfer_rate   = settings["tr"][v_i]
 
-        #Correct model input 
         if "CNN" in model_type:
-            model_arch[0][0] *= memory_size
-
+            module  = model_arch    [0] 
+            ch_in   = module.in_channels * memory_size
+            ch_out  = module.out_channels
+            pad     = module.padding
+            kernel  = module.kernel_size
+            stride  = module.stride
+            model_arch[0] = Conv2d(ch_in,ch_out,kernel,stride,pad)
+            
         elif "FCN" in model_type:
             model_arch[0] = memory_size * 3 * grid_x * grid_y
 
@@ -182,7 +178,10 @@ if __name__ == "__main__":
                                                                         lr=learning_rate,
                                                                         loss_fn=loss_fn,
                                                                         m_type=model_type,
-                                                                        name=arch_used)
+                                                                        name=arch_used,
+                                                                        score_tracker=[],
+                                                                        step_tracker=[]
+                                                                        )
 
             scores,steps,best,x_scale,graph_name = t.train_concurrent(  iters=iters,
                                                                         train_every=train_every,
@@ -192,7 +191,8 @@ if __name__ == "__main__":
                                                                         epochs=epochs,
                                                                         max_steps=max_steps,
                                                                         blocker=256,
-                                                                        transfer_models_every=transfer_rate) 
+                                                                        transfer_models_every=transfer_rate,
+                                                                        verbose=True) 
 
             score_list      .append(scores)
             steps_list      .append(steps)
@@ -223,7 +223,6 @@ if __name__ == "__main__":
                     pass 
 
         x_scale_lengths = [len(x) for x in x_scales]
-        print(f"max of {x_scale_lengths} is {numpy.argmax(x_scale_lengths)}")
         x_scale = x_scales[numpy.argmax(x_scale_lengths)]
 
         variant_sessions[str(settings[variant_key][v_i])]["avg_scores"] = avg_scores
@@ -232,10 +231,91 @@ if __name__ == "__main__":
         variant_sessions[str(settings[variant_key][v_i])]["x_scale"]    = x_scale
 
 
-    print([x for x in variant_sessions])
     plot_game(  scores_list     = [x["avg_scores"] for x in variant_sessions.values()],
                 steps_list      = [x["avg_steps"] for x in variant_sessions.values()],
                 series_names    = [f"{reverser[variant_key]} - {k}" for k in variant_sessions],
                 x_scales        = [x["x_scale"] for x in variant_sessions.values()],
                 graph_name      = big_name,
                 f_name          = f"Results_vs_{variant_key}")
+
+
+if __name__ == "__main__":
+    import pprint 
+    a = list(settings.values())
+    all_settings = list(product(*a))
+    
+    FIG,PLOTS = plt.subplots(   nrows=len(settings[variant_keys[0]])*2,
+                                ncols=len(settings[variant_keys[1]]))
+
+    print(PLOTS.shape)
+
+    i = 1
+
+    print(f"x dim is {variant_keys[0]}")
+    print(f"y dim is {variant_keys[1]}")
+    for x,dim_1 in enumerate(settings[variant_keys[0]]):
+        for y,dim_2 in enumerate(settings[variant_keys[1]]):
+            
+            for dim_3 in settings[variant_keys[2]]:
+                
+
+                t_scores = [0] * chunks
+                t_steps  = [0] * chunks 
+                x_scales = []
+                name = f"{variant_keys[0]}-{dim_1} x {variant_keys[1]}{dim_2}"
+
+                for iter in range(sf):
+
+                    #PREP SETTINGS 
+                    settings_dict = copy.deepcopy(settings)
+                    for item in settings_dict:
+                        if isinstance(settings_dict[item],list):
+                            settings_dict[item] = settings_dict[item][0]
+                    settings_dict[variant_keys[0]] = dim_1
+                    settings_dict[variant_keys[1]] = dim_2
+                    settings_dict[variant_keys[2]] = dim_3
+
+                    series_name = f"{variant_keys[2]}-{dim_3}"
+                    #CORRECT ARCH 
+                    print(f"Training iter\t{i}\{len(all_settings)}")
+                    trainer = Trainer(  settings_dict['x'],settings_dict['y'],
+                                        memory_size         =settings_dict['ms'],
+                                        loss_fn             =settings_dict['lo'],
+                                        optimizer_fn        =settings_dict['op'],
+                                        lr                  =settings_dict['lr'],
+                                        gamma               =settings_dict['ga'],
+                                        architecture        =copy.deepcopy(settings_dict['arch']['arch']),
+                                        gpu_acceleration    =use_gpu,
+                                        epsilon             =.2,
+                                        m_type              = settings_dict['arch']['type'],
+                                        score_tracker       =list(),
+                                        step_tracker        =list(),
+                                        game_tracker        =list(),  
+                                        gui=False     
+                                        )
+                    scores,steps,highscore,x_scale,xname = trainer.train_concurrent(    iters                   =settings_dict['it'],
+                                                                                        train_every             =settings_dict['te'],
+                                                                                        pool_size               =settings_dict['ps'],
+                                                                                        batch_size              =settings_dict['bs'],
+                                                                                        epochs                  =settings_dict['ep'],
+                                                                                        transfer_models_every   =settings_dict['te'],
+                                                                                        rewards                 =settings_dict['rw'],
+                                                                                        max_steps               =settings_dict['mx'],
+                                                                                        verbose=False)
+                    
+                    
+                    #ADD ALL SCORES AND LIVES                                                                 pool_size               =settings_dict['ps'],
+                    t_scores = [t + s for t,s in zip(scores,t_scores)]
+                    t_steps  = [t + s for t,s in zip(steps,t_steps)]
+                    x_scales.append(x_scale) 
+                PLOTS[2*x][y].plot(x_scales[-1],t_scores,label=series_name)
+                PLOTS[2*x][y].set_title("SCORES "+ name)
+                PLOTS[2*x][y].legend()
+                PLOTS[2*x+1][y].plot(x_scales[-1],t_steps,label=series_name)
+                PLOTS[2*x+1][y].set_title("STEPS " + name)
+                PLOTS[2*x+1][y].legend()
+                #Add to large figure 
+                i+= 1
+
+        
+    plt.show()

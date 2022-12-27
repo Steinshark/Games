@@ -2,6 +2,7 @@
 # All pytorch modules 
 import torch
 import torch.nn as nn
+from torch.nn import Conv2d,Linear,Flatten,ReLU
 
 #All supporting modules 
 import random
@@ -16,7 +17,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-1,"food":1,"step":-.01},max_steps=200):
+	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=4,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200):
 
 
 		#Set global Vars
@@ -118,7 +119,7 @@ class Snake:
 			# 	The model for this dropoff will probably change and is 
 			#	open to exploration
 			for snake_i in self.active_games:
-				self.full_game_tracker[snake_i].append({"snake":self.snake_tracker[snake_i],"food":self.food_vectors[snake_i]})
+				self.full_game_tracker[snake_i].append({"snake":self.snake_tracker[snake_i],'food':self.food_vectors[snake_i]})
 
 			if random.random() < epsilon:
 				self.explore()
@@ -157,7 +158,15 @@ class Snake:
 		self.prev_dir_vectors = copy.copy(self.direction_vectors)
 
 		for snake_i in self.active_games:
-			self.direction_vectors[snake_i] = random.randint(0,3) 
+			cur_dir = self.direction_vectors[snake_i]
+
+			#Give it only legal moves
+			if cur_dir in [0,1]:
+				self.direction_vectors[snake_i] = random.randint(2,3)
+			elif cur_dir == [2,3]:
+				self.direction_vectors[snake_i] = random.randint(0,1)
+			
+			#self.direction_vectors[snake_i] = random.randint(0,3) 
 	
 
 
@@ -222,13 +231,13 @@ class Snake:
 				
 				#Dont penalize fully for threshold
 				if self.game_collection[snake_i]['eaten_since'] > self.move_threshold:
-					experience['r'] = self.reward['step'] * 5
+					experience['r'] = self.reward['step']
 
 				self.experiences.append(experience)
 				continue
 			
 			#	START EXP CREATION 
-			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':-1,'done':1}
+			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':1}
 			
 			#	ROLL VECTORS 
 			#	Since the snake has survived, we can roll 3 channels down to be written with 
@@ -249,7 +258,7 @@ class Snake:
 				self.snake_tracker[snake_i].append(self.snake_tracker[snake_i][-1])
 
 				#Set snake reward to be food 
-				experience['r'] = self.reward['food']
+				experience['r'] = self.reward['eat']
 				self.game_collection[snake_i]["eaten_since"] = 0
 			
 			
@@ -265,7 +274,7 @@ class Snake:
 			for snake_body_pos in self.snake_tracker[snake_i][:-1]:
 				x,y = snake_body_pos[0],snake_body_pos[1] 
 				self.game_vectors[snake_i][1][y][x] = 1
-			#self.game_vectors[snake_i][1][next_head[1]][next_head[0]]
+			self.game_vectors[snake_i][1][next_head[1]][next_head[0]]
 
 			#Update the food location vector 
 			food_x,food_y = self.food_vectors[snake_i]
@@ -286,14 +295,13 @@ class Snake:
 		#Delete all items from mark_del  
 		for del_snake_i in mark_del:
 			self.active_games.remove(del_snake_i)
-		
-		
+	
+	
 		#DEBUG 
 		# s_i = self.active_games[0]
-		# print(f"snake: {s_i}")
-		# print(f"moved:{self.direction_vectors[s_i]} -> {self.movements[self.direction_vectors[s_i]]}")
-
-		# print(self.snake_tracker[s_i])
+		# print(f"Game #{s_i}")
+		# print(f"moved:{self.movements[self.direction_vectors[s_i]]}")
+		# print(f"Snake is: {self.snake_tracker[s_i]}")
 		# input(self.game_vectors[s_i])
 
 
@@ -334,16 +342,20 @@ class Snake:
 		return self.game_collection,self.experiences,self.full_game_tracker
 
 	def check_opposite(self,snake_i):
+		if self.cur_step == 0 :
+			return False
 		dir_1 = self.direction_vectors[snake_i]
 		dir_2 = self.prev_dir_vectors[snake_i]
 
 		return abs(dir_1-dir_2) == 1 and not dir_1+dir_2 == 3
 		
 if __name__ == "__main__":
-	w = 4 
-	h = 4
-	model 	= ConvolutionalNetwork(loss_fn=torch.nn.HuberLoss,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,architecture=[[12,4,3],[144,4]],input_shape=(1,12,4,4))
-	s = Snake(w,h,model,device=torch.device("cpu"))
+	w = 3
+	h = 3
+	model 	= ConvolutionalNetwork(loss_fn=torch.nn.HuberLoss,optimizer_fn=torch.optim.Adam,lr=.0001,wd=0,architecture=[Conv2d(6,16,3,1,1) ,ReLU(),Conv2d(16,32,3,1,0),ReLU(),Flatten(),Linear(128,128),ReLU(),Linear(128,4)],input_shape=(1,6,w,h))
+	s 		= Snake(w,h,model,device=torch.device("cpu"),memory_size=2)
+
+	model.forward(torch.ones(size=(1,6,w,h)))
 	#t0 = time.time()
 	#s.play_out_games()
 
@@ -355,9 +367,10 @@ if __name__ == "__main__":
 			print("all snakes died")
 			print(s.direction_vectors)
 			break
-		print(s.game_vectors[s.active_games[0]][:3])
+		print(f"GAME REPR:")
+		print(s.game_vectors[s.active_games[0]])
 		print(f"game:{s.active_games[0]}")
-		print(f"dir:{s.direction_vectors[s.active_games[0]]}")
+		print(f"dir:{s.movements[s.direction_vectors[s.active_games[0]]]}")
 		print(f"snake:{s.snake_tracker[s.active_games[0]]}")
 		input(f"status:{s.game_collection[s.active_games[0]]['status']}")
 	#print(f"list took {(time.time()-t0)}")

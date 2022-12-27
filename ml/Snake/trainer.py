@@ -9,7 +9,7 @@ import numpy
 import sys 
 import tkinter as tk
 from snakeAI import SnakeGame
-
+from telemetry import plot_game
 class Trainer:
 
 	def __init__(	self,game_w,game_h,
@@ -23,7 +23,7 @@ class Trainer:
 					wd=0,
 					fname="experiences",
 					name="generic",
-					gamma=.98,
+					gamma=.96,
 					architecture=[256,32],
 					gpu_acceleration=False,
 					epsilon=.2,
@@ -36,7 +36,8 @@ class Trainer:
 					score_tracker=[],
 					step_tracker=[],
 					parent_instance=None,
-					game_tracker = []):
+					game_tracker=[],
+					gui=False):
 
 		self.PATH = PATH
 		self.fname = fname
@@ -53,7 +54,7 @@ class Trainer:
 		self.all_lived = step_tracker
 		self.parent_instance = parent_instance
 		self.game_tracker = game_tracker
-
+		self.gui = gui
 		if m_type == "FCN":
 			self.input_dim *= 3
 			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
@@ -63,12 +64,14 @@ class Trainer:
 
 
 		elif m_type == "CNN":
-			self.input_shape = (1,architecture[0].in_channels,game_w,game_h)
-			print(f"in shape is {self.input_shape}")
+			self.input_shape = (1,architecture[0].in_channels*memory_size,game_w,game_h)
+			if self.gui:
+				print(f"in shape is {self.input_shape}")
 			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape)
 			self.encoding_type = "6_channel"
-			print(self.learning_model)
+			if self.gui:
+				print(self.learning_model)
 
 		total_params = sum(param.numel() for param in self.learning_model.model.parameters())
 
@@ -230,7 +233,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False,picking=True,rewards={"die":-1,"food":1,"step":-.01},max_steps=100,random_pick=False,blocker=256):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False,picking=True,rewards={"die":-1,"eat":10,"step":-.01},max_steps=100,random_pick=False,blocker=256):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -251,7 +254,8 @@ class Trainer:
 
 			#	UPDATE EPSILON
 			e 				= self.update_epsilon(i/(iters))	
-			self.progress_var.set(i/iters)
+			if self.gui:
+				self.progress_var.set(i/iters)
 
 			#	GET EXPERIENCES
 			metrics, experiences, new_games = SnakeConcurrent.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards=rewards,max_steps=max_steps).play_out_games(epsilon=e)
@@ -275,7 +279,8 @@ class Trainer:
 				if self.all_scores[-1] > best_score:
 					best_score = self.all_scores[-1]
 					best_scorer = game_i
-					self.output.insert(tk.END,f"  new hs: {best_score}\n")
+					if self.gui:
+						self.output.insert(tk.END,f"  new hs: {best_score}\n")
 
 				self.all_lived.append(metr_dict["lived_for"])
 			
@@ -284,8 +289,9 @@ class Trainer:
 			#	UPDATE VERBOSE 
 			if verbose:
 				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(self.all_lived[-1000:])/1000):.2f} score_avg: {(sum(self.all_scores[-1000:])/1000):.2f}")
-			self.steps_out.set(f"{(sum(self.all_lived[-1000:])/1000):.2f}")
-			self.score_out.set(f"{(sum(self.all_scores[-1000:])/1000):.2f}")
+			if self.gui:
+				self.steps_out.set(f"{(sum(self.all_lived[-1000:])/1000):.2f}")
+				self.score_out.set(f"{(sum(self.all_scores[-1000:])/1000):.2f}")
 			
 			# 	GET TRAINING SAMPLES
 			#	AND TRAIN MODEL 
@@ -306,15 +312,16 @@ class Trainer:
 						while cur_i in training_ind:
 							cur_i = random.randint(0,len(memory_pool)-1)
 
-						if not memory_pool[cur_i]['r'] > 0 or not memory_pool[cur_i]['r'] < .5: 
+						if not memory_pool[cur_i]['r'] > 0:# or not memory_pool[cur_i]['r'] < .5: 
 
 							if random.random() < drop_rate:
 								continue 
 							else:
+								
 								training_ind.append(cur_i)
 								training_set.append(memory_pool[cur_i])
 						else:
-							if memory_pool[cur_i]['r'] < .5:
+							if memory_pool[cur_i]['r'] < .5 and False:
 								if random.random < drop_rate*.5:
 									continue
 							training_set.append(memory_pool[cur_i])
@@ -336,8 +343,10 @@ class Trainer:
 				self.transfer_models(transfer=True,verbose=verbose)
 			
 			i += train_every
-			self.parent_instance.place_steps()
-			self.parent_instance.place_scores()
+
+			if self.gui:
+				self.parent_instance.place_steps()
+				self.parent_instance.place_scores()
 		#	block_reduce lists 
 		#plot up to 500
 
@@ -363,6 +372,8 @@ class Trainer:
 		if self.save_fig:
 			plot_game(blocked_scores,blocked_lived,graph_name,x_scale)
 
+		if self.gui:
+			self.output.insert(tk.END,f"Completed Training\n\tHighScore:{best_score}\n\tSteps:{sum(self.all_lived[-100:])/100}")
 		return blocked_scores,blocked_lived,best_score,x_scale,graph_name
 
 
@@ -557,6 +568,6 @@ class Trainer:
 		if percent > .90:
 			return 0
 		else:
-			return pow(2.7182,radical) * .25
+			return pow(2.7182,radical)
 	
 
