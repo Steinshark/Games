@@ -49,11 +49,11 @@ def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],grap
 ARCHITECTURES = {   "FCN_1"     : {"type":"FCN","arch":[3,1024,128,4]},
                     "baby"      : {"type":"CNN","arch":[Conv2d(3,32,3,1,1) ,ReLU()          ,Flatten()          ,Linear(512,1024)       ,ReLU()     ,Linear(1024,512)   ,ReLU()             ,Linear(512,4)                                                      ]},
                    
-                    "smKer"     : {"type":"CNN","arch":[Conv2d(3,16,3,1,1) ,ReLU()          ,Conv2d(16,32,7,1,0),ReLU()                 ,Flatten()  ,Linear(512,128)    ,ReLU()             ,Linear(128,4)                                                      ]},
-                    "medKer"    : {"type":"CNN","arch":[Conv2d(3,32,3,1,1) ,ReLU()          ,Conv2d(32,32,3,1,0),ReLU()                 ,Flatten()  ,Linear(512,4096)   ,ReLU()             ,Linear(4096,512)           ,ReLU() ,Linear(512,4)                          ]},
-                    "lrgKer"    : {"type":"CNN","arch":[Conv2d(3,64,5,1,1) ,ReLU()          ,Conv2d(64,32,3,1,0),ReLU()                 ,Flatten()  ,Linear(1,4096)     ,ReLU()             ,Linear(4096,256)           ,ReLU() ,Linear(256,4)                          ]},
+                    "sm"     : {"type":"CNN","arch":[Conv2d(3,16,3,1,1) ,ReLU()          ,Conv2d(16,32,5,1,0),ReLU()                 ,Flatten()  ,Linear(512,512)    ,ReLU()             ,Linear(512,32)             ,ReLU() ,Linear(32,4)                           ]},
+                    "med"    : {"type":"CNN","arch":[Conv2d(3,32,3,1,1) ,ReLU()          ,Conv2d(32,32,5,1,0),ReLU()                 ,Flatten()  ,Linear(512,8192)   ,ReLU()             ,Linear(4096,512)           ,ReLU() ,Linear(512,4)                          ]},
+                    "lg"     : {"type":"CNN","arch":[Conv2d(3,64,3,1,1) ,ReLU()          ,Conv2d(65,32,5,1,0),ReLU()                 ,Flatten()  ,Linear(1,8192)     ,ReLU()             ,Linear(4096,512)           ,ReLU() ,Linear(512,4)                          ]},
                     
-                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(3,32,5,1,2), BatchNorm2d(32) ,ReLU()             ,MaxPool2d(2, 2)        ,Conv2d(32,64,3,1,1)            ,BatchNorm2d(64)    ,ReLU()         ,MaxPool2d(2, 2)    ,Conv2d(64, 128, 3, 1, 1)   ,BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4)]}
+                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(3,32,3,1,2), BatchNorm2d(32) ,ReLU()             ,MaxPool2d(2, 2)        ,Conv2d(32,64,3,1,1)            ,BatchNorm2d(64)    ,ReLU()         ,MaxPool2d(2, 2)    ,Conv2d(64, 128, 3, 1, 1)   ,BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4)]}
 
 }#,Softmax(dim=0)]}}
 

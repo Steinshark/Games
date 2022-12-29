@@ -104,7 +104,13 @@ class ConvolutionalNetwork(nn.Module):
 			if "Flatten" in str(module):
 				through = module(through)
 				flat_size = through.size()[1]
-				architecture[i+1] = torch.nn.Linear(flat_size,architecture[i+1].out_features,device=device)
+				old_outs = architecture[i+1].out_features
+				old_next_outs = architecture[i+3].out_features
+				while flat_size < old_outs:
+					old_outs /= 2
+					old_outs = int(old_outs) 
+				architecture[i+1] = torch.nn.Linear(flat_size,old_outs,device=device)
+				architecture[i+3] = torch.nn.Linear(old_outs,old_next_outs,device=device)
 				break
 			else:
 				through = module(through)

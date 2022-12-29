@@ -233,7 +233,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False,picking=True,rewards={"die":-1,"eat":10,"step":-.01},max_steps=100,random_pick=False,blocker=256):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False,rewards={"die":-1,"eat":10,"step":-.01},max_steps=100,random_pick=True,blocker=256):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -250,7 +250,6 @@ class Trainer:
 		while i < iters and not self.cancelled:
 			#	Keep some performance variables 
 			t0 				= time.time() 
-
 
 			#	UPDATE EPSILON
 			e 				= self.update_epsilon(i/(iters))	
@@ -498,7 +497,7 @@ class Trainer:
 						printed+=1
 				
 				#Init final values for actual reward values 
-				final_target_values = torch.ones(size=(batch_size,4),device=self.device,requires_grad=False)
+				final_target_values = torch.zeros(size=(batch_size,4),device=self.device,requires_grad=False)
 
 				#Run all of batch through the network 
 				batch_set 				= big_set[batch_i*batch_size:batch_i*batch_size+batch_size]
@@ -514,9 +513,14 @@ class Trainer:
 					#Pre calc some reused values
 					i 					= item_i + (batch_i*batch_size)
 					exp 				= big_set[i]
-
+					#print(f"EXP is {exp['s']}")
+					#print(f"chosen action was {exp['a']}")
+					#print(f"resulted in next state {exp['s`']}")
+					#print(f"done val: {exp['done']}")
 					#Calculate Bellman 
 					final_target_values[item_i,exp["a"]] 	= exp["r"] + (exp['done'] * self.gamma * target_expected_values[item_i])
+					#print(f"final value is {final_target_values[item_i,exp['a']]}")
+					#input()
 
 
 

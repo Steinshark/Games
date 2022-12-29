@@ -227,7 +227,7 @@ class Snake:
 				self.game_collection[snake_i]["lived_for"] = self.cur_step
 
 				#Add final experience
-				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':0}\
+				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':0}
 				
 				#Dont penalize fully for threshold
 				if self.game_collection[snake_i]['eaten_since'] > self.move_threshold:
@@ -236,7 +236,7 @@ class Snake:
 				self.experiences.append(experience)
 				continue
 			
-			#	START EXP CREATION 
+			#	START EXP CREATION 	
 			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':1}
 			
 			#	ROLL VECTORS 
@@ -274,7 +274,9 @@ class Snake:
 			for snake_body_pos in self.snake_tracker[snake_i][:-1]:
 				x,y = snake_body_pos[0],snake_body_pos[1] 
 				self.game_vectors[snake_i][1][y][x] = 1
-			self.game_vectors[snake_i][1][next_head[1]][next_head[0]]
+			
+			#Counts the head in the body channel 
+			self.game_vectors[snake_i][1][next_head[1]][next_head[0]] = 1
 
 			#Update the food location vector 
 			food_x,food_y = self.food_vectors[snake_i]
