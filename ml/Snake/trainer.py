@@ -10,6 +10,8 @@ import sys
 import tkinter as tk
 from snakeAI import SnakeGame
 from telemetry import plot_game
+
+
 class Trainer:
 
 	def __init__(	self,game_w,game_h,
@@ -568,8 +570,8 @@ class Trainer:
 
 	@staticmethod
 	def update_epsilon(percent):
-		radical = -.0299573*100*percent -.916290 
-		if percent > .90:
+		radical = -.4299573*100*percent -1.2116290 
+		if percent > .50:
 			return 0
 		else:
 			return pow(2.7182,radical)
