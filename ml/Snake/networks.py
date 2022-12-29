@@ -106,7 +106,7 @@ class ConvolutionalNetwork(nn.Module):
 				flat_size = through.size()[1]
 				old_outs = architecture[i+1].out_features
 				old_next_outs = architecture[i+3].out_features
-				while flat_size < old_outs:
+				while flat_size <= old_outs*2:
 					old_outs /= 2
 					old_outs = int(old_outs) 
 				architecture[i+1] = torch.nn.Linear(flat_size,old_outs,device=device)
