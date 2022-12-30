@@ -12,11 +12,10 @@ import random
 
 variant_keys    = []
 arch_used       = 'None'
-use_gpu         = True
+use_gpu         = False
 sf              = 1
 chunks          = 256
 #ARCHITECTURES 
-\
 #LOSSES
 HUBER   = torch.nn.HuberLoss
 MSE     = torch.nn.MSELoss
@@ -41,12 +40,12 @@ settings = {
     "ep"    : 1,
     "ms"    : 2,
     "mx"    : 100,
-    "arch"  : ARCHITECTURES,
     "lo"    : MSE,
     "op"    : ADAMW,
     "tr"    : 10,
     "ga"    : .79,
-    "rw"    : {"die":-17,"eat":45,"step":-.2}
+    "rw"    : {"die":-17,"eat":45,"step":-.2},
+    "arch"  : ARCHITECTURES
 }
 
 reverser = {
@@ -103,6 +102,8 @@ if len(sys.argv) > 1:
 for setting in settings:
     if isinstance(settings[setting],list):
         variant_keys.append(setting)
+        print(f"append {setting}")
+        print(variant_keys)
         continue
     if setting == "sf":
         continue 

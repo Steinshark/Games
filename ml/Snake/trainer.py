@@ -341,7 +341,6 @@ class Trainer:
 
 			#	UPDATE MODELS 
 			if i/train_every % transfer_models_every == 0:
-				print("transfeer")
 				self.transfer_models(transfer=True,verbose=verbose)
 			
 			i += train_every
