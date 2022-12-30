@@ -12,7 +12,7 @@ import random
 
 variant_keys    = []
 arch_used       = 'None'
-use_gpu         = False
+use_gpu         = True
 sf              = 1
 chunks          = 256
 #ARCHITECTURES 
