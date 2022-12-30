@@ -235,7 +235,7 @@ class Trainer:
 		return scores,lived
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2,verbose=False,rewards={"die":-1,"eat":10,"step":-.01},max_steps=100,random_pick=True,blocker=256):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,transfer_models_every=2,verbose=False,rewards={"die":-3	 ,"eat":5,"step":-.01},max_steps=100,random_pick=True,blocker=256):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -328,9 +328,9 @@ class Trainer:
 							training_set.append(memory_pool[cur_i])
 							training_ind.append(cur_i)
 
-				qual 		= 100*sum([int(t['r'] > 0) for t in training_set]) / len(training_set)
+				qual 		= 100*sum([int(t['r'] > 1) for t in training_set]) / len(training_set)
 				bad_set 	= random.sample(memory_pool,sample_size)
-				bad_qual 	= f"{(100*sum([int(t['r'] > 0) for t in bad_set]) / len(bad_set)):.2f}"
+				bad_qual 	= f"{(100*sum([int(t['r'] > 1) for t in bad_set]) / len(bad_set)):.2f}"
 
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
 				
@@ -341,6 +341,7 @@ class Trainer:
 
 			#	UPDATE MODELS 
 			if i/train_every % transfer_models_every == 0:
+				print("transfeer")
 				self.transfer_models(transfer=True,verbose=verbose)
 			
 			i += train_every
@@ -352,7 +353,6 @@ class Trainer:
 		#plot up to 500
 
 		if self.cancelled:
-			print("exiting")
 			return
 		averager = int(len(self.all_scores)/blocker)
 		
@@ -505,16 +505,18 @@ class Trainer:
 				batch_set 				= big_set[batch_i*batch_size:batch_i*batch_size+batch_size]
 				exp_set 				= torch.stack([exp['s`'][0] for exp in batch_set])
 				target_expected_values 	= torch.max(self.target_model.forward(exp_set),dim=1)[0]
-
+				#input(f"initial vals\n{final_target_values}")
 
 				#One run of this for loop will be one batch run
 				#Update the weights of the experience
 				for item_i in range(batch_size):
+
 					if self.cancelled:
 						return
+
 					#Pre calc some reused values
-					i 					= item_i + (batch_i*batch_size)
-					exp 				= big_set[i]
+					exp 				= batch_set[item_i]
+
 					#print(f"EXP is {exp['s']}")
 					#print(f"chosen action was {exp['a']}")
 					#print(f"resulted in next state {exp['s`']}")
@@ -524,7 +526,7 @@ class Trainer:
 					#print(f"final value is {final_target_values[item_i,exp['a']]}")
 					#input()
 
-
+				#input(f"updated trgVals\n{final_target_values}")
 
 				#	BATCH GRADIENT DESCENT
 				i_start 					= batch_i*batch_size
@@ -535,6 +537,7 @@ class Trainer:
 				inputs 						= torch.stack([exp["s"][0] for exp in big_set[i_start:i_end]])
 				t1 = time.time()
 				this_batch 					= self.learning_model.forward(inputs)
+				#input(f"This batch\n{this_batch}")
 				batch_loss 					= self.learning_model.loss(final_target_values,this_batch)
 				total_loss 					+= batch_loss.item()
 

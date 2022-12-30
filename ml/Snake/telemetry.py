@@ -46,20 +46,15 @@ def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],grap
 #                  "CNN_3"    : {"type":"CNmedN","arch":[[3,8,11],[8,8,3],[6400,1024],[1024,4]]},
 #                  "CNN_4"    : {"type":"CNN","arch":[[3,32,3],[32,64,3],[128,64],[64,4]]}}
 
-ARCHITECTURES = {   "FCN_1"     : {"type":"FCN","arch":[3,1024,128,4]},
-                    "baby"      : {"type":"CNN","arch":[Conv2d(3,32,3,1,1)  ,ReLU()          ,Flatten()          ,Linear(512,1024)       ,ReLU()     ,Linear(1024,512)   ,ReLU()             ,Linear(512,4)                                                                                                                                                              ]},
+ARCHITECTURES = {   "FCN_1"     : {"type":"FCN","arch":[2,1024,128,4]},
+                    "baby"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1)  ,ReLU()             ,Flatten()                  ,Linear(512,1024)           ,ReLU()     ,Linear(1024,512)   ,ReLU()             ,Linear(512,4)                                                                                                                                                              ]},
                    
-                    "sm"        : {"type":"CNN","arch":[Conv2d(3,16,3,1,1)  ,ReLU()          ,Conv2d(16,32,5,1,0)    ,ReLU()                 ,Flatten()  ,Linear(512,512)    ,ReLU()             ,Linear(512,32)     ,ReLU() ,Linear(32,4)                                                                                                                       ]},
-                    "med"       : {"type":"CNN","arch":[Conv2d(3,32,3,1,1)  ,ReLU()          ,Conv2d(32,32,5,1,0)    ,ReLU()                 ,Flatten()  ,Linear(512,8192)   ,ReLU()             ,Linear(4096,256)   ,ReLU() ,Linear(256,4)                                                                                                                      ]},
-                    "lg"        : {"type":"CNN","arch":[Conv2d(3,64,3,1,1)  ,ReLU()          ,Conv2d(64,32,7,1,0)    ,ReLU()                 ,Flatten()  ,Linear(1,8192)     ,ReLU()             ,Linear(4096,256)   ,ReLU() ,Linear(256,4)                                                                                                                      ]},
-                    
-                    "smSM"     : {"type":"CNN","arch":[Conv2d(3,16,3,1,1)   ,ReLU()           ,Conv2d(16,32,5,1,0)    ,ReLU()                 ,Flatten()  ,Linear(512,512)    ,ReLU()             ,Linear(512,32)     ,ReLU() ,Linear(32,4)                , Softmax()                                                                                            ]},
-                    "medSM"    : {"type":"CNN","arch":[Conv2d(3,32,3,1,1)   ,ReLU()           ,Conv2d(32,32,5,1,0)    ,ReLU()                 ,Flatten()  ,Linear(512,8192)   ,ReLU()             ,Linear(4096,256)   ,ReLU() ,Linear(256,4)               , Softmax()                                                                                            ]},
-                    "lgSM"     : {"type":"CNN","arch":[Conv2d(3,64,3,1,1)   ,ReLU()           ,Conv2d(64,32,7,1,0)    ,ReLU()                 ,Flatten()  ,Linear(1,8192)     ,ReLU()             ,Linear(4096,256)   ,ReLU() ,Linear(256,4)               , Softmax()                                                                                            ]},
-                    
-                    "smMP"     : {"type":"CNN","arch":[Conv2d(3,16,3,1,1)   ,ReLU()           ,MaxPool2d(2,2)         ,Conv2d(16,32,5,1,0)    ,ReLU()     ,MaxPool2d(2,2)     ,Flatten()          ,Linear(512,512)    ,ReLU() ,Linear(512,32)             ,ReLU() ,Linear(32,4)                , Softmax()                                                            ]},
-                    "medMP"    : {"type":"CNN","arch":[Conv2d(3,32,3,1,1)   ,ReLU()           ,MaxPool2d(2,2)         ,Conv2d(32,32,5,1,0)    ,ReLU()     ,MaxPool2d(2,2)     ,Flatten()          ,Linear(512,8192)   ,ReLU() ,Linear(4096,32)           ,ReLU() ,Linear(32,4)               , Softmax()                                                            ]},
-                    "lgMP"     : {"type":"CNN","arch":[Conv2d(3,64,3,1,1)   ,ReLU()           ,MaxPool2d(2,2)         ,Conv2d(64,32,7,1,0)    ,ReLU()     ,MaxPool2d(2,2)     ,Flatten()          ,Linear(1,8192)     ,ReLU() ,Linear(4096,32)           ,ReLU() ,Linear(32,4)               , Softmax()                                                            ]},
+                    "sm"        : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Flatten(),Linear(512,512),ReLU(),Linear(512,4)]},
+                    "sm1"       : {"type":"CNN","arch":[Conv2d(2,32,5,1,1),ReLU(),Flatten(),Linear(512,32),ReLU(),Linear(32,4)]},
+                    "med"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1)  ,ReLU()             ,Conv2d(32,64,5,1,0)        ,ReLU()                     ,Flatten()  ,Linear(512,128)   ,ReLU()             ,Linear(128,4)                                                                                                                      ]},
+                    "med2"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1)  ,ReLU()             ,Conv2d(32,64,7,1,0)        ,ReLU()                     ,Flatten()  ,Linear(512,128)   ,ReLU()             ,Linear(128,4)                                                                                                                      ]},
+                    "lg"        : {"type":"CNN","arch":[Conv2d(2,64,3,1,1)  ,ReLU()             ,Conv2d(64,64,5,1,0)        ,ReLU()                     ,Conv2d(64,64,5,1,0)    ,ReLU()                 ,Flatten()  ,Linear(1,8192)     ,ReLU()             ,Linear(4096,256)   ,ReLU() ,Linear(256,4)                                                                                                                      ]},
+
                     
                     "chatGPT"   : {"type":"CNN","arch":[Conv2d(3,32,3,1,2), BatchNorm2d(32) ,ReLU()             ,MaxPool2d(2, 2)        ,Conv2d(32,64,3,1,1)            ,BatchNorm2d(64)    ,ReLU()         ,MaxPool2d(2, 2)    ,Conv2d(64, 128, 3, 1, 1)   ,BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4) ]}
 
@@ -74,16 +69,16 @@ OPTIMIZERS  = { "Adam"      : torch.optim.Adam,
                 "SGD"       : torch.optim.SGD,
                 "RMSProp"   : torch.optim.RMSprop}
 
-DEFAULTS    = { "gameX"     : 20,
-                "gameY"     : 20,
-                "iters"     : 1024*512,
-                "te"        : 64,
-                "ps"        : 1024*32,
-                "ss"        : 1024*8,
-                "bs"        : 64,
-                "lr"        : .0001,
+DEFAULTS    = { "gameX"     : 12,
+                "gameY"     : 12,
+                "iters"     : 1024*32,
+                "te"        : 128,
+                "ps"        : 1024*16,
+                "ss"        : 1024*4,
+                "bs"        : 32,
+                "lr"        : .001,
                 "ep"        : 1,
-                "ms"        : 2,
+                "ms"        : 3,
                 "mx"        : 100,
                 "sf"        : 1,
                 "arch"      : "",
@@ -92,5 +87,5 @@ DEFAULTS    = { "gameX"     : 20,
                 "tr"        : 5,
                 "gam"       : .8,
                 "gpu"       : False,
-                "rew"       : "{'die':-17,'eat':35,'step':0}"
+                "rew"       : "{'die':-17,'eat':35,'step':-2}"
                 }

@@ -20,25 +20,6 @@ from multiprocessing import Process
 import numpy 
 import time 
 from torch.nn import Conv2d
-def load_game_shot(canvas:tk.Canvas,snake_body):
-    global GAME_IMG
-    global PIXEL_LIST
-    for row in range(canv_im_h):
-        for col in range(canv_im_w):
-            #print(PIXEL_LIST[row,col])
-            if random.random() < .25:
-                PIXEL_LIST[row,col] = (255,255,255)
-    fname = r"C:\users\steinshark\pictures\out-0.png"
-    GAME_IMG = ImageTk.PhotoImage(RAW_IMG)
-
-    canvas.create_image(0,0,anchor="nw",image=GAME_IMG)
-
-
-def play_game():
-    pass 
-
-def show_game():
-    pass
 
 class GameBoard:
 
@@ -424,7 +405,8 @@ class TrainerApp:
                                                     "batch_size":int(self.settings['bs']),
                                                     "epochs":int(self.settings['ep']),
                                                     "transfer_models_every":int(self.settings['tr']),
-                                                    "rewards":self.settings['rew']
+                                                    "rewards":self.settings['rew'],
+                                                    "verbose":True
                                             },
                                      )
         self.telemetry_box.insert(tk.END,"Starting train thread\n")
@@ -433,13 +415,17 @@ class TrainerApp:
     def cancel_training(self):
         self.var_step.set("0")
         self.var_score.set("0") 
-        self.telemetry_box.insert(tk.END,"Cancelling Training\n")
         self.trainer.cancelled = True 
         self.progress_var.set(0)
         try:
-            self.train_thread.join()
-        except AssertionError:
-            pass
+            self.train_thread.close()
+            self.train_thread = None
+            self.telemetry_box.insert(tk.END,"Cancelling Training\n")
+        except AssertionError as AE:
+            print(f"error joining thread")
+            print(AE)
+            
+        print(f"cancelled")
     
     def place_steps(self):
         self.step_telemetry.update()
