@@ -119,6 +119,7 @@ class ConvolutionalNetwork(nn.Module):
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
 		self.to(device)
+		print(f"generated model with {sum([p.numel() for p in self.model.parameters()])}")
 		
 	def train(self,x_input,y_actual,epochs=10,in_shape=(1,6,10,10)):
 

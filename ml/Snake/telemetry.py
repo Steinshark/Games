@@ -52,10 +52,10 @@ ARCHITECTURES = {   "FCN_1"     : {"type":"FCN","arch":[2,1024,128,4]},
                     "sm"        : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Flatten(),Linear(512,512),ReLU(),Linear(512,4)]},
                     "sm1"       : {"type":"CNN","arch":[Conv2d(2,32,5,1,1),ReLU(),Flatten(),Linear(512,32),ReLU(),Linear(32,4)]},
                     "med"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1)  ,ReLU()             ,Conv2d(32,64,5,1,0)        ,ReLU()                     ,Flatten()  ,Linear(512,128)   ,ReLU()             ,Linear(128,4)                                                                                                                      ]},
-                    "med2"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1)  ,ReLU()             ,Conv2d(32,64,7,1,0)        ,ReLU()                     ,Flatten()  ,Linear(512,128)   ,ReLU()             ,Linear(128,4)                                                                                                                      ]},
-                    "lg"        : {"type":"CNN","arch":[Conv2d(2,64,3,1,1)  ,ReLU()             ,Conv2d(64,64,5,1,0)        ,ReLU()                     ,Conv2d(64,64,5,1,0)    ,ReLU()                 ,Flatten()  ,Linear(1,8192)     ,ReLU()             ,Linear(4096,256)   ,ReLU() ,Linear(256,4)                                                                                                                      ]},
+                    "med2"      : {"type":"CNN","arch":[Conv2d(2,32,5,1,1)  ,ReLU()             ,Conv2d(32,64,7,1,0)        ,ReLU()                     ,Flatten()  ,Linear(512,128)   ,ReLU()             ,Linear(128,4)                                                                                                                      ]},
+                    "lg"        : {"type":"CNN","arch":[Conv2d(2,128,3,1,1) ,ReLU()             ,Conv2d(128,64,5,1,0)       ,ReLU()                     ,Conv2d(64,64,5,1,0)    ,ReLU()                 ,Flatten()  ,Linear(1,8192)     ,ReLU()             ,Linear(4096,256)   ,ReLU() ,Linear(256,4)                                                                                                                      ]},
 
-                    
+                    "long"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1)  ,ReLU(),             Conv2d(32,32,3,1,0)       ,ReLU(),                     Conv2d(32,32,3,1,0), Flatten(),Linear(0,512),ReLU(),Linear(512,64),ReLU(),Linear(64,4)]},
                     "chatGPT"   : {"type":"CNN","arch":[Conv2d(3,32,3,1,2), BatchNorm2d(32) ,ReLU()             ,MaxPool2d(2, 2)        ,Conv2d(32,64,3,1,1)            ,BatchNorm2d(64)    ,ReLU()         ,MaxPool2d(2, 2)    ,Conv2d(64, 128, 3, 1, 1)   ,BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4) ]}
 
 }#,Softmax(dim=0)]}}
@@ -87,5 +87,5 @@ DEFAULTS    = { "gameX"     : 12,
                 "tr"        : 5,
                 "gam"       : .8,
                 "gpu"       : False,
-                "rew"       : "{'die':-17,'eat':35,'step':-2}"
+                "rew"       : "{'die':-.7,'eat':1,'step':0}"
                 }

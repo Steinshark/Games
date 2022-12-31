@@ -9,7 +9,7 @@ from torch.nn import Conv2d,ReLU,Flatten,Linear,MaxPool2d,Softmax, BatchNorm2d
 from itertools import product
 from matplotlib import pyplot as plt 
 import random 
-
+import os 
 variant_keys    = []
 arch_used       = 'None'
 use_gpu         = False
@@ -122,10 +122,12 @@ if __name__ == "__main__":
     import pprint 
     a = list(settings.values())
     all_settings = list(product(*a))
-    
+    if len(settings[variant_keys[1]]) < 2 and len(settings[variant_keys[0]]) > 1:
+        variant_keys = [variant_keys[1],variant_keys[0],variant_keys[2]]
     FIG,PLOTS = plt.subplots(   nrows=len(settings[variant_keys[0]])*2,
                                 ncols=len(settings[variant_keys[1]]))
-
+    print(len(settings[variant_keys[0]])*2)
+    print(len(settings[variant_keys[1]]))
     print(PLOTS.shape)
 
     i = 1
@@ -154,7 +156,11 @@ if __name__ == "__main__":
                     settings_dict[variant_keys[1]] = dim_2
                     settings_dict[variant_keys[2]] = dim_3
 
-                    series_name = f"{variant_keys[2]}-{dim_3}"[:50]
+                    if variant_keys[2] == 'arch':
+                        series_name = list(ARCHITECTURES.keys())[list(ARCHITECTURES.values()).index(dim_3)]
+                    else:
+                        series_name = f"{variant_keys[2]}-{dim_3}"[:50]
+
                     #CORRECT ARCH 
                     print(f"Training iter\t{i}\{len(all_settings)}")
                     trainer = Trainer(  settings_dict['x'],settings_dict['y'],
@@ -198,4 +204,4 @@ if __name__ == "__main__":
 
         
     plt.show()
-    plt.savefig(f"name")
+    plt.savefig(os.join("figs",name))

@@ -55,7 +55,8 @@ class GameBoard:
 class TrainerApp:
 
     def __init__(self,width,height):
-
+        self.best_game = [] 
+        self.best_score = 0
         #Build window 
         self.window         = tk.Tk()
         self.window         .geometry(str(width)+ "x" +str(height))
@@ -302,9 +303,10 @@ class TrainerApp:
         self.viewer_control.rowconfigure(1,weight=1)
         self.slider         = Scale(self.slider_control,from_=0,to=100,orient="horizontal")
         self.play_button    = Button(self.viewer_control,text="Play",command=self.play_game)
-
+        self.best_button    = Button(self.viewer_control,text="Play Best",command = self.play_best)
         self.slider.grid(row=0,column=0,sticky=tk.NSEW)
         self.play_button.grid(row=0,column=1,sticky=tk.NSEW)
+        self.best_button.grid(row=0,column=2,sticky=tk.NSEW)
 
         self.fps_slide      = Scale(self.control_frame,from_=1,to=60,orient="horizontal")
         self.fps_slide.grid(row=i+8,column=0,sticky=tk.NSEW)
@@ -369,7 +371,7 @@ class TrainerApp:
         import pprint
         pprint.pp(self.settings)
 
-
+        self.longest_run        = []
         self.cur_game_steps      = [] 
         self.cur_game_scores     = []
 
@@ -491,6 +493,18 @@ class TrainerApp:
         index = int((game_to_play / 100) * len(self.game_tracker))-1
 
         game = self.game_tracker[index]
+        for frame in game:
+            t0 = time.time()
+            self.place_game_img2(frame)
+            while time.time() - t0 < (1/self.FPS):
+                time.time()
+
+    def play_best(self):
+
+        self.FPS = self.fps_slide.get()
+        self.set_vars()
+
+        game = self.best_game
         for frame in game:
             t0 = time.time()
             self.place_game_img2(frame)

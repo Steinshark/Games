@@ -10,7 +10,7 @@ import sys
 import tkinter as tk
 from snakeAI import SnakeGame
 from telemetry import plot_game
-
+import copy
 
 class Trainer:
 
@@ -275,17 +275,33 @@ class Trainer:
 
 
 			#Update metrics 
-			for game_i,metr_dict in enumerate(metrics): 
-				self.all_scores.append(metr_dict["highscore"])
-				if self.all_scores[-1] > best_score:
-					best_score = self.all_scores[-1]
-					best_scorer = game_i
-					if self.gui:
-						self.output.insert(tk.END,f"  new hs: {best_score}\n")
+			#Find top scorer this round
+			round_best_scorer= 0
+			round_best_score = 0
 
+			for game_i,metr_dict in enumerate(metrics): 
+				
+				#Update large telemetry 
+				score = metr_dict["highscore"]
+				self.all_scores.append(score)
 				self.all_lived.append(metr_dict["lived_for"])
+				
+				#Check best scorer
+				if score > round_best_score:
+					round_best_score = score 
+					round_best_scorer = game_i					
 			
-			self.game_tracker.append(new_games[game_i])
+			#Save best game for telemetry 
+			self.game_tracker.append(new_games[round_best_scorer])
+
+			#Check for best score ever
+			if round_best_score > best_score:
+				best_score = round_best_score
+				self.parent_instance.best_game = copy.deepcopy(new_games[round_best_scorer])
+				self.parent_instance.best_score = best_score
+				if self.gui:
+						self.output.insert(tk.END,f"  new hs: {best_score}\n")
+			
 
 			#	UPDATE VERBOSE 
 			if verbose:
