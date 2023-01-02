@@ -315,7 +315,7 @@ def carve_wiki():
             pass
 ##
 ##
-#This method is meant to grab data and append to a weekly,stock specific db file ONLY if it doenst 
+#This method is meant to grab data and append to a weekly,stock specific db file ONLY if it doesnt 
 #already exist in there
 #All data is added in 5 min format
 def robinhood_data_download(tickers:list[str]):
