@@ -13,7 +13,7 @@ import os
 variant_keys    = []
 arch_used       = 'None'
 use_gpu         = False
-sf              = 1
+sf              = 2
 chunks          = 256
 #ARCHITECTURES 
 #LOSSES
@@ -29,22 +29,22 @@ ADA     = torch.optim.Adamax
 
 #SETTINGS 
 settings = {
-    "x"     : 12,
-    "y"     : 12,
-    "lr"    : 1e-3,
+    "x"     : 15,
+    "y"     : 15,
+    "lr"    : 25e-4,
     "it"    : 1024*32,
-    "te"    : 128,
-    "ps"    : 1024*16,
-    "ss"    : 1024*2,
+    "te"    : 16,
+    "ps"    : 1024*8,
+    "ss"    : 1024,
     "bs"    : 32,
     "ep"    : 1,
     "ms"    : 2,
-    "mx"    : 100,
+    "mx"    : 15*3,
     "lo"    : MSE,
     "op"    : ADAMW,
     "tr"    : 10,
-    "ga"    : .79,
-    "rw"    : {"die":-17,"eat":45,"step":-.2},
+    "ga"    : .75,
+    "rw"    : {"die":-.65,"eat":1.45,"step":0},
     "arch"  : ARCHITECTURES
 }
 
@@ -124,9 +124,9 @@ if __name__ == "__main__":
     all_settings = list(product(*a))
     if len(settings[variant_keys[1]]) < 2 and len(settings[variant_keys[0]]) > 1:
         variant_keys = [variant_keys[1],variant_keys[0],variant_keys[2]]
-    FIG,PLOTS = plt.subplots(   nrows=len(settings[variant_keys[0]])*2,
+    FIG,PLOTS = plt.subplots(   nrows=len(settings[variant_keys[0]]),
                                 ncols=len(settings[variant_keys[1]]))
-    print(len(settings[variant_keys[0]])*2)
+    print(len(settings[variant_keys[0]]))
     print(len(settings[variant_keys[1]]))
     print(PLOTS.shape)
 
@@ -135,9 +135,15 @@ if __name__ == "__main__":
     print(f"x dim is {variant_keys[0]}")
     print(f"y dim is {variant_keys[1]}")
     for x,dim_1 in enumerate(settings[variant_keys[0]]):
+        if dim_1 == "skip": 
+            continue
         for y,dim_2 in enumerate(settings[variant_keys[1]]):
+            if dim_2 == "skip":
+                continue 
             
             for dim_3 in settings[variant_keys[2]]:
+                if dim_3 == "skip":
+                    continue
                 
 
                 t_scores = [0] * chunks
@@ -193,12 +199,10 @@ if __name__ == "__main__":
                     t_scores = [t + s for t,s in zip(scores,t_scores)]
                     t_steps  = [t + s for t,s in zip(steps,t_steps)]
                     x_scales.append(x_scale) 
-                PLOTS[2*x][y].plot(x_scales[-1],t_scores,label=series_name)
-                PLOTS[2*x][y].set_title("SCORES "+ name)
-                PLOTS[2*x][y].legend()
-                PLOTS[2*x+1][y].plot(x_scales[-1],t_steps,label=series_name)
-                PLOTS[2*x+1][y].set_title("STEPS " + name)
-                PLOTS[2*x+1][y].legend()
+                PLOTS[x][y].plot(x_scales[-1],t_scores,label=series_name)
+                PLOTS[x][y].set_title("SCORES "+ name)
+                PLOTS[x][y].legend()
+                
                 #Add to large figure 
                 i+= 1
 

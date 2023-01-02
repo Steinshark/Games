@@ -13,7 +13,7 @@ def snake():
     box_height      = screen_h / tile_height
     direction       = (1,0)
 
-    FRAME_TIME      = .04
+    FRAME_TIME      = .07
     snake           = [(0,0)]
     food            = (5,5)
 
@@ -42,7 +42,7 @@ def snake():
         next_head = tuple(map(sum,zip(direction,snake[0])))
         if next_head[0] > tile_width-1 or next_head[0] < 0 or next_head[1] > tile_height-1 or next_head[1] < 0 or next_head in snake:
             print("game over!!!")
-            quit()
+            break
         elif next_head == food:
             snake = [food] + snake 
             food = (random.randint(0,tile_width-1),random.randint(0,tile_height-1))
@@ -57,4 +57,5 @@ def snake():
 
         pygame.display.flip()
 
-snake()
+while True:
+    snake()

@@ -84,7 +84,7 @@ class FullyConnectedNetwork(nn.Module):
 
 class ConvolutionalNetwork(nn.Module):
 	
-	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20),device=torch.device("cpu")):
+	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20),device=torch.device("cpu"),verbose=False):
 		super(ConvolutionalNetwork,self).__init__()
 		self.input_shape 	= input_shape
 		through 			= torch.ones(size=input_shape,device=device)
@@ -119,7 +119,9 @@ class ConvolutionalNetwork(nn.Module):
 		self.loss = loss_fn()
 		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
 		self.to(device)
-		print(f"generated model with {sum([p.numel() for p in self.model.parameters()])}")
+
+		if verbose:
+			print(f"generated model with {sum([p.numel() for p in self.model.parameters()])} params")
 		
 	def train(self,x_input,y_actual,epochs=10,in_shape=(1,6,10,10)):
 

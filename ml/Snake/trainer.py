@@ -41,70 +41,70 @@ class Trainer:
 					game_tracker=[],
 					gui=False):
 
-		self.PATH = PATH
-		self.fname = fname
-		self.name = name 
-		self.m_type = m_type
-		self.input_dim = game_w * game_h * memory_size
-		self.save_fig = save_fig_now
-		self.progress_var = progress_var
-		self.cancelled = False
-		self.output = output
-		self.steps_out = steps
-		self.score_out= scored
-		self.all_scores = score_tracker
-		self.all_lived = step_tracker
-		self.parent_instance = parent_instance
-		self.game_tracker = game_tracker
-		self.gui = gui
-		self.gpu_acceleration = gpu_acceleration
 
-		if gpu_acceleration:
-			self.device = torch.device('cuda')
-		else:
-			self.device = torch.device('cpu')
 
+		#Set file handling vars 
+		self.PATH 				= PATH
+		self.fname 				= fname
+		self.name 				= name
+		self.save_fig 			= save_fig_now
+
+		#Set model vars  
+		self.m_type 			= m_type
+		self.input_dim 			= game_w * game_h * memory_size
+		self.progress_var 		= progress_var
+		self.gpu_acceleration 	= gpu_acceleration
+		self.movement_repr_tuples = [(0,-1),(0,1),(-1,0),(1,0)]
+		self.loss_fn = loss_fn
+		self.optimizer_fn 		= optimizer_fn
+		self.architecture 		= architecture
+
+		#Set runtime vars 
+		self.cancelled 			= False
+		self.w 					= game_w	
+		self.h 					= game_h
+		self.visible 			= visible
+
+		#Set telemetry vars 
+		self.steps_out 			= steps
+		self.score_out			= scored
+		self.all_scores 		= score_tracker
+		self.all_lived 			= step_tracker
+		self.output 			= output
+		self.parent_instance 	= parent_instance
+		self.game_tracker 		= game_tracker
+		self.gui 				= gui
+
+		#Set training vars 
+		self.gamma 				= gamma
+		self.memory_size 		= memory_size
+		self.lr 				= lr
+		self.wd 				= wd
+		self.epsilon 			= epsilon
+		self.e_0 				= self.epsilon
+
+		#Enable cuda acceleration if specified 
+		self.device 			= torch.device('cuda') if gpu_acceleration else torch.device('cpu')
+
+
+
+
+		#Generate models for the learner agent 
 		if m_type == "FCN":
 			self.input_dim *= 3
 			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
 			self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
 			self.encoding_type = "one_hot"
-			
-
-
 		elif m_type == "CNN":
 			self.input_shape = (1,architecture[0].in_channels*memory_size,game_w,game_h)
+			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device,verbose=True)
 			if self.gui:
-				print(f"in shape is {self.input_shape}")
-			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device)
+				self.output.insert(tk.END,f"Generated training model\n\t-{sum([p.numel() for p in self.target_model.model.parameters()])}")
 			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device)
 			self.encoding_type = "6_channel"
-			if self.gui:
-				print(self.learning_model)
-
-		total_params = sum(param.numel() for param in self.learning_model.model.parameters())
-
-		#input(f"{m_type}/'
-		# """'
-		# '" model has {total_params} parameters")
-		self.w = game_w	
-		self.h = game_h
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
 
-		self.visible = visible
-		self.movement_repr_tuples = [(0,-1),(0,1),(-1,0),(1,0)]
-		self.gamma = gamma
-		self.memory_size = memory_size
-		self.loss_fn = loss_fn
-		self.optimizer_fn = optimizer_fn
-		self.lr = lr
-		self.wd = wd
-		self.epsilon = epsilon
-		self.e_0 = self.epsilon
-		self.architecture = architecture
-
-		import pprint
 
 
 	def train(self,episodes=1000,train_every=1000,replay_buffer=32768,sample_size=128,batch_size=32,epochs=10,early_stopping=True,transfer_models_every=2000,verbose=True,iters=3,picking=True):
@@ -295,11 +295,12 @@ class Trainer:
 			self.game_tracker.append(new_games[round_best_scorer])
 
 			#Check for best score ever
-			if round_best_score > best_score:
+			if round_best_score >= best_score:
 				best_score = round_best_score
-				self.parent_instance.best_game = copy.deepcopy(new_games[round_best_scorer])
-				self.parent_instance.best_score = best_score
 				if self.gui:
+					self.parent_instance.best_score = best_score
+					self.parent_instance.best_game = copy.deepcopy(new_games[round_best_scorer])
+					if round_best_score > best_score:
 						self.output.insert(tk.END,f"  new hs: {best_score}\n")
 			
 

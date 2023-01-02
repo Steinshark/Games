@@ -212,7 +212,7 @@ class Snake:
 			next_head = [next_x,next_y]
 			
 			#Check if this snake lost 
-			if next_x < 0 or next_y < 0 or next_x == self.grid_w or next_y == self.grid_h or next_head in self.snake_tracker[snake_i] or self.game_collection[snake_i]['eaten_since'] > self.move_threshold or self.check_opposite(snake_i):
+			if next_x < 0 or next_y < 0 or next_x == self.grid_w or next_y == self.grid_h or next_head in self.snake_tracker[snake_i] or self.game_collection[snake_i]['eaten_since'] > self.move_threshold:
 				
 				#Mark for delete and cleanup
 				mark_del.append(snake_i)
