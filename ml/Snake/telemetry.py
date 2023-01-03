@@ -49,8 +49,8 @@ def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],grap
 ARCHITECTURES = {   
                     "sm"        : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4)]},
                     "med"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,5,1,0),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4)                         ]},
-                    "medS"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,5,1,0),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4), Softmax(dim=0)                         ]},
-                    "lg"        : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,13,1,0),ReLU(),Flatten(),Linear(1,512),ReLU(),Linear(512,64),ReLU() ,Linear(64,4)                       ]},
+                    "medS"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,5,1,0),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4), Softmax(dim=1)                         ]},
+                    "lg"        : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),ReLU(),Conv2d(64,64,5,1,0),ReLU(),Flatten(),Linear(1,512),ReLU(),Linear(512,64),ReLU() ,Linear(64,4)                       ]},
                     "chatGPT"   : {"type":"CNN","arch":[Conv2d(2,32,3,1,2),BatchNorm2d(32) ,ReLU(),MaxPool2d(2, 2),Conv2d(32,64,3,1,1),BatchNorm2d(64),ReLU(),MaxPool2d(2,2),Conv2d(64, 128, 3, 1, 1),BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4) ]}
 
 }#,Softmax(dim=0)]}}

@@ -634,9 +634,13 @@ if __name__ == "__main__":
     ######################################################################################
     #Create the root frame 
     
-    ta = TrainerApp(1200,800)
+    try:
+        ta = TrainerApp(1200,800)
 
-    ta.run_loop()
+        ta.run_loop()
+
+    except Exception:
+        pass
 
 
 

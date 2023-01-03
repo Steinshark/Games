@@ -169,6 +169,7 @@ if __name__ == "__main__":
 
                     #CORRECT ARCH 
                     print(f"Training iter\t{i}\{len(all_settings)}")
+                    pprint.pp(settings_dict)
                     trainer = Trainer(  settings_dict['x'],settings_dict['y'],
                                         memory_size         =settings_dict['ms'],
                                         loss_fn             =settings_dict['lo'],

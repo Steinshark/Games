@@ -99,7 +99,7 @@ class Trainer:
 			self.input_shape = (1,architecture[0].in_channels*memory_size,game_w,game_h)
 			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device,verbose=True)
 			if self.gui:
-				self.output.insert(tk.END,f"Generated training model\n\t-{sum([p.numel() for p in self.target_model.model.parameters()])}")
+				self.output.insert(tk.END,f"Generated training model\n\t{sum([p.numel() for p in self.target_model.model.parameters()])} params")
 			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device)
 			self.encoding_type = "6_channel"
 		self.target_model.to(self.device)
@@ -296,11 +296,12 @@ class Trainer:
 
 			#Check for best score ever
 			if round_best_score >= best_score:
-				best_score = round_best_score
 				if self.gui:
 					self.parent_instance.best_score = best_score
 					self.parent_instance.best_game = copy.deepcopy(new_games[round_best_scorer])
+					
 					if round_best_score > best_score:
+						best_score = round_best_score
 						self.output.insert(tk.END,f"  new hs: {best_score}\n")
 			
 
