@@ -8,3 +8,6 @@
 *.jpg*
 *.png*
 *.zip*
+*.pyc*
+*.wav*
+*.npz*

@@ -1,0 +1,226 @@
+from collections import OrderedDict
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+import random
+
+class FullyConnectedNetwork(nn.Module):
+    def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[512,32,16]):
+        super(FullyConnectedNetwork,self).__init__()
+
+        self.model = nn.Sequential(nn.Linear(input_size,architecture[0]))
+        self.model.append(nn.LeakyReLU(.5))
+
+        for i,size in enumerate(architecture[:-1]):
+
+            self.model.append(nn.Linear(size,architecture[i+1]))
+            self.model.append(nn.LeakyReLU(.5))
+        self.model.append(nn.Linear(architecture[-1],output_size))
+        self.model.append(nn.Softmax(dim=0))
+        self.optimizer = optimizer_fn(self.model.parameters(),lr=lr,weight_decay=wd)
+        self.loss = loss_fn()
+
+    def train(self,x_input,y_actual,epochs=1000,verbose=False,show_steps=10,batch_size="online",show_graph=False):
+        memory = 3
+        prev_loss = [100000000 for x in range(memory)]
+        losses = []
+        if type(batch_size) is str:
+            batch_size = len(y_actual)
+
+        if verbose:
+            print(f"Training on dataset shape:\t f{x_input.shape} -> {y_actual.shape}")
+            print(f"batching size:\t{batch_size}")
+
+        #Create the learning batches
+        dataset = torch.utils.data.TensorDataset(x_input,y_actual)
+        dataloader = torch.utils.data.DataLoader(dataset,batch_size=batch_size,shuffle=True)
+
+
+        for i in range(epochs):
+            #Track loss avg in batch
+            avg_loss = 0
+
+            for batch_i, (x,y) in enumerate(dataloader):
+
+                #Find the predicted values
+                batch_prediction = self.forward(x)
+                #Calculate loss
+                loss = self.loss(batch_prediction,y)
+                avg_loss += loss
+                #Perform grad descent
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+            avg_loss = avg_loss / batch_i 			# Add losses to metric's list
+            losses.append(avg_loss.cpu().detach().numpy())
+
+            #Check for rising error
+            if not False in [prev_loss[x] > prev_loss[x+1] for x in range(len(prev_loss)-1)]:
+                print(f"broke on epoch {i}")
+                break
+            else:
+                prev_loss = [avg_loss] + [prev_loss[x+1] for x in range(len(prev_loss)-1)]
+
+            #Check for verbosity
+            if verbose and i % show_steps == 0:
+                print(f"loss on epoch {i}:\t{loss}")
+
+        if show_graph:
+            plt.plot(losses)
+            plt.show()
+
+
+    def forward(self,x_list):
+        return self.model(x_list)
+        #	y_predicted.append(y_pred.cpu().detach().numpy())
+
+class ConvolutionalNetwork(nn.Module):
+    
+    def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20)):
+        super(ConvolutionalNetwork,self).__init__()
+        self.model = []
+        switched = False 
+        self.input_shape = input_shape
+
+        self.activation = {	"relu" : nn.ReLU,
+                            "sigmoid" : nn.Sigmoid}
+
+        for i,layer in enumerate(architecture):
+            if len(layer) == 3:
+                in_c,out_c,kernel = layer[0],layer[1],layer[2]
+                self.model.append(nn.Conv2d(in_channels=in_c,out_channels=out_c,kernel_size=kernel,padding=2))
+                self.model.append(self.activation['relu']())
+                
+            else:
+                in_size, out_size = layer[0],layer[1]
+                if not switched:
+                    self.model.append(nn.Flatten(1))
+                    switched = True 
+                self.model.append(nn.Linear(in_size,out_size))
+                if not i == len(architecture)-1 :
+                    self.model.append(self.activation['relu']())
+
+        #self.model.append(nn.Softmax(1))
+        o_d = OrderedDict({str(i) : n for i,n in enumerate(self.model)})
+        self.model = nn.Sequential(o_d)
+        self.loss = loss_fn()
+        self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
+        
+    def train(self,x_input,y_actual,epochs=10,in_shape=(1,6,10,10)):
+
+        #Run epochs
+        for i in range(epochs):
+
+            #Predict on x : M(x) -> y
+            y_pred = self.model(x_input)
+            #Find loss  = y_actual - y
+            loss = self.loss_function(y_pred,y_actual)
+            print(f"epoch {i}:\nloss = {loss}")
+
+            #Update network
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+    def forward(self,x):
+        #if len(x.shape) == 3:
+            #input(f"received input shape: {x.shape}")
+            #x = torch.reshape(x,self.input_shape)
+        
+        return self.model(x)
+
+
+class ConvNet(nn.Module):
+    def __init__(self,architecture,loss_fn=nn.MSELoss,optimizer=torch.optim.SGD,lr=.005):
+        self.layers = {}
+
+        for l in architecture:
+            #Add Conv2d layers
+            if len(l) == 3:
+                in_c,out_c,kernel_size = l[0],l[1],l[2]
+                self.layers.append(len(self.layers),nn.Conv2d(in_c,out_c,kernel_size))
+                self.layers.append(nn.ReLU())
+            #Add Linear layers
+            elif len(l) == 2:
+                in_dim,out_dim = l[0],l[1]
+                self.layers[len(self.layers) : nn.Linear(in_dim,out_dim)]
+                if not l == architecture[-1]:
+                    self.layers.append(nn.ReLU())
+        
+        self.loss = loss_fn()
+
+
+class AudioGenerator(nn.Module):
+
+    #	2 MIN SONGS, BITRATE IS 44100, must be 										
+    def __init__(self,in_size=22050,num_channels=2,kernel_sizes=[16,11,9,3],scales=[2,2,2],strides=[16,15,1,1],padding=[0,1,1,1],device=torch.device("cpu")):
+        super(AudioGenerator, self).__init__()
+
+        self.main = nn.Sequential(
+
+
+            nn.ConvTranspose1d(1,							num_channels*scales[0],		kernel_sizes[0],		stride=strides[0],	padding=padding[0], bias=False),
+            nn.BatchNorm1d(num_channels * scales[0]),
+            nn.ReLU(True),
+
+            nn.ConvTranspose1d(num_channels*scales[0],		num_channels*scales[1],		kernel_sizes[1], 		stride=strides[1], 	padding=padding[1], bias=False),
+            nn.BatchNorm1d(num_channels * scales[1]),
+            nn.ReLU(True),
+
+            
+            nn.ConvTranspose1d( num_channels * scales[1], 	num_channels * scales[2], 	kernel_sizes[2], 		stride=strides[2], 	padding=padding[2], bias=False),
+            nn.BatchNorm1d(num_channels * scales[2]),
+            nn.ReLU(True),
+
+
+            nn.ConvTranspose1d( num_channels * scales[2], 	num_channels, 				kernel_sizes[3], 		stride=strides[3], 	padding=padding[3], bias=False),
+            nn.BatchNorm1d(num_channels),
+            nn.ReLU(True),
+
+            nn.Tanh()
+        )
+
+        self.to(device)
+
+    def forward(self, input):
+        out = self.main(input)
+        return out
+
+class AudioDiscriminator(nn.Module):
+    def __init__(self,channels=[2,2,2,2,2,2,2,2,1],kernels=[22050,5000,10,5],strides=[1,1,1,1],paddings=[],device=torch.device("cpu"),verbose=False):
+        super(AudioDiscriminator, self).__init__()
+        
+        model = OrderedDict()
+        for i,config in enumerate(zip(channels[:-1],kernels,strides,paddings)):
+            f,k,s,p = config 
+
+            model[str(3*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],strides[i],paddings[i],bias=False)
+            if not i == len(channels)-2:
+
+                model[str(3*i+1)]       = nn.BatchNorm1d(channels[i+1])
+                model[str(3*i+2)]       = nn.LeakyReLU(0.2,inplace=True)
+            else:
+                model[str(3*i+1)]       = nn.Flatten()
+                model[str(3*i+2)]       = nn.Sigmoid()
+
+        self.model = nn.Sequential(model)
+        if verbose:
+            print(self.model)
+        self.model.to(device)
+
+    def forward(self, input):
+        return self.model(input)
+
+
+
+if __name__ == "__main__":
+    dev = torch.device("cuda")
+    d = AudioDiscriminator()
+    d.to(dev)
+
+    test_in = torch.randn(size=(1, 2,5292000),device=dev)
+    print(d.forward(test_in).shape)
