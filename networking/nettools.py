@@ -12,7 +12,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from newspaper import Article
 import tlib
-from  robin_stocks import robinhood
+from robin_stocks import robinhood
 from robin_stocks.robinhood import authentication as rauth 
 from robin_stocks.robinhood import profiles as rprof 
 from robin_stocks.robinhood import stocks as rstocks
