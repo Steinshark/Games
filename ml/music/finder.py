@@ -20,7 +20,7 @@ def total_size_ct(input):
     for layer in range(len(kernels_ct)):
         output = out_size_ct(output,kernels_ct[layer],strides_ct[layer],padding_ct[layer])
         if output > 5292000:
-            return -1
+            return 0
 
     return output
 
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     possible_d_config = []
     possible_g_config = []
     t0          = time.time()
-    t_thresh    = 20*60 
+    t_thresh    = 5*60 
     
     print("search for Discriminators")
     while time.time()-t0 < t_thresh:
@@ -68,14 +68,15 @@ if __name__ == "__main__":
         strides_ct[randint(0,len(kernels_ct)-1)]  = randint(1,6)
 
         if ((total_size_ct(int(44100/4)) == goal) or (total_size_ct(int(44100/2)) == goal) or (total_size_ct(44100) == goal)) and ((sorted(kernels_ct,reverse=True) == kernels_ct) or (sorted(kernels_ct) == kernels_ct)) and ((sorted(strides_ct) == strides_ct) or (sorted(strides_ct,reverse=True) == strides_ct)):
-            dictionary  =                   {'kernels'   :   copy.deepcopy(kernels_ct),
-                                            'strides'   :   copy.deepcopy(strides_ct),
-                                            'padding'   :   copy.deepcopy(padding_ct)}
+            dictionary  =                   {   'input_size':   total_size_ct(int(44100/4))+total_size_ct(int(44100/2))+total_size_ct(int(44100)),
+                                                'kernels'   :   copy.deepcopy(kernels_ct),
+                                                'strides'   :   copy.deepcopy(strides_ct),
+                                                'padding'   :   copy.deepcopy(padding_ct)}
             if not dictionary in possible_g_config:
                 possible_g_config.append(dictionary)
                 print("found one")
     print(f"found {len(possible_g_config)}")
     import json 
-    f= open("copnfigs_list","w")
+    f= open("configs.txt","w")
     f.write(json.dumps({'d':possible_d_config,'g':possible_g_config}))
     f.close()

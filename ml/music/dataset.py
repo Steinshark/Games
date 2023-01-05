@@ -71,26 +71,29 @@ def read_wav(filename):
 
     max_val         = pow(2,(bits_per_sample)-1)
 
-    ch1     = []
-    ch2     = []
+    ch1     = [0]   *   n_samples       # Pre-allocate arrays for decoded file
+    ch2     = [0]   *   n_samples       # Pre-allocate arrays for decoded file
 
-    print(file_hex[:96])
+
+    #Decode file by reading hex, converting from 2's complement, 
+    #and adding to proper channel 
     for i,sample in enumerate(range(n_samples)):
         try:
             sample_start    = int(i * hex_per_sample)
             sample_end      = int(sample_start +  hex_per_sample)
 
+            #Convert hex to int value
             c1 = int(data[sample_start:sample_start+hex_per_channel],base=16)
             c2 = int(data[sample_start+hex_per_channel:sample_end],base=16)
 
-            #Convert to 2s complement
+            #Convert hex to 2s complement
             if c1&0x8000:
                 c1 = c1 - 0x10000
             if c2&0x8000:
                 c2 = c2 - 0x10000
 
-            ch1.append(c1/max_val)
-            ch2.append(c2/max_val)
+            ch1[i] = c1/max_val
+            ch2[i] = c2/max_val
 
         except ValueError:
 
@@ -99,7 +102,7 @@ def read_wav(filename):
             else:
                 print("-\tBAD")
         
-
+    #Create and save the numpy array
     arr = numpy.array([ch1,ch2],dtype=float)
     numpy.save(os.path.join(DATASET_PATH,str(filename.__hash__())[:10]),arr)
 
@@ -181,14 +184,9 @@ def reconstruct(arr_in:numpy.array,output_file):
     #Convert values back to 2s complement
     for c1_i,c2_i in zip(range(len(ch1)),range(len(ch2))):
         val1        = int(ch1[c1_i])
-        #print(f"val1 is {val1}")
-        #hex_repr1   = '{0:0{1}X}'.format(val1,4)
-        #print(f"val1hex is {hex_repr1}")
         hex_repr_2s_1   = str(binascii.hexlify(val1.to_bytes(2,byteorder='big',signed=True)))[2:-1]
-        #print(f"2s compl repr is {hex_repr_2s_1}")
-        #input()
+
         val2        = int(ch2[c2_i])
-        #hex_repr2   = '{0:0{1}X}'.format(val2,4)
         hex_repr_2s_2   = str(binascii.hexlify(val2.to_bytes(2,byteorder='big',signed=True)))[2:-1]
 
         data.append(hex_repr_2s_1)
@@ -211,7 +209,6 @@ def reconstruct(arr_in:numpy.array,output_file):
 if __name__ == "__main__":
 
     input_vect  =   numpy.load("D:/data/music/-101321759.npy")
-    #input_vect  =   torch.from_numpy(input_vect)
     print(input_vect[0][0:10])
     print(input_vect.shape) 
     reconstruct(input_vect,"test.wav")

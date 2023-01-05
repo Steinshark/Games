@@ -1,5 +1,4 @@
 from networks import AudioGenerator, AudioDiscriminator
-
 import torch 
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
@@ -7,9 +6,11 @@ import numpy
 import time
 import os 
 import json 
+import random 
+import pprint 
 
 MODELS_PATH      = "D:/code/projects/ml/music/models"
-DATASET_PATH    = "D:/data/music"
+DATASET_PATH    = r"S:\Data\music\dataset"
 
 class AudioDataSet(Dataset):
 
@@ -31,6 +32,7 @@ class AudioDataSet(Dataset):
         y = self.data[i][1]
         return x,y
 
+
 def import_generator(fname,config_file):
     #Load config file 
     config = json.loads(open(config_file,"r").read())
@@ -51,6 +53,7 @@ def import_generator(fname,config_file):
 
     return exported_model
 
+
 def save_generator(fname,config,model:torch.nn.Module):
 
     #Save settings 
@@ -61,6 +64,7 @@ def save_generator(fname,config,model:torch.nn.Module):
     #Save model 
     torch.save(model.state_dict(),os.path.join(MODELS_PATH,fname))
     return 
+
 
 def import_discriminator(fname,config,config_file):
     #Load config file 
@@ -79,6 +83,7 @@ def import_discriminator(fname,config,config_file):
 
     return exported_model
  
+
 def save_discriminator(fname,config,model:torch.nn.Module):
     #Save settings 
     with open(f"{fname}_config","w") as config_file:
@@ -90,10 +95,14 @@ def save_discriminator(fname,config,model:torch.nn.Module):
     return 
 
 
-def train(epochs,lr,betas,bs,verbose=True):
-    dataset     = AudioDataSet([os.path.join(DATASET_PATH,f) for f in os.listdir("D:/data/music")])
-    dataloader  = DataLoader(dataset,batch_size=bs,shuffle=True)
-
+def train(filepaths,epochs=1,lr=.002,betas={'g':(.5,.999),'d':(.5,.999)},bs=4,verbose=True):
+    
+    #Create dataset and loader for batching more efficiently
+    print("building dataset")
+    t0 = time.time()
+    dataset     = AudioDataSet(filepaths)
+    dataloader  = DataLoader(dataset,batch_size=bs,shuffle=True,num_workers=4)
+    print       (f"\tcreated dataset of size {dataset.__len__()} in {(time.time()-t0):.2f}s")
     #Create and prep models
     dev         = torch.device("cuda")
     configs     = json.loads(open("configs","r").read())
@@ -101,22 +110,24 @@ def train(epochs,lr,betas,bs,verbose=True):
     d_config    = configs['d'][0]
 
     g           = AudioGenerator(in_size=44100,num_channels=2,kernel_sizes=g_config['kernels'],strides=g_config['strides'],padding=g_config['padding'],device=dev) 
-    print(f"initialized Generator with {sum([p.numel() for p in g.parameters()])}")
+    print       (f"initialized Generator with {sum([p.numel() for p in g.parameters()])}")
 
     d           = AudioDiscriminator(kernels=d_config['kernels'],strides=d_config['strides'],paddings=d_config['padding'],device=dev)
-    print(f"initialized Discriminator with {sum([p.numel() for p in d.model.parameters()])}")
+    print       (f"initialized Discriminator with {sum([p.numel() for p in d.model.parameters()])}")
 
     g_opt       = torch.optim.Adam(g.parameters(),lr=lr['g'],betas=betas['g'])
     d_opt       = torch.optim.Adam(d.parameters(),lr=lr['d'],betas=betas['d'])
     error_fn    = torch.nn.BCELoss()
     
-    g_test      = torch.randn(size=(1,1,44100),device=dev)
+    
+    #Ensure models are proper sizes
     d_test      = torch.randn(size=(1,2,5292000),device=dev)
+    g_test      = torch.randn(size=(1,1,44100),device=dev)
     
     if not g.forward(g_test).shape == torch.Size([1,2,5292000]):
-        print(f"Generator configured incorrectly\n\toutput size was {g.forward(g_test).shape}, must be 5292000")
+        print   (f"Generator configured incorrectly\n\toutput size was {g.forward(g_test).shape}, must be 5292000")
     if not d.forward(d_test).shape == torch.Size([1,1]):
-        print(f"Discriminator configured incorrectly\n\toutput size was {d.forward(d_test).shape}, must be 1")
+        print   (f"Discriminator configured incorrectly\n\toutput size was {d.forward(d_test).shape}, must be 1")
 
 
     #RUN EPOCHS
@@ -216,4 +227,5 @@ def train(epochs,lr,betas,bs,verbose=True):
 
 
 if __name__ == "__main__":
-    train(1,{'g':.0002,'d':.0002},{'g':(.5,.999),'d':(.5,.999)},4)
+    filepaths = random.sample([os.path.join(DATASET_PATH,f) for f in os.listdir(DATASET_PATH)],10)
+    train(filepaths,epochs=1,lr={'g':.0002,'d':.0002},betas={'g':(.5,.999),'d':(.5,.999)},bs=4)
