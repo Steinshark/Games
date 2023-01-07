@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import random
-
+from finder import total_size_c
 class FullyConnectedNetwork(nn.Module):
     def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[512,32,16]):
         super(FullyConnectedNetwork,self).__init__()
@@ -157,60 +157,49 @@ class ConvNet(nn.Module):
 class AudioGenerator(nn.Module):
 
     #	2 MIN SONGS, BITRATE IS 44100, must be 										
-    def __init__(self,in_size=22050,num_channels=2,kernel_sizes=[16,11,9,3],scales=[2,2,2],strides=[16,15,1,1],padding=[0,1,1,1],device=torch.device("cpu")):
+    def __init__(self,num_channels=2,kernels=[16,11,9,3],channels=[8,4,2],strides=[16,15,1,1],paddings=[0,1,1,1],out_pads=[],device=torch.device("cpu")):
         super(AudioGenerator, self).__init__()
 
-        self.main = nn.Sequential(
+        model = OrderedDict()
 
+        for i,config in enumerate(zip(channels,kernels,strides,paddings)):
+            f,k,s,p = config 
+            model[str(3*i)]         = nn.ConvTranspose1d(channels[i],channels[i+1],kernels[i],strides[i],paddings[i],output_padding=out_pads[i],bias=False)
+            model[str(3*i+1)]       = nn.BatchNorm1d(channels[i+1])
+            model[str(3*i+2)]       = nn.ReLU(True)
 
-            nn.ConvTranspose1d(1,							num_channels*scales[0],		kernel_sizes[0],		stride=strides[0],	padding=padding[0], bias=False),
-            nn.BatchNorm1d(num_channels * scales[0]),
-            nn.ReLU(True),
-
-            nn.ConvTranspose1d(num_channels*scales[0],		num_channels*scales[1],		kernel_sizes[1], 		stride=strides[1], 	padding=padding[1], bias=False),
-            nn.BatchNorm1d(num_channels * scales[1]),
-            nn.ReLU(True),
-
-            
-            nn.ConvTranspose1d( num_channels * scales[1], 	num_channels * scales[2], 	kernel_sizes[2], 		stride=strides[2], 	padding=padding[2], bias=False),
-            nn.BatchNorm1d(num_channels * scales[2]),
-            nn.ReLU(True),
-
-
-            nn.ConvTranspose1d( num_channels * scales[2], 	num_channels, 				kernel_sizes[3], 		stride=strides[3], 	padding=padding[3], bias=False),
-            nn.BatchNorm1d(num_channels),
-            nn.ReLU(True),
-
-            nn.Tanh()
-        )
+        model[str(3*i+3)] = nn.Tanh()
+        self.model = nn.Sequential(model)    
 
         self.to(device)
+        self.device = device
+        self.num_channels = num_channels
 
     def forward(self, input):
-        out = self.main(input)
+        out = self.model(input)
         return out
 
+
 class AudioDiscriminator(nn.Module):
-    def __init__(self,channels=[2,2,2,2,2,2,2,2,1],kernels=[22050,5000,10,5],strides=[1,1,1,1],paddings=[],device=torch.device("cpu"),verbose=False):
+    def __init__(self,channels=[2,8,4,4,4,2,2,1,1],kernels=[22050,5000,10,5],strides=[1,1,1,1],paddings=[],device=torch.device("cpu"),verbose=False):
         super(AudioDiscriminator, self).__init__()
         
         model = OrderedDict()
-        for i,config in enumerate(zip(channels[:-1],kernels,strides,paddings)):
+        for i,config in enumerate(zip(channels,kernels,strides,paddings)):
             f,k,s,p = config 
 
             model[str(3*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],strides[i],paddings[i],bias=False)
-            if not i == len(channels)-2:
-
+            if not (i == (len(channels)-2)):
                 model[str(3*i+1)]       = nn.BatchNorm1d(channels[i+1])
                 model[str(3*i+2)]       = nn.LeakyReLU(0.2,inplace=True)
             else:
-                model[str(3*i+1)]       = nn.Flatten()
-                model[str(3*i+2)]       = nn.Sigmoid()
+                model[str(3*i+3)]       = nn.Sigmoid()
 
         self.model = nn.Sequential(model)
         if verbose:
             print(self.model)
         self.model.to(device)
+        self.channels = channels
 
     def forward(self, input):
         return self.model(input)
@@ -218,9 +207,21 @@ class AudioDiscriminator(nn.Module):
 
 
 if __name__ == "__main__":
-    dev = torch.device("cuda")
-    d = AudioDiscriminator()
-    d.to(dev)
+    nc = 5
+    config =    {"kernels":[8192, 8192, 64, 4, 4, 4, 4], "strides": [3, 3, 3, 3, 3, 3, 2], "paddings": [0, 0, 0, 0, 0, 0, 0], "out_pad":[0, 0, 0, 0, 0, 0, 0], "in_size":1, "num_channels":2}
+    kernels_ct = config['kernels']
+    strides_ct = config['strides']
+    padding_ct = config['paddings']
+    out_pad_ct = config['out_pad']
 
-    test_in = torch.randn(size=(1, 2,5292000),device=dev)
-    print(d.forward(test_in).shape)
+    channels   = [nc] + [2]*len(padding_ct)
+    channels[1] = 8 
+    channels[2] = 4
+    g = AudioGenerator(channels=channels,kernels=kernels_ct,strides=strides_ct,paddings=padding_ct,out_pads=out_pad_ct,device=torch.device('cuda'))
+    print(g)
+    import torch 
+
+    inputvect   = torch.randn(size=(1,nc,1),dtype=torch.float,device=torch.device('cuda'))
+    out         = g.forward(inputvect)[0]
+
+    print(out.shape)

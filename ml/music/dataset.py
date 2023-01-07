@@ -9,9 +9,9 @@ import numpy
 from networks import AudioGenerator,AudioDiscriminator
 import torch 
 import binascii
-DOWNLOAD_PATH           = r"//FILESERVER/S Drive/Data/music/downloads"
-CHUNK_PATH              = r"//FILESERVER/S Drive/Data/music/chunked"
-DATASET_PATH            = r"//FILESERVER/S Drive/Data/music/dataset"
+DOWNLOAD_PATH           = r"C:\data\music\downloads"
+CHUNK_PATH              = r"C:\data\music\chunked"
+DATASET_PATH            = r"C:\data\music\dataset"
 
 MINUTES                 = 0 
 def download_link(url:str,path:str): 
@@ -101,7 +101,21 @@ def read_wav(filename):
                 pass
             else:
                 print("-\tBAD")
-        
+
+    count = 0 
+    flag = False 
+    while len(ch1) < 5291999:
+        ch1.append(ch1[-1])
+        ch2.append(ch2[-1])
+        count += 1 
+        if count > 10000 and not flag :
+            print(f"bad len on {filename}")
+            flag = True
+    
+    if len(ch1) > 5291999:
+        ch1 = ch1[:5291999]
+    if len(ch2) > 5291999:
+        ch2 = ch2[:5291999]
     #Create and save the numpy array
     arr = numpy.array([ch1,ch2],dtype=float)
     numpy.save(os.path.join(DATASET_PATH,str(filename.__hash__())[:10]),arr)
@@ -140,7 +154,7 @@ def download_all():
             cur_cat = cat
             cur_path = full_path
         else:
-            download_link(line,cur_path)
+            download_link(line.rstrip(),cur_path)
 
 def chunk_all():
     global MINUTES
@@ -160,7 +174,6 @@ def read_all():
     for i,filename in enumerate(os.listdir(CHUNK_PATH)):
         print(f"{i}/{total}")
         read_wav(os.path.join(CHUNK_PATH,filename))
-        input()
 
 def reg_to_2s_compl(val,bits):
     """compute the 2's complement of int value val"""
@@ -176,10 +189,9 @@ def reconstruct(arr_in:numpy.array,output_file):
     arr_in = numpy.maximum(arr_in,-32766)
 
     #Convert to python list 
-    ch1     = list(arr_in[0])
-    ch2     = list(arr_in[1])
+    ch1     = list(arr_in[0])[:5291999]
+    ch2     = list(arr_in[1])[:5291999]
 
-    print(f"ch1 is {ch1[:10]}")
     data    = []
     #Convert values back to 2s complement
     for c1_i,c2_i in zip(range(len(ch1)),range(len(ch2))):
@@ -194,7 +206,6 @@ def reconstruct(arr_in:numpy.array,output_file):
     
     data = "".join(data)
 
-    print(f"data was {data[:10]}")
     header  = "52494646a4ff420157415645666d7420100000000100020044ac000010b10200040010006461746180ff420100000000"
 
 
@@ -208,7 +219,6 @@ def reconstruct(arr_in:numpy.array,output_file):
 
 if __name__ == "__main__":
 
-    input_vect  =   numpy.load("D:/data/music/-101321759.npy")
-    print(input_vect[0][0:10])
-    print(input_vect.shape) 
-    reconstruct(input_vect,"test.wav")
+    #download_all()
+    #chunk_all()
+    read_all()
