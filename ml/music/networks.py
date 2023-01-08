@@ -8,6 +8,7 @@ import numpy as np
 import math
 import random
 from finder import total_size_c
+
 class FullyConnectedNetwork(nn.Module):
     def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[512,32,16]):
         super(FullyConnectedNetwork,self).__init__()
@@ -179,11 +180,37 @@ class AudioGenerator(nn.Module):
         out = self.model(input)
         return out
 
+class AudioGenerator2(nn.Module):
+
+    def __init__(self,factors,channels,scales):
+        
+        #Parent Class 
+        super(AudioGenerator2,self).__init__()
+
+        #Build model
+        self.model  = nn.Sequential()
+        
+        for i in range(len(factors)):
+            self.model.append(nn.Upsample(scale_factor=factors[i]*scales[0]))
+            self.model.append(nn.Conv1d(channels[i],channels[i+1],factors[i],scales[i]))
+
+            if i == len(factors)-1:
+                self.model.append(nn.Tanh())
+            else:
+                self.model.append(nn.LeakyReLU(.2,inplace=False))
+        
+
+    
+    def forward(self,x):
+        return self.model(x)
 
 class AudioDiscriminator(nn.Module):
-    def __init__(self,channels=[2,8,4,4,4,2,2,1,1],kernels=[22050,5000,10,5],strides=[1,1,1,1],paddings=[],device=torch.device("cpu"),verbose=False):
+    def __init__(self,channels=[2,8,4,4,4,2,2,1,1],kernels=[22050,5000,10,5],strides=[1,1,1,1],paddings=[],final_layer=0,device=torch.device("cpu"),verbose=False):
         super(AudioDiscriminator, self).__init__()
         
+        if not len(channels) == len(kernels)+1:
+            print(f"bad channel size {len(channels)} must be {len(kernels)+1}")
+            exit(-1)
         model = OrderedDict()
         for i,config in enumerate(zip(channels,kernels,strides,paddings)):
             f,k,s,p = config 
@@ -192,8 +219,14 @@ class AudioDiscriminator(nn.Module):
             if not (i == (len(channels)-2)):
                 model[str(3*i+1)]       = nn.BatchNorm1d(channels[i+1])
                 model[str(3*i+2)]       = nn.LeakyReLU(0.2,inplace=True)
+
             else:
-                model[str(3*i+3)]       = nn.Sigmoid()
+                if final_layer > 1:
+                    model[str(3*i+3)]   = nn.Flatten()
+                    model[str(3*i+4)]   = nn.Linear(final_layer,1)
+                    model[str(3*i+5)]   = nn.Sigmoid()
+                else:
+                    model[str(3*i+3)]       = nn.Sigmoid()
 
         self.model = nn.Sequential(model)
         if verbose:

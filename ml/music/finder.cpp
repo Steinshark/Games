@@ -9,9 +9,9 @@
 
 using namespace std;
 
-int g_len       = 20;
-int d_len       = 6;
-string FOUT     = "configs3.txt";
+int g_len       = 22;
+int d_len       = 12;
+string FOUT     = "configs.txt";
 void print_list(int*,int);
 
 struct config{
@@ -87,10 +87,11 @@ int total_size_ct(int in,int* kernels,int* strides,int* padding,int* outpad,int*
     for(int i=0; i < g_len;i++){
 
         output = out_size_ct(output,kernels[i],strides[i],padding[i],outpad[i]);
-        if(output > 5320000){
+
+        if(output > 5324000){
             return 0;
         }                                 
-        if((output < 5320000) && (output >= 5291999)){
+        if((output < 5324000) && (output >= 5260000)){
             //cout << "cut on " << i << endl;
             //cout << list_to_string(kernels,g_len) << " " << list_to_string(strides,g_len) << " " << list_to_string(padding,g_len) << endl;
             *upto = i+1;
@@ -105,13 +106,15 @@ int out_size_c(int in,int k,int s,int p){
     return 1+( (in+(2*p)-(k-1)-1 ) / s);
 }
 
-int total_size_c(int in,int* kernels,int* strides,int* padding,bool print){
+int total_size_c(int in,int* kernels,int* strides,int* padding,bool print,int* upto){
     int output = in;
 
     for(int i=0; i < d_len;i++){
+        
         if (output < kernels[i]){
             return -1;
         }
+        
         output = out_size_c(output,kernels[i],strides[i],padding[i]);
         if(print){
             cout << "layer " << i << ": " << output << endl;
@@ -120,7 +123,8 @@ int total_size_c(int in,int* kernels,int* strides,int* padding,bool print){
             return -1;
         }
         if((output == 1) && (i != (d_len-1))){
-            return -1;
+            *upto = i+1;
+            return 1;
         }
     }
     if(print){
@@ -199,14 +203,14 @@ int main(){
     vector<string> possible_g_config;
     
     //SET T LIMIT 
-    int limit = 60*30;
+    int limit = 60*5;
     cout << "Searching for Discriminator" << endl;
 
     //Start configs 
     int* kernels = new int[d_len];
     int* strides = new int[d_len];
     int* padding = new int[d_len];
-    
+    int uptod    = d_len;
     fill_list(kernels,d_len,2);
     fill_list(strides,d_len,1);
     fill_list(padding,d_len,0);
@@ -217,15 +221,17 @@ int main(){
         kernels[int(rand()%d_len)] = power_of_2(1,16);
         strides[int(rand()%d_len)] = power_of_2(1,6);
         padding[int(rand()%d_len)] = power_of_2(0,8);
-        int out_size = total_size_c(5292000,kernels,strides,padding,false);
+        int out_size = total_size_c(5292000,kernels,strides,padding,false,&uptod);
 
         
-        if ((out_size == 1) && is_sorted_backward(kernels,d_len) && is_valid(strides,d_len)){
+        if ((out_size == 1) && is_sorted_backward(kernels,uptod) && is_valid(strides,uptod) && uptod > 5){
             config dcandidate;
-            dcandidate.kernels    = list_to_string(kernels,d_len);
-            dcandidate.strides    = list_to_string(strides,d_len);
-            dcandidate.padding    = list_to_string(padding,d_len);
+            dcandidate.kernels    = list_to_string(kernels,uptod);
+            //dcandidate.num_channels= to_string(uptod);
+            dcandidate.strides    = list_to_string(strides,uptod);
+            dcandidate.padding    = list_to_string(padding,uptod);
             possible_d_config.push_back(config_to_string(dcandidate));
+            //cout << "foundone" <<endl;
         }
     }
     
@@ -239,22 +245,27 @@ int main(){
     int* padding_g  = new int[g_len];
     int* out_pad_g  = new int[g_len];
 
-    fill_list(kernels_g,g_len,1);
-    fill_list(strides_g,g_len,1);
+    fill_list(kernels_g,g_len,4);
+    fill_list(strides_g,g_len,2);
     fill_list(padding_g,g_len,0);
     fill_list(out_pad_g,g_len,0);
 
+    kernels_g[0] = 4;
+    kernels_g[1] = 4;
+    kernels_g[2] = 8;
+    kernels_g[3] = 16;
+    kernels_g[4] = 16;
     int upto = g_len;
     time_t start_g = time(NULL);
-    while(time(NULL)-start_g < limit){
-        kernels_g[int(rand()%(g_len))] = power_of_2(2,16);//power_of_2(1,16);
+    while(time(NULL)-start_g < 0){
+        kernels_g[int(rand()%(g_len-5))+5] = power_of_2(4,14);//power_of_2(1,16);
         //padding_g[int(rand()%g_len)] = pure_rand(1,1024*4);
-        strides_g[int(rand()%g_len)] = pure_rand(1,4);//pure_rand(1,10);
+        //strides_g[int(rand()%g_len)] = pure_rand(1,4);//pure_rand(1,10);
         //out_pad_g[int(rand()%g_len)] = pure_rand(1,1024);
         int out_size = total_size_ct(1,kernels_g,strides_g,padding_g,out_pad_g,&upto);
 
         //cout << out_size << endl;
-        if ((out_size == 5292000) && is_valid(kernels_g,upto) && upto > 5){
+        if ((out_size == 5292000) && is_sorted_backward(kernels_g,upto) && upto > 5){
 
             config gcandidate;
             gcandidate.in_size      = to_string(1);
@@ -264,6 +275,7 @@ int main(){
             gcandidate.padding      = list_to_string(padding_g,upto);
             gcandidate.outpad       = list_to_string(out_pad_g,upto);
             possible_g_config.push_back(config_to_string(gcandidate));
+            cout << "Found one" << " size " << to_string(upto) << endl;
         }
     }
     

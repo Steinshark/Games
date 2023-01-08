@@ -1,6 +1,6 @@
 import torch 
 from torch.utils.data import Dataset, DataLoader
-from networks import AudioGenerator, AudioDiscriminator
+from networks import AudioGenerator,AudioGenerator2,AudioDiscriminator
 import numpy 
 import time 
 import json
@@ -9,7 +9,7 @@ from dataset import reconstruct
 import random 
 import sys 
 import pprint 
-from utilities import weights_init, config_explorer, lookup, G_CONFIGS, D_CONFIGS
+from utilities import weights_init, config_explorer, lookup, G_CONFIGS, D_CONFIGS, print_epoch_header
 
 class AudioDataSet(Dataset):
 
@@ -46,6 +46,7 @@ class Trainer:
 
         self.device         = device
         self.input_channels = input_channels
+    
     #Import a list of configs for D and G in JSON format.
     def import_configs(self,config_filename:str):
 
@@ -71,53 +72,60 @@ class Trainer:
             return 
 
     #Create models from scratch using a config
-    def create_models(self,D_config:dict,G_config:dict):
-
-
+    def create_models(self,D_config:dict,G_config:dict,run_parallel=True):
 
         #Ensure Proper Config Files 
-        if not "kernels" in G_config:
-            print("Invalid Generator config, must contain Kernel settings")
-            return 
-        if not "strides" in G_config:
-            print("Invalid Generator config, must contain Stride settings")
-            return 
-        if not "paddings" in G_config:
-            print("Invalid Generator config, must contain Padding settings")
-            return 
+        if not "factors" in G_config:
+            print("Invalid Generator config, must contain Factor settings")
+            exit(-1) 
+        if not "channels" in G_config:
+            print("Invalid Generator config, must contain Channel settings")
+            exit(-1) 
+        if not "scales" in G_config:
+            print("Invalid Generator config, must contain Scale settings")
+            exit(-1) 
+       
         if not "kernels" in D_config:
             print("Invalid Discrimintator config, must contain Kernel settings")
-            return 
+            exit(-1) 
         if not "strides" in D_config:
             print("Invalid Discrimintator config, must contain Stride settings")
-            return 
+            exit(-1) 
         if not "paddings" in D_config:
             print("Invalid Discrimintator config, must contain Padding settings")
-            return 
+            exit(-1) 
+        if not "channels" in D_config:
+            print("Invalid Discrimintator config, must contain Channels settings")
+            exit(-1)
         
 
         #Create Generator 
-        self.Generator   = AudioGenerator(          num_channels=G_config['num_channels'],
-                                                    kernels=G_config['kernels'],
-                                                    channels=G_config['channels'],
-                                                    strides=G_config['strides'],
-                                                    paddings=G_config['paddings'],
-                                                    out_pads=G_config['out_pad'],
-                                                    device=torch.device(G_config['device']))
+        self.Generator   = AudioGenerator2(         G_config['factors'],
+                                                    G_config['channels'],
+                                                    G_config['scales'])
 
         #Create Discriminator
         self.Discriminator   = AudioDiscriminator(  channels=D_config['channels'],
                                                     kernels=D_config['kernels'],
                                                     strides=D_config['strides'],
                                                     paddings=D_config['paddings'],
-                                                    device=torch.device(G_config['device']),
+                                                    final_layer=D_config['final_layer'],
+                                                    device=self.device,
                                                     verbose=False)
 
         #Init weights 
         self.Generator.apply(weights_init)
         self.Discriminator.apply(weights_init)
 
-        
+        #Check if mulitple GPUs 
+        if torch.cuda.device_count() > 1 and run_parallel:
+            print(f"Running model on {torch.cuda.device_count()} distributed GPUs")
+            self.Generator      = torch.nn.DataParallel(self.Generator,device_ids=[id for id in range(torch.cuda.device_count())])
+            self.Discriminator  = torch.nn.DataParallel(self.Discriminator,device_ids=[id for id in range(torch.cuda.device_count())])
+
+        #Put both models on correct device 
+        self.Generator      = self.Generator.to(self.device)
+        self.Discriminator  = self.Discriminator.to(self.device) 
         #Save model config for later 
         self.G_config = G_config
         self.D_config = D_config
@@ -161,11 +169,13 @@ class Trainer:
         self.dataset        = AudioDataSet(filenames)
         self.dataloader     = DataLoader(self.dataset,batch_size=batch_size,shuffle=shuffle,num_workers=num_workers)
 
+    #Set optimizers and error function for models
     def set_learners(self,D_optim,G_optim,error_fn):
         self.D_optim    = D_optim
         self.G_optim    = G_optim
         self.error_fn   = error_fn
-   
+
+    #Train models with NO accumulation
     def train(self,verbose=True):
         #Telemetry
         if verbose:
@@ -244,6 +254,8 @@ class Trainer:
             generator_outputs       = self.Generator.forward(random_inputs)
             t_g[-1] += time.time()-t_0
 
+            print(f"G out shape {random_inputs.shape}")
+
             #Ask Discriminator to classify fake samples 
             t_0 = time.time()
             fake_labels             = torch.zeros(size=(x_len,),dtype=torch.float,device=self.device)
@@ -307,6 +319,7 @@ class Trainer:
         t_d.append(0)
         t_g.append(0)
 
+    #Train models with accumulation - DUBIOUS
     def train_accumulated(self,verbose=True,accu_bs=16):
         #Telemetry
         if verbose:
@@ -437,12 +450,6 @@ class Trainer:
         t_d.append(0)
         t_g.append(0)
 
-    def print_epoch_header(epoch_num,epoch_tot,header_width=100):
-        print("="*header_width)
-        epoch_seg   = f'=   EPOCH{f"{epoch_num+1}/{epoch_tot}".rjust(8)}'
-        print(epoch_seg,end="")
-        print(" "*(header_width-(len(epoch_seg)+1)),end="=\n")
-        print("="*header_width)
 
     def sample(self,out_file_path):
         inputs = torch.randn(size=(1,self.input_channels,1),dtype=torch.float,device=self.device)
@@ -467,20 +474,16 @@ if __name__ == "__main__" and True:
         epochs      = 4 
         bs          = 8
 
-    input_channels          = 100
-    configs                 = json.loads(open("configs3.txt","r").read())
-    d_configs               = [con for i,con in enumerate(configs['D'])]
-    g_configs               = [con for i,con in enumerate(configs['G'])]
+    input_channels          = 512
 
     #Create D config 
-    d_config                = D_CONFIGS['LoHi_5']
-    d_config['channels']    = [2] + [16] + [16] + [4]*(len(d_config['kernels'])-4) + [4] + [1]
+    d_config                = D_CONFIGS['new']
+    d_config['channels']    = [2,8,8,8,4,4,4,1]
     d_config['device']      = 'cuda'    
 
     #Create G config 
-    g_config                = G_CONFIGS['HiLo_2']
-    g_config['channels']    = [input_channels] + [128] + [128] + [32]*(len(g_config['kernels'])-4) + [32] + [2]
-    g_config['device']      = 'cuda'
+    g_config                = G_CONFIGS['USamp']
+
 
     #Build trainer obj
     trainer = Trainer(torch.device('cuda'),input_channels)
@@ -494,19 +497,23 @@ if __name__ == "__main__" and True:
     g_params    = trainer.Generator.parameters()
     trainer.set_learners(torch.optim.Adam(d_params,lr=.0002,betas=(.75,.999)),torch.optim.Adam(g_params,lr=.0003,betas=(.75,.999)),torch.nn.BCELoss())
 
+
     #Train!
     print(f"Starting model training")
     time.sleep(2)
     for ep in range(epochs):
         #Generate training data 
-        root        = "C:/data/music/dataset"
-        filenames   = os.listdir(root)
+        root1       = "/mnt/sdb/music/dataset"
+        root2       = "/mnt/sdc/music/dataset"
+
+        filenames   = [os.path.join(root1,fname) for fname in os.listdir(root1)] + [os.path.join(root2,fname) for fname in os.listdir(root2)]
         filenames   = random.sample(filenames,load)
-        trainer.build_dataset([os.path.join(root,fname) for fname in filenames],bs,True,2)
-        Trainer.print_epoch_header(ep,epochs)
+
+        trainer.build_dataset(filenames,bs,True,2)
+        print_epoch_header(ep,epochs)
         trainer.train()
     
-    trainer.save_model_states("models",D_name="D_batch_LoHi_5",G_name="G_batch_HiLo_2")
+    trainer.save_model_states("models",D_name="D_NEW",G_name="G_NEW")
 
     trainer.sample(os.path.join("outputs",f"{input('save sample as: ')}.wav"))
 
