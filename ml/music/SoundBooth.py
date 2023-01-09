@@ -10,7 +10,7 @@ import random
 import sys 
 import pprint 
 from utilities import weights_init, config_explorer, lookup, G_CONFIGS, D_CONFIGS, print_epoch_header,model_size
-from sandboxG import G1_OPP
+from sandboxG import build_gen
 
 class AudioDataSet(Dataset):
 
@@ -462,64 +462,51 @@ class Trainer:
         reconstruct(outputs,out_file_path)
         print(f"saved audio to {out_file_path}")
 
+    def c_exec(self,load,epochs,bs,D,G,lr,beta,filenames,ncz,outsize,sample_out,sf,verbose=False):
+        self.outsize        =outsize
+        self.ncz            = ncz
+        self.Discriminator  = D 
+        self.Generator      = G
 
+        d_params            = self.Discriminator.parameters()
+        g_params            = self.Generator.parameters()
+        self.set_learners(torch.optim.Adam(d_params,lr=lr[0],betas=(beta[0],.999)),torch.optim.Adam(g_params,lr=lr[1],betas=(beta[1],.999)),torch.nn.BCELoss())
+
+        for e in range(epochs):
+            filenames   = random.sample(filenames,load)
+            self.build_dataset(filenames,bs,True,2)
+            if verbose:
+                print_epoch_header(e,epochs)
+                self.train(verbose=verbose)
+        
+            if (e+1) % 8 == 0:
+                self.sample(f"{sample_out}_{e}.wav",sf=sf)
 
 if __name__ == "__main__" and True:
-    if len(sys.argv) > 1:
-        load        = int(sys.argv[1])
-        epochs      = int(sys.argv[2])
-        bs          = int(sys.argv[3])
-        if len(sys.argv) > 4:
-            accu_bs     = int(sys.argv[4])
+    load    = 1024 
+    ep      = 32
+    dev     = torch.device('cuda')
 
-    else:
-        load        = 256
-        epochs      = 4 
-        bs          = 8
-
-
-    #Create D config 
-    d_config                = D_CONFIGS['new2']
-    d_config['channels']    = [2,128,128,64,64,1]
-    d_config['device']      = 'cuda'    
-
-    #Create G config 
-    g_config                = G_CONFIGS['USamp']
-
-
-    #Build trainer obj
-    trainer = Trainer(torch.device('cuda'),512,529200)
-    trainer.create_models(d_config,g_config)
-    trainer.Generator = G1_OPP
-    trainer.Generator.to(trainer.device)
-    #trainer.load_models(d_config,g_config,"models/D_batch_LoHi_5","models/G_batch_HiLo_1")
-    print("D size: ", model_size(trainer.Generator))
-    print("G size: ", model_size(trainer.Discriminator))
-    #random_inputs           = torch.randn(size=(1,trainer.input_channels,1),dtype=torch.float,device=trainer.device)
-    #generator_outputs       = trainer.Generator.forward(random_inputs)
-    #input(f"{generator_outputs.shape}")
-    #Place learning items
-    d_params    = trainer.Discriminator.parameters()
-    g_params    = trainer.Generator.parameters()
-    trainer.set_learners(torch.optim.Adam(d_params,lr=.0001,betas=(.75,.999)),torch.optim.Adam(g_params,lr=.0003,betas=(.75,.999)),torch.nn.BCELoss())
-
-
-    #Train!
-    print(f"Starting model training")
-    for ep in range(epochs):
-        #Generate training data 
-        root1       = "C:/data/music/dataset/Scale5_60s"
-        root2= root1
-        #root2       = "/mnt/sdc/music/dataset"
-
-        filenames   = [os.path.join(root1,fname) for fname in os.listdir(root1)] + [os.path.join(root2,fname) for fname in os.listdir(root2)]
-        filenames   = random.sample(filenames,load)
-
-        trainer.build_dataset(filenames,bs,True,2)
-        print_epoch_header(ep,epochs)
-        trainer.train()
     
-    trainer.save_model_states("models",D_name="D_NEWs",G_name="G_NEWs")
+    D       = AudioDiscriminator(channels=[2,256,128,128,128,1],kernels=[9,33,33,33,33],paddings=[4,4,4,4,4],strides=[7,5,5,4,4,3,3,3],final_layer=182).to(dev)
 
-    trainer.sample(os.path.join("outputs",f"{input('save sample as: ')}.wav"),sf=5)
+    #ins     = torch.randn(size=(1,2,529200),device=dev)
+    #input(f"outs {D(ins).shape}")
+    root    = "C:/data/music/dataset/Scale5_60s"
+    files   = [os.path.join(root,f) for f in os.listdir(root)]
 
+
+    for ncz in [128,1024]:
+        for r_fc in [True,False]:
+            for r_ch in [True,False]:
+                G   = build_gen(ncz,reverse_factors=r_fc,reverse_channels=r_ch)
+                for bs in [8]:
+                    for beta in [(.7,.7)]:
+                        for lrs in [(.0001,.0001)]:
+                            t       = Trainer(dev,ncz,529200)
+                            build_gen()
+                            series_name = f"outputs/{ncz}_beta{beta}_{lrs}_revCH{r_ch}_revFCT{r_fc}"
+                            if not os.path.isdir(series_name):
+                                os.mkdir(series_name)
+                            
+                            t.c_exec(load,ep,bs,D,G,lrs,beta,files,ncz,529200,f"{series_name}/",5,verbose=True)
