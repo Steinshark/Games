@@ -2,6 +2,7 @@ from pytube import YouTube
 from pydub import AudioSegment
 from pydub.utils import make_chunks
 import os 
+import sys 
 from binascii import hexlify
 from pydub.exceptions import CouldntDecodeError
 import ctypes
@@ -9,33 +10,45 @@ import numpy
 from networks import AudioGenerator,AudioDiscriminator
 import torch 
 import binascii
+import hashlib
 
-DOWNLOAD_PATH           = r"C:\data\music\downloads"
-CHUNK_PATH              = r"C:\data\music\chunked\Scale5_60s"
-DATASET_PATH            = r"C:\data\music\dataset\Scale5_60s"
+#Inizialize directories properly
+if "linux" in sys.platform:
+    DOWNLOAD_PATH           = r"/media/steinshark/stor_sm/music/downloads"
+    CHUNK_PATH              = r"/media/steinshark/stor_sm/music/chunked\Scale5_60s"
+    DATASET_PATH            = r"/media/steinshark/stor_lg/music/dataset\Scale5_60s"
+else:
+    DOWNLOAD_PATH           = r"C:\data\music\downloads"
+    CHUNK_PATH              = r"C:\data\music\chunked\Scale5_60s"
+    DATASET_PATH            = r"C:\data\music\dataset\Scale5_60s"
 
 MINUTES                 = 0 
-def download_link(url:str,path:str): 
+
+#Returns a deterministic hash of a string
+def hash_str(input_str:str):
+    return str(hashlib.md5(input_str.encode()).hexdigest())
+
+#Downloads 1 URL 
+def download_link(url:str,output_path:str,index=None,total=None): 
 
     #Grab video 
     yt_handle               = YouTube(url)
-    print(f"downloading {url}")
-    link_audio              = yt_handle.streams.filter(only_audio=True).first().download(output_path=path)
-    print(f"\tsuccess")
 
-def rename_files():
-    for cat in os.listdir(DATABASE_PATH):
-        for file in os.listdir(os.path.join(DATABASE_PATH,cat)):
-            old_path   = os.path.join(os.path.join(DATABASE_PATH),cat,file) 
-            fname = file.replace(" ","").replace("mp4","mp3")
-            new_path   = os.path.join(os.path.join(DATABASE_PATH),cat,fname) 
+    #Telemetry
+    if not index is None:
+        tel_msg = f"downloading {url[:50]}\t[{index}/{total}]"
+    else:
+        tel_msg = f"downloading {url[:50]}"
+    print(tel_msg,end='')
+    yt_handle.streams.filter(only_audio=True).first().download(output_path=output_path)
+    print(f"\t- success")
 
-            os.rename(old_path,new_path)
-
+#Convert big-endian to little-endian
 def big_to_little(hex,con=True):
     little_repr = bytearray.fromhex(hex)[::-1].hex()
     return int(little_repr,base=16) if con else little_repr
 
+#Convert little-endian to big-endian
 def little_to_big(hex,con=False):
     try:
         big_repr = bytearray.fromhex(hex)[::-1].hex()
@@ -43,7 +56,7 @@ def little_to_big(hex,con=False):
         big_repr = bytearray.fromhex(str(hex))[::-1].hex()
     return int(big_repr,base=16) if con else big_repr
 
-
+#Convert a wav file to a 2-channel numpy array
 def read_wav(filename,sf=1):
     file_hex        = open(filename,"rb").read().rstrip().hex()
     
@@ -126,8 +139,18 @@ def read_wav(filename,sf=1):
     numpy.save(os.path.join(DATASET_PATH,str(filename.__hash__())[:10]),arr)
 
 #Chunks a file into 'chunk_length' millisecond-sized chunks
-def chunk_file(file_name:str,chunk_length:int,save_path:str): 
-    full_audio  = AudioSegment.from_file(file_name,"mp4")
+def chunk_file(fname:str,chunk_length:int,output_path:str): 
+
+    #Convert fname to hash 
+    fhash           = hash_str(fname)[:10]
+
+    #Check that file has not been chunked 
+    fname_check     = f"{fhash}_0.wav"
+    if os.path.exists(fname_check):
+        print("\tAudio has already been chunked!") 
+
+    #Chunk audio
+    full_audio  = AudioSegment.from_file(fname,"mp4")
     chunks      = make_chunks(full_audio,chunk_length=chunk_length)
 
     for i,chunk in enumerate(chunks):
@@ -141,40 +164,46 @@ def chunk_file(file_name:str,chunk_length:int,save_path:str):
             chunk.export(full_path,format="wav")
     return i*1000*chunk_length
 
-def download_all():
-    cur_cat     = ""
-    cur_path    = ""
-    downloaded = [] 
+#Downloads a list of files 
+def download_all(filenames):
 
-    for line in open("links.txt").readlines():
-        if line in downloaded:
-            continue 
-        else:
-            downloaded.append(line)
-        if "CATEGORY" in line:
-            cat = line.replace("CATEGORY","").replace("|","").rstrip()
-            full_path = os.path.join(DOWNLOAD_PATH,cat)
-            if not os.path.exists(full_path):
-                os.mkdir(full_path)
+    for url in filenames:
+
+        if "CATEGORY" in url:
+            #Get category being downloaded
+            cat                 = url.replace("CATEGORY","").replace("|","")
+            download_out_path   = os.path.join(DOWNLOAD_PATH,cat)
+
+            #Create path dir if it does not exist
+            if not os.path.exists(download_out_path):
+                os.mkdir(download_out_path)
                 print(f"created path for category: {cat}")
-            cur_cat = cat
-            cur_path = full_path
+            
         else:
-            download_link(line.rstrip(),cur_path)
+            download_link(url,download_out_path)
 
-def chunk_all(chunk_length:int):
+#Chunks the audio from a given category 
+def chunk_all(chunk_length:int,category:str):
+    
     global MINUTES
-    for cat in os.listdir(DOWNLOAD_PATH):
-        for file in os.listdir(os.path.join(DOWNLOAD_PATH,cat)):
-            try:
-                if not os.path.exists(CHUNK_PATH):
-                    os.mkdir(CHUNK_PATH)
-                full_file_path      = os.path.join(os.path.join(DOWNLOAD_PATH),cat,file) 
-                print(f"opening {full_file_path}")
-                MINUTES += chunk_file(full_file_path,1000*chunk_length,CHUNK_PATH)
-            except CouldntDecodeError:
-                pass
-    print(f"created dataset {MINUTES} minutes long")
+
+    audio_base_path = os.path.join(DOWNLOAD_PATH,category)
+    audio_out_path  = os.path.join(CHUNK_PATH,category)
+
+    #Ensure the output path exists 
+    if not os.path.exists(audio_out_path):
+        os.mkdir(audio_out_path)
+        print(f"created path for audio outputs: {audio_out_path}")
+
+    #Chunk the files 
+    for fname in os.listdir(audio_base_path):
+
+        #Chunk the file 
+        audio_source_path   = os.path.join(audio_base_path,fname) 
+        print(f"Chunking {audio_source_path}")
+        MINUTES += chunk_file(audio_source_path,1000*chunk_length,audio_out_path)
+    
+    print(f"added {MINUTES} to dataset")
 
 def read_all(sf=1,start=-1,end=-1):
 
@@ -255,7 +284,7 @@ if __name__ == "__main__":
 
     import sys 
     #Chunk for 60s
-    read_all(sf=5,start=int(sys.argv[1]),end=int(sys.argv[2]))
+    #read_all(sf=5,start=int(sys.argv[1]),end=int(sys.argv[2]))
     
     #a = upscale(numpy.load(r"C:\data\music\dataset\Scale5_60s\6416308374.npy"),sf=5)
     #reconstruct(a,"recontest.wav")
