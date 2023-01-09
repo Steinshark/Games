@@ -57,7 +57,7 @@ def little_to_big(hex,con=False):
     return int(big_repr,base=16) if con else big_repr
 
 #Convert a wav file to a 2-channel numpy array
-def read_wav(filename,sf=1):
+def read_wav(filename,sf,outputsize):
     file_hex        = open(filename,"rb").read().rstrip().hex()
     
     file_header     = file_hex[:8]
@@ -116,27 +116,28 @@ def read_wav(filename,sf=1):
             else:
                 print("-\tBAD")
 
+    #Ensure output is correct length
     count = 0 
     flag = False 
-    newlen = int(5292000 / 2)
-    while len(ch1) < newlen:
+    while len(ch1) < outputsize:
         ch1.append(ch1[-1])
         ch2.append(ch2[-1])
         count += 1 
         if count > 10000 and not flag :
-            print(f"bad len on {filename}")
+            print(f"bad len on {filename} - {len(ch1)-10000}/{outputsize}")
             flag = True
-    
-    if len(ch1) > newlen:
-        ch1 = ch1[:newlen]
-    if len(ch2) > newlen:
-        ch2 = ch2[:newlen]
+
+    if len(ch1) > outputsize:
+        ch1 = ch1[:outputsize]
+    if len(ch2) > outputsize:
+        ch2 = ch2[:outputsize]
+
     #Create and save the numpy array
     arr = numpy.array([ch1,ch2],dtype=float)
     if sf > 1:
         arr = downscale(arr,sf)
     
-    numpy.save(os.path.join(DATASET_PATH,str(filename.__hash__())[:10]),arr)
+    numpy.save(filename,arr)
 
 #Chunks a file into 'chunk_length' millisecond-sized chunks
 def chunk_file(fname:str,chunk_length:int,output_path:str): 
@@ -148,20 +149,19 @@ def chunk_file(fname:str,chunk_length:int,output_path:str):
     fname_check     = f"{fhash}_0.wav"
     if os.path.exists(fname_check):
         print("\tAudio has already been chunked!") 
+        return 0
 
     #Chunk audio
     full_audio  = AudioSegment.from_file(fname,"mp4")
     chunks      = make_chunks(full_audio,chunk_length=chunk_length)
 
+    #Save files
     for i,chunk in enumerate(chunks):
-        root_name = str(file_name.__hash__())[:10]
-        fname   = f"{root_name}_{i}.wav"
-        print(f"saving chunk {fname}")
-        full_path   = os.path.join(save_path,fname)
-        if os.path.exists(full_path):
-            print("\tfile existed")
-        else:
-            chunk.export(full_path,format="wav")
+        filename    = f"{fhash}_{i}.wav"
+        full_path   = os.path.join(output_path,filename)
+        chunk.export(full_path,format="wav")
+    
+    print(f"\tsaved {i} chunks")
     return i*1000*chunk_length
 
 #Downloads a list of files 
@@ -205,25 +205,46 @@ def chunk_all(chunk_length:int,category:str):
     
     print(f"added {MINUTES} to dataset")
 
-def read_all(sf=1,start=-1,end=-1):
+#Convert all wav files to numpy
+def read_all(category:str,sf=1,start=-1,end=-1):
 
+    #Ensure dataset path exists 
     if not os.path.exists(DATASET_PATH):
         os.mkdir(DATASET_PATH)
     
-    filenames = os.listdir(CHUNK_PATH)
+    #build source and save paths
+    audio_source_path       = os.path.join(CHUNK_PATH,category)
+    audio_output_path       = os.path.join(DATASET_PATH,category)
+    if not os.path.exists(audio_output_path):
+        os.mkdir(audio_output_path)
+
+    #Get chunks to convert 
+    filenames   = os.listdir(audio_source_path)
     if not start == -1:
         filenames = filenames[start:end]
     total = len(filenames)
+    
+    #Create arrays
     for i,filename in enumerate(filenames):
-        print(f"{i}/{total}")
-        read_wav(os.path.join(CHUNK_PATH,filename),sf=sf)
+        output_full_path    = os.path.join(audio_output_path,f"{hash_str(filename)[:10]}.npy")
 
+        #Check for existing 
+        print(f"Converting{output_full_path}\t{i}/{total}",end='')
+        if os.path.exists(output_full_path):
+            print(f"-already existed!")
+            continue 
+        read_wav(os.path.join(CHUNK_PATH,filename),sf=sf)
+        print(f"- success")
+    return 
+
+#Convert to a 2s comlement 
 def reg_to_2s_compl(val,bits):
     """compute the 2's complement of int value val"""
     if (val & (1 << (bits - 1))) != 0: # if sign bit is set e.g., 8bit: 128-255
         val = val - (1 << bits)        # compute negative value
     return val      
 
+#Convert a numpy array to a wav file 
 def reconstruct(arr_in:numpy.array,output_file:str):
 
     #Bring all values back up to 32000
@@ -261,6 +282,7 @@ def reconstruct(arr_in:numpy.array,output_file:str):
     file.write(bytes.fromhex(str(data)))
     file.close()
 
+#Scale a numpy array down 
 def downscale(arr_in:numpy.array,sf:int):
 
     import time 
@@ -274,7 +296,7 @@ def downscale(arr_in:numpy.array,sf:int):
 
     return arr_out
 
-
+#Scale a numpy array back up
 def upscale(arr_in,sf):
     return numpy.repeat(arr_in,sf,axis=1)
 
@@ -282,9 +304,7 @@ def upscale(arr_in,sf):
 
 if __name__ == "__main__":
 
-    import sys 
-    #Chunk for 60s
-    #read_all(sf=5,start=int(sys.argv[1]),end=int(sys.argv[2]))
-    
-    #a = upscale(numpy.load(r"C:\data\music\dataset\Scale5_60s\6416308374.npy"),sf=5)
-    #reconstruct(a,"recontest.wav")
+    ####################################################################################    
+    #                                      DOWNLOAD                                    # 
+    ####################################################################################    
+    links = open
