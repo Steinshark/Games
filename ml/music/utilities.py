@@ -25,8 +25,12 @@ D_CONFIGS = {
                 "new"  : {      'kernels': [9,33,33,129,129,513,2049],
                                 'strides': [3,3,3,3,3,3,3],
                                 'paddings':[4,4,4,4,4,4,4],
-                                'final_layer':1678}
-                
+                                'final_layer':1678},
+                "new2" : {
+                                'kernels' : [9,33,33,33,33],
+                                'paddings' : [4,4,4,4,4],
+                                'strides' : [7,5,5,4,4,3,3,3],
+                                'final_layer' : 182}              
 }
 
 G_CONFIGS ={
@@ -56,9 +60,9 @@ G_CONFIGS ={
                                 'device': 'cuda'
                                 },
                 "USamp" : {
-                                "factors"       : [2,3,3,3,4,4,5,5,5,7,7],
-                                "channels"      : [512,2048,1024,512,64,64,32,32,32,32,16,2],
-                                "scales"        : [3,4,4,4,5,5,6,6,6,8,8]
+                                "factors"       : [2,3,3,3,4,4,5,5,5,7],
+                                "channels"      : [1024,256,128,64,64,32,32,32,8,8,2],
+                                "scales"        : [3,4,4,4,5,5,6,6,6,8]
                 }
 }
 
@@ -98,16 +102,13 @@ def print_epoch_header(epoch_num,epoch_tot,header_width=100):
     print(" "*(header_width-(len(epoch_seg)+1)),end="=\n")
     print("="*header_width)
 
+def model_size(model:torch.nn.Module):
+    return f"{ (sum([p.numel()*p.element_size() for p in model.parameters()])/(1024*1024)):.2f}MB"
 
 if __name__ == "__main__":
-    configs     = json.loads(open("configs.txt").read())
-    d_configs   = list({str(con['kernels'])+str(con['strides'])+str(con['paddings']) : con for i,con in enumerate(configs['D'])}.values())
-    g_configs   = list({str(con['kernels'])+str(con['strides'])+str(con['paddings']) : con for i,con in enumerate(configs['G'])}.values())
+    import numpy 
+    a = numpy.load("C:\data\music\dataset\Scale5_60s\-802589122.npy") 
+    from matplotlib import pyplot as plt 
 
-    print(len(d_configs))
-    import pprint 
-    conf = config_explorer(d_configs,[lambda con: con['kernels'][0] < 256 and con['kernels'][0] >= 32])
-    pprint.pp(conf[:10])
-    pcik = int(input("pick: "))
-    print(lookup(d_configs,conf[pcik]))
-    pprint.pp(d_configs[lookup(d_configs,conf[pcik])])
+    plt.plot(a[0][:1000])
+    plt.show()

@@ -5,22 +5,23 @@ import numpy
 import time 
 import json
 import os 
-from dataset import reconstruct
+from dataset import reconstruct, upscale
 import random 
 import sys 
 import pprint 
-from utilities import weights_init, config_explorer, lookup, G_CONFIGS, D_CONFIGS, print_epoch_header
+from utilities import weights_init, config_explorer, lookup, G_CONFIGS, D_CONFIGS, print_epoch_header,model_size
+from sandboxG import G1_OPP
 
 class AudioDataSet(Dataset):
 
-    def __init__(self,fnames):
+    def __init__(self,fnames,out_len):
 
         #Load files as torch tensors 
         self.data = []
         for file in fnames:
             arr = numpy.load(file,allow_pickle=True)
             arr = torch.from_numpy(arr).type(torch.float)
-            if not arr.size()[-1] == 5291999:
+            if not arr.size()[-1] == out_len:
                 input(f"{file} is bad w size {arr.size()}")
             self.data.append([arr,1])
 
@@ -38,14 +39,15 @@ class AudioDataSet(Dataset):
 
 class Trainer:
 
-    def __init__(self,device:torch.DeviceObjType,input_channels:int):
+    def __init__(self,device:torch.DeviceObjType,ncz:int,outsize:int):
 
         #Create models
         self.Generator      = None 
         self.Discriminator  = None 
 
         self.device         = device
-        self.input_channels = input_channels
+        self.ncz            = ncz
+        self.outsize        = outsize
     
     #Import a list of configs for D and G in JSON format.
     def import_configs(self,config_filename:str):
@@ -166,7 +168,7 @@ class Trainer:
         self.batch_size     = batch_size
 
         #Create sets
-        self.dataset        = AudioDataSet(filenames)
+        self.dataset        = AudioDataSet(filenames,self.outsize)
         self.dataloader     = DataLoader(self.dataset,batch_size=batch_size,shuffle=shuffle,num_workers=num_workers)
 
     #Set optimizers and error function for models
@@ -250,11 +252,11 @@ class Trainer:
             
             #Generate samples
             t_0 = time.time()
-            random_inputs           = torch.randn(size=(x_len,self.input_channels,1),dtype=torch.float,device=self.device)
-            generator_outputs       = self.Generator.forward(random_inputs)
+            random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
+            generator_outputs       = self.Generator(random_inputs)
             t_g[-1] += time.time()-t_0
 
-            print(f"G out shape {random_inputs.shape}")
+            #print(f"G out shape {random_inputs.shape}")
 
             #Ask Discriminator to classify fake samples 
             t_0 = time.time()
@@ -285,7 +287,7 @@ class Trainer:
             t_d[-1] += time.time()-t_0
             
             #Classify random vector 
-            random_vect             = torch.randn(size=(1,2,5291999),dtype=torch.float,device=self.device)
+            random_vect             = torch.randn(size=(1,2,self.outsize),dtype=torch.float,device=self.device)
             with torch.no_grad():
                 d_random            += self.Discriminator.forward(random_vect).cpu().detach().item()
             
@@ -451,17 +453,18 @@ class Trainer:
         t_g.append(0)
 
 
-    def sample(self,out_file_path):
-        inputs = torch.randn(size=(1,self.input_channels,1),dtype=torch.float,device=self.device)
+    def sample(self,out_file_path,sf=1):
+        inputs = torch.randn(size=(1,self.ncz,1),dtype=torch.float,device=self.device)
         outputs = self.Generator.forward(inputs)
         outputs = outputs[0].cpu().detach().numpy()
+        if sf > 1:
+            outputs = upscale(outputs,sf)
         reconstruct(outputs,out_file_path)
         print(f"saved audio to {out_file_path}")
 
 
 
 if __name__ == "__main__" and True:
-
     if len(sys.argv) > 1:
         load        = int(sys.argv[1])
         epochs      = int(sys.argv[2])
@@ -474,11 +477,10 @@ if __name__ == "__main__" and True:
         epochs      = 4 
         bs          = 8
 
-    input_channels          = 512
 
     #Create D config 
-    d_config                = D_CONFIGS['new']
-    d_config['channels']    = [2,8,8,8,4,4,4,1]
+    d_config                = D_CONFIGS['new2']
+    d_config['channels']    = [2,128,128,64,64,1]
     d_config['device']      = 'cuda'    
 
     #Create G config 
@@ -486,25 +488,29 @@ if __name__ == "__main__" and True:
 
 
     #Build trainer obj
-    trainer = Trainer(torch.device('cuda'),input_channels)
+    trainer = Trainer(torch.device('cuda'),512,529200)
     trainer.create_models(d_config,g_config)
+    trainer.Generator = G1_OPP
+    trainer.Generator.to(trainer.device)
     #trainer.load_models(d_config,g_config,"models/D_batch_LoHi_5","models/G_batch_HiLo_1")
-    print(f"Discriminator init with size {(sum([ p.numel()*p.element_size() for p in trainer.Discriminator.parameters()])/(1024*1024)):.2f}MB")
-    print(f"Generator     init with size {(sum([ p.numel()*p.element_size() for p in trainer.Generator.parameters()])/(1024*1024)):.2f}MB")
-
+    print("D size: ", model_size(trainer.Generator))
+    print("G size: ", model_size(trainer.Discriminator))
+    #random_inputs           = torch.randn(size=(1,trainer.input_channels,1),dtype=torch.float,device=trainer.device)
+    #generator_outputs       = trainer.Generator.forward(random_inputs)
+    #input(f"{generator_outputs.shape}")
     #Place learning items
     d_params    = trainer.Discriminator.parameters()
     g_params    = trainer.Generator.parameters()
-    trainer.set_learners(torch.optim.Adam(d_params,lr=.0002,betas=(.75,.999)),torch.optim.Adam(g_params,lr=.0003,betas=(.75,.999)),torch.nn.BCELoss())
+    trainer.set_learners(torch.optim.Adam(d_params,lr=.0001,betas=(.75,.999)),torch.optim.Adam(g_params,lr=.0003,betas=(.75,.999)),torch.nn.BCELoss())
 
 
     #Train!
     print(f"Starting model training")
-    time.sleep(2)
     for ep in range(epochs):
         #Generate training data 
-        root1       = "/mnt/sdb/music/dataset"
-        root2       = "/mnt/sdc/music/dataset"
+        root1       = "C:/data/music/dataset/Scale5_60s"
+        root2= root1
+        #root2       = "/mnt/sdc/music/dataset"
 
         filenames   = [os.path.join(root1,fname) for fname in os.listdir(root1)] + [os.path.join(root2,fname) for fname in os.listdir(root2)]
         filenames   = random.sample(filenames,load)
@@ -513,7 +519,7 @@ if __name__ == "__main__" and True:
         print_epoch_header(ep,epochs)
         trainer.train()
     
-    trainer.save_model_states("models",D_name="D_NEW",G_name="G_NEW")
+    trainer.save_model_states("models",D_name="D_NEWs",G_name="G_NEWs")
 
-    trainer.sample(os.path.join("outputs",f"{input('save sample as: ')}.wav"))
+    trainer.sample(os.path.join("outputs",f"{input('save sample as: ')}.wav"),sf=5)
 

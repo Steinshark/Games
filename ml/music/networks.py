@@ -191,8 +191,9 @@ class AudioGenerator2(nn.Module):
         self.model  = nn.Sequential()
         
         for i in range(len(factors)):
-            self.model.append(nn.Upsample(scale_factor=factors[i]*scales[0]))
+            self.model.append(nn.Upsample(scale_factor=factors[i]*scales[i]))
             self.model.append(nn.Conv1d(channels[i],channels[i+1],factors[i],scales[i]))
+            self.model.append(nn.ReLU(True))
 
             if i == len(factors)-1:
                 self.model.append(nn.Tanh())
@@ -218,7 +219,7 @@ class AudioDiscriminator(nn.Module):
             model[str(3*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],strides[i],paddings[i],bias=False)
             if not (i == (len(channels)-2)):
                 model[str(3*i+1)]       = nn.BatchNorm1d(channels[i+1])
-                model[str(3*i+2)]       = nn.LeakyReLU(0.2,inplace=True)
+                model[str(3*i+2)]       = nn.LeakyReLU(.02,True)
 
             else:
                 if final_layer > 1:

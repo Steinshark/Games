@@ -9,9 +9,10 @@ import numpy
 from networks import AudioGenerator,AudioDiscriminator
 import torch 
 import binascii
+
 DOWNLOAD_PATH           = r"C:\data\music\downloads"
-CHUNK_PATH              = r"C:\data\music\chunked"
-DATASET_PATH            = r"C:\data\music\dataset"
+CHUNK_PATH              = r"C:\data\music\chunked\Scale5_60s"
+DATASET_PATH            = r"C:\data\music\dataset\Scale5_60s"
 
 MINUTES                 = 0 
 def download_link(url:str,path:str): 
@@ -43,7 +44,7 @@ def little_to_big(hex,con=False):
     return int(big_repr,base=16) if con else big_repr
 
 
-def read_wav(filename):
+def read_wav(filename,sf=1):
     file_hex        = open(filename,"rb").read().rstrip().hex()
     
     file_header     = file_hex[:8]
@@ -104,7 +105,8 @@ def read_wav(filename):
 
     count = 0 
     flag = False 
-    while len(ch1) < 5291999:
+    newlen = int(5292000 / 2)
+    while len(ch1) < newlen:
         ch1.append(ch1[-1])
         ch2.append(ch2[-1])
         count += 1 
@@ -112,12 +114,15 @@ def read_wav(filename):
             print(f"bad len on {filename}")
             flag = True
     
-    if len(ch1) > 5291999:
-        ch1 = ch1[:5291999]
-    if len(ch2) > 5291999:
-        ch2 = ch2[:5291999]
+    if len(ch1) > newlen:
+        ch1 = ch1[:newlen]
+    if len(ch2) > newlen:
+        ch2 = ch2[:newlen]
     #Create and save the numpy array
     arr = numpy.array([ch1,ch2],dtype=float)
+    if sf > 1:
+        arr = downscale(arr,sf)
+    
     numpy.save(os.path.join(DATASET_PATH,str(filename.__hash__())[:10]),arr)
 
 #Chunks a file into 'chunk_length' millisecond-sized chunks
@@ -134,6 +139,7 @@ def chunk_file(file_name:str,chunk_length:int,save_path:str):
             print("\tfile existed")
         else:
             chunk.export(full_path,format="wav")
+    return i*1000*chunk_length
 
 def download_all():
     cur_cat     = ""
@@ -156,24 +162,32 @@ def download_all():
         else:
             download_link(line.rstrip(),cur_path)
 
-def chunk_all():
+def chunk_all(chunk_length:int):
     global MINUTES
     for cat in os.listdir(DOWNLOAD_PATH):
         for file in os.listdir(os.path.join(DOWNLOAD_PATH,cat)):
             try:
+                if not os.path.exists(CHUNK_PATH):
+                    os.mkdir(CHUNK_PATH)
                 full_file_path      = os.path.join(os.path.join(DOWNLOAD_PATH),cat,file) 
                 print(f"opening {full_file_path}")
-                chunk_file(full_file_path,1000*60*2,CHUNK_PATH)
-                MINUTES += 2
+                MINUTES += chunk_file(full_file_path,1000*chunk_length,CHUNK_PATH)
             except CouldntDecodeError:
                 pass
     print(f"created dataset {MINUTES} minutes long")
 
-def read_all():
-    total = len(os.listdir(CHUNK_PATH))
-    for i,filename in enumerate(os.listdir(CHUNK_PATH)):
+def read_all(sf=1,start=-1,end=-1):
+
+    if not os.path.exists(DATASET_PATH):
+        os.mkdir(DATASET_PATH)
+    
+    filenames = os.listdir(CHUNK_PATH)
+    if not start == -1:
+        filenames = filenames[start:end]
+    total = len(filenames)
+    for i,filename in enumerate(filenames):
         print(f"{i}/{total}")
-        read_wav(os.path.join(CHUNK_PATH,filename))
+        read_wav(os.path.join(CHUNK_PATH,filename),sf=sf)
 
 def reg_to_2s_compl(val,bits):
     """compute the 2's complement of int value val"""
@@ -181,7 +195,7 @@ def reg_to_2s_compl(val,bits):
         val = val - (1 << bits)        # compute negative value
     return val      
 
-def reconstruct(arr_in:numpy.array,output_file):
+def reconstruct(arr_in:numpy.array,output_file:str):
 
     #Bring all values back up to 32000
     arr_in *= 32768
@@ -195,15 +209,16 @@ def reconstruct(arr_in:numpy.array,output_file):
     data    = []
     #Convert values back to 2s complement
     for c1_i,c2_i in zip(range(len(ch1)),range(len(ch2))):
-        val1        = int(ch1[c1_i])
+        val1            = int(ch1[c1_i])
         hex_repr_2s_1   = str(binascii.hexlify(val1.to_bytes(2,byteorder='big',signed=True)))[2:-1]
 
-        val2        = int(ch2[c2_i])
+        val2            = int(ch2[c2_i])
         hex_repr_2s_2   = str(binascii.hexlify(val2.to_bytes(2,byteorder='big',signed=True)))[2:-1]
 
         data.append(hex_repr_2s_1)
         data.append(hex_repr_2s_2)
     
+
     data = "".join(data)
 
     header  = "52494646a4ff420157415645666d7420100000000100020044ac000010b10200040010006461746180ff420100000000"
@@ -217,8 +232,30 @@ def reconstruct(arr_in:numpy.array,output_file):
     file.write(bytes.fromhex(str(data)))
     file.close()
 
+def downscale(arr_in:numpy.array,sf:int):
+
+    import time 
+    ch1_split   = [arr_in[0][i*sf:(i+1)*sf] for i in range(int(len(arr_in[0])/sf))]
+    ch2_split   = [arr_in[1][i*sf:(i+1)*sf] for i in range(int(len(arr_in[1])/sf))]
+    
+    ch1_avg     = [sum(item)/sf for item in ch1_split]
+    ch2_avg     = [sum(item)/sf for item in ch2_split]
+    
+    arr_out     = numpy.array([ch1_avg,ch2_avg])
+
+    return arr_out
+
+
+def upscale(arr_in,sf):
+    return numpy.repeat(arr_in,sf,axis=1)
+
+
+
 if __name__ == "__main__":
 
-    #download_all()
-    #chunk_all()
-    read_all()
+    import sys 
+    #Chunk for 60s
+    read_all(sf=5,start=int(sys.argv[1]),end=int(sys.argv[2]))
+    
+    #a = upscale(numpy.load(r"C:\data\music\dataset\Scale5_60s\6416308374.npy"),sf=5)
+    #reconstruct(a,"recontest.wav")
