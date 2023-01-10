@@ -11,12 +11,15 @@ from networks import AudioGenerator,AudioDiscriminator
 import torch 
 import binascii
 import hashlib
+import time 
+from http.client import IncompleteRead
+import math 
 
 #Inizialize directories properly
 if "linux" in sys.platform:
     DOWNLOAD_PATH           = r"/media/steinshark/stor_sm/music/downloads"
-    CHUNK_PATH              = r"/media/steinshark/stor_sm/music/chunked\Scale5_60s"
-    DATASET_PATH            = r"/media/steinshark/stor_lg/music/dataset\Scale5_60s"
+    CHUNK_PATH              = r"/media/steinshark/stor_sm/music/chunked/"
+    DATASET_PATH            = r"/media/steinshark/stor_lg/music/dataset/"
 else:
     DOWNLOAD_PATH           = r"C:\data\music\downloads"
     CHUNK_PATH              = r"C:\data\music\chunked\Scale5_60s"
@@ -24,24 +27,51 @@ else:
 
 MINUTES                 = 0 
 
+
 #Returns a deterministic hash of a string
 def hash_str(input_str:str):
     return str(hashlib.md5(input_str.encode()).hexdigest())
 
+#Returns whether or not the file has been chunked
+def is_chunked(fname,output_path):
+    fhash           = hash_str(fname)[:10]
+
+    #Check that file has not been chunked 
+
+    fname_check     = os.path.join(output_path,f"{fhash}_0.wav")
+    return os.path.exists(fname_check)
+
+#Returns whether or not the file has been converted to numpy 
+def is_processed(filename,category):
+    audio_output_path       = os.path.join(DATASET_PATH,category)
+    output_full_path        = os.path.join(audio_output_path,f"{filename.replace('.wav','.npy')}")
+
+    return os.path.exists(output_full_path)
+
 #Downloads 1 URL 
 def download_link(url:str,output_path:str,index=None,total=None): 
 
+    #Check if already exists 
+    out_path_full   = os.path.join(output_path,f"{hash_str(url)[:10]}_final.mp4")
+    if os.path.exists(out_path_full):
+        print(f"video  done {url[:50]}")
+        return
     #Grab video 
-    yt_handle               = YouTube(url)
+    yt_handle       = YouTube(url)
 
     #Telemetry
     if not index is None:
-        tel_msg = f"downloading {url[:50]}\t[{index}/{total}]"
+        tel_msg         = f"downloading {url[:50]}\t[{index}/{total}]"
     else:
-        tel_msg = f"downloading {url[:50]}"
-    print(tel_msg,end='')
-    yt_handle.streams.filter(only_audio=True).first().download(output_path=output_path)
-    print(f"\t- success")
+        tel_msg         = f"downloading {url[:50]}"
+    print(tel_msg,end='',flush=True)
+    try:
+        filepath        = yt_handle.streams.filter(only_audio=True).first().download(output_path=output_path)
+
+        os.rename(filepath,out_path_full)
+        print(f"\t- success")
+    except IncompleteRead:
+        print(f"\t -failed")
 
 #Convert big-endian to little-endian
 def big_to_little(hex,con=True):
@@ -57,7 +87,7 @@ def little_to_big(hex,con=False):
     return int(big_repr,base=16) if con else big_repr
 
 #Convert a wav file to a 2-channel numpy array
-def read_wav(filename,sf,outputsize):
+def read_wav(filename,outname,sf,prescale_outputsize):
     file_hex        = open(filename,"rb").read().rstrip().hex()
     
     file_header     = file_hex[:8]
@@ -119,37 +149,44 @@ def read_wav(filename,sf,outputsize):
     #Ensure output is correct length
     count = 0 
     flag = False 
-    while len(ch1) < outputsize:
+    while len(ch1) < prescale_outputsize:
+        if len(ch1) == 0:
+            print("- empty file")
+            return 
         ch1.append(ch1[-1])
         ch2.append(ch2[-1])
         count += 1 
         if count > 10000 and not flag :
-            print(f"bad len on {filename} - {len(ch1)-10000}/{outputsize}")
+            print(f"\t - bad len on {filename} - {len(ch1)-10000}/{prescale_outputsize}")
             flag = True
 
-    if len(ch1) > outputsize:
-        ch1 = ch1[:outputsize]
-    if len(ch2) > outputsize:
-        ch2 = ch2[:outputsize]
+    if len(ch1) > prescale_outputsize:
+        ch1 = ch1[:prescale_outputsize]
+    if len(ch2) > prescale_outputsize:
+        ch2 = ch2[:prescale_outputsize]
 
     #Create and save the numpy array
     arr = numpy.array([ch1,ch2],dtype=float)
     if sf > 1:
         arr = downscale(arr,sf)
-    
-    numpy.save(filename,arr)
+    numpy.save(outname.replace(".wav",""),arr)
 
 #Chunks a file into 'chunk_length' millisecond-sized chunks
 def chunk_file(fname:str,chunk_length:int,output_path:str): 
 
-    #Convert fname to hash 
-    fhash           = hash_str(fname)[:10]
 
     #Check that file has not been chunked 
-    fname_check     = f"{fhash}_0.wav"
+    fout_name       = os.path.basename(fname).replace("_final","").replace(".mp4","")
+    fname_check     = os.path.join(output_path,f"{fout_name}_0.wav")
+    print(f"Converting {fout_name}.wav",end='',flush=True)
     if os.path.exists(fname_check):
-        print("\tAudio has already been chunked!") 
+        print("\t- Audio has already been chunked!") 
         return 0
+    fname_check     = os.path.join(DATASET_PATH,output_path.split("/")[-1], f"{fout_name}_0.npy")
+    if os.path.exists(fname_check):
+        print("\t- Audio has already been chunked!") 
+        return 0
+
 
     #Chunk audio
     full_audio  = AudioSegment.from_file(fname,"mp4")
@@ -157,11 +194,10 @@ def chunk_file(fname:str,chunk_length:int,output_path:str):
 
     #Save files
     for i,chunk in enumerate(chunks):
-        filename    = f"{fhash}_{i}.wav"
-        full_path   = os.path.join(output_path,filename)
+        full_path   = os.path.join(output_path,f"{fout_name}_{i}.wav")
         chunk.export(full_path,format="wav")
     
-    print(f"\tsaved {i} chunks")
+    print(f"\t- saved {i} chunks")
     return i*1000*chunk_length
 
 #Downloads a list of files 
@@ -182,15 +218,18 @@ def download_all(filenames):
         else:
             download_link(url,download_out_path)
 
+
 #Chunks the audio from a given category 
-def chunk_all(chunk_length:int,category:str):
+def chunk_all(chunk_length:int,category:str,outpath:str,only=""):
     
     global MINUTES
 
     audio_base_path = os.path.join(DOWNLOAD_PATH,category)
-    audio_out_path  = os.path.join(CHUNK_PATH,category)
+    audio_out_path  = os.path.join(CHUNK_PATH,outpath)
 
     #Ensure the output path exists 
+    if not os.path.exists(CHUNK_PATH):
+        os.mkdir(CHUNK_PATH)
     if not os.path.exists(audio_out_path):
         os.mkdir(audio_out_path)
         print(f"created path for audio outputs: {audio_out_path}")
@@ -198,15 +237,33 @@ def chunk_all(chunk_length:int,category:str):
     #Chunk the files 
     for fname in os.listdir(audio_base_path):
 
+        #Dont chunk incomplete files
+        if not "_final" in fname:
+            continue
+        if not only =='':
+            if only == 'both':
+                pass 
+            elif only == 'even':
+                if not fname[0] in "01234678":
+                    continue 
+            elif only == 'odd':
+                if not fname[0] in "9abcdef":
+                    continue
+
+
+
         #Chunk the file 
         audio_source_path   = os.path.join(audio_base_path,fname) 
-        print(f"Chunking {audio_source_path}")
         MINUTES += chunk_file(audio_source_path,1000*chunk_length,audio_out_path)
     
     print(f"added {MINUTES} to dataset")
 
 #Convert all wav files to numpy
-def read_all(category:str,sf=1,start=-1,end=-1):
+def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker=0,numworkers=0):
+
+    #Get workers ready
+    split = math.ceil(16 / numworkers) 
+    worker_split = ["0123456789abcdef"[i*split:i*split+split] for i in range(numworkers)][worker]
 
     #Ensure dataset path exists 
     if not os.path.exists(DATASET_PATH):
@@ -226,15 +283,24 @@ def read_all(category:str,sf=1,start=-1,end=-1):
     
     #Create arrays
     for i,filename in enumerate(filenames):
-        output_full_path    = os.path.join(audio_output_path,f"{hash_str(filename)[:10]}.npy")
-
+        if not filename[0] in worker_split:
+            continue
+        output_full_path    = os.path.join(audio_output_path,f"{filename}.npy")
+        input_full_path     = os.path.join(audio_source_path,filename)
         #Check for existing 
-        print(f"Converting{output_full_path}\t{i}/{total}",end='')
+        print(f"Converting {input_full_path}\t{i}/{total}",end='')
         if os.path.exists(output_full_path):
-            print(f"-already existed!")
+            print(f" -already existed!")
             continue 
-        read_wav(os.path.join(CHUNK_PATH,filename),sf=sf)
-        print(f"- success")
+        try:
+            read_wav(input_full_path,output_full_path,sf=sf,prescale_outputsize=prescale_outputsize)
+        except ValueError:
+            print(f" got bad value reading")
+            pass
+        #
+        # Remove file after it has been processed
+        os.remove(input_full_path)
+        print(f" - success")
     return 
 
 #Convert to a 2s comlement 
@@ -303,8 +369,39 @@ def upscale(arr_in,sf):
 
 
 if __name__ == "__main__":
+    mode = sys.argv[1]
 
     ####################################################################################    
     #                                      DOWNLOAD                                    # 
     ####################################################################################    
-    links = open
+    if mode == "-d":
+        links   = open("links.txt","r").read().split()
+        links   = list({l : 1 for l in links}.keys())
+        print("Downloading ",len(links)-1, " links ")
+        download_all(links)
+    ####################################################################################    
+    #                                       CHUNKS                                     # 
+    ####################################################################################    
+    elif mode == "-c":
+        if not len(sys.argv) > 2:
+            input("even,odd, or both?")
+        while True:
+            chunk_all(60,"LOFI","LOFI_sf5_t60",only=sys.argv[2])
+            time.sleep(30)
+    
+    ####################################################################################    
+    #                                       CHUNKS                                     # 
+    ####################################################################################
+    elif mode == "-r":
+        if not len(sys.argv) > 3:
+            print("need worker and numworkers")
+        while True:
+            read_all("LOFI_sf5_t60",sf=5,prescale_outputsize=5292000/2,worker=int(sys.argv[2]),numworkers=int(sys.argv[3]))
+            time.sleep(30)
+    
+    elif mode == "-t":
+        input_vect  =numpy.load("/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60/7d657ea173_116.npy",allow_pickle=True)
+        outsout     = reconstruct(upscale(input_vect,5),"Test.wav")
+    else:
+        print("chose from -d (download), -c (chunk), or -r (read)")
+

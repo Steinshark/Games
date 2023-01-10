@@ -452,7 +452,7 @@ class Trainer:
         t_d.append(0)
         t_g.append(0)
 
-
+    #Get a sample from Generator
     def sample(self,out_file_path,sf=1):
         inputs = torch.randn(size=(1,self.ncz,1),dtype=torch.float,device=self.device)
         outputs = self.Generator.forward(inputs)
@@ -462,6 +462,7 @@ class Trainer:
         reconstruct(outputs,out_file_path)
         print(f"saved audio to {out_file_path}")
 
+    #Train easier
     def c_exec(self,load,epochs,bs,D,G,lr,beta,filenames,ncz,outsize,sample_out,sf,verbose=False):
         self.outsize        =outsize
         self.ncz            = ncz
@@ -483,7 +484,8 @@ class Trainer:
                 self.sample(f"{sample_out}_{e}.wav",sf=sf)
 
 if __name__ == "__main__" and True:
-    load    = 1024 
+
+    load    = 18 
     ep      = 32
     dev     = torch.device('cuda')
 
@@ -492,21 +494,33 @@ if __name__ == "__main__" and True:
 
     #ins     = torch.randn(size=(1,2,529200),device=dev)
     #input(f"outs {D(ins).shape}")
-    root    = "C:/data/music/dataset/Scale5_60s"
+    if "linux" in sys.platform:
+        root    = "/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60"
+    else:
+        root    = "C:/data/music/dataset/Scale5_60s"
+    
     files   = [os.path.join(root,f) for f in os.listdir(root)]
 
-
+    outsize = 529200
     for ncz in [128,1024]:
         for r_fc in [True,False]:
             for r_ch in [True,False]:
                 G   = build_gen(ncz,reverse_factors=r_fc,reverse_channels=r_ch)
-                for bs in [8]:
+                for bs in [9]:
                     for beta in [(.7,.7)]:
                         for lrs in [(.0001,.0001)]:
-                            t       = Trainer(dev,ncz,529200)
+                            t       = Trainer(dev,ncz,outsize)
                             build_gen()
+                            if torch.cuda.device_count() > 1:
+                                G = torch.nn.DataParallel(G,device_ids=[0,1,2])
+                                D = torch.nn.DataParallel(D,device_ids=[0,1,2])
+                                print("Models created as DataParalell\n\n")
+
+
                             series_name = f"outputs/{ncz}_beta{beta}_{lrs}_revCH{r_ch}_revFCT{r_fc}"
+                            if not os.path.exists("outputs"):
+                                os.mkdir("outputs")
                             if not os.path.isdir(series_name):
                                 os.mkdir(series_name)
                             
-                            t.c_exec(load,ep,bs,D,G,lrs,beta,files,ncz,529200,f"{series_name}/",5,verbose=True)
+                            t.c_exec(load,ep,bs,D,G,lrs,beta,files,ncz,outsize,f"{series_name}/",5,verbose=True)
