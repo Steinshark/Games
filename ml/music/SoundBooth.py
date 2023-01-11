@@ -454,7 +454,7 @@ class Trainer:
 
     #Get a sample from Generator
     def sample(self,out_file_path,sf=1):
-        inputs = torch.randn(size=(1,self.ncz,1),dtype=torch.float,device=self.device)
+        inputs = torch.randn(size=(1,1,self.ncz),dtype=torch.float,device=self.device)
         outputs = self.Generator.forward(inputs)
         outputs = outputs[0].cpu().detach().numpy()
         if sf > 1:
@@ -483,7 +483,7 @@ class Trainer:
 
 if __name__ == "__main__" and True:
 
-    load    = 1024 
+    load    = 256 
     ep      = 32
     dev     = torch.device('cuda')
 
@@ -499,18 +499,18 @@ if __name__ == "__main__" and True:
     files   = [os.path.join(root,f) for f in os.listdir(root)]
 
     outsize = 529200
-    for ncz in [2016]:
+    for ncz in [2016*3]:
         for leak in [.02]:
             for r_fc in [False]:
                 for r_ch in [False]:
                     for ver in [1]:
                     #G   = build_gen(ncz,reverse_factors=r_fc,reverse_channels=r_ch,ver=ver)
-                        for bs in [8]:
-                            for beta in [(.7,.7)]:
-                                for lrs in [(.0001,.0001)]:
+                        for bs in [4]:
+                            for beta in [(.5,.5)]:
+                                for lrs in [(.0001,.0005)]:
+                                    
                                     t       = Trainer(dev,ncz,outsize)
-                                    G = build_encdec(in_factors=[2,2,2,3,3,7],enc_factors=[2,3,7],dec_factors=[3,3,5,5,7,7],bs=8)
-                                
+                                    G = build_encdec(in_factors=[2,2,2,3,3,3,7],enc_factors=[2,3,7],dec_factors=[3,5,5,7,7],bs=8)                                
                                     if torch.cuda.device_count() > 1:
                                         G = torch.nn.DataParallel(G,device_ids=[0,1,2])
                                         D = torch.nn.DataParallel(D,device_ids=[0,1,2])

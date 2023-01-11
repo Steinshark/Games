@@ -23,7 +23,7 @@ def build_encdec(in_factors=[],enc_factors=[],dec_factors=[],bs=8,leak=.2):
 
     #Start with 2 encoder layers
     enc_kernels     = [9,9,17]
-    enc_channels    = [128,256,1024]
+    enc_channels    = [128,256,512]
     enc_strides     = enc_factors
     enc_padding     = [math.floor(k/2) for k in enc_kernels]
 
@@ -48,7 +48,7 @@ def build_encdec(in_factors=[],enc_factors=[],dec_factors=[],bs=8,leak=.2):
         # dec_strides     = dec_factors
         # dec_padding     = [0 for k in dec_kernels]
         #                 UPTO --------------]
-    dec_channels    = [1024,512,512,256,128,2,32,32]
+    dec_channels    = [1024,512,512,256,2]
     dec_kernels     = [9,9,17,17,17,17,17,17]
     dec_strides     = dec_factors
     dec_padding     = [math.floor(k/2) for k in dec_kernels]
@@ -80,12 +80,12 @@ def build_encdec(in_factors=[],enc_factors=[],dec_factors=[],bs=8,leak=.2):
     #G.append(           ConvTranspose1d(dec_channels[3],dec_channels[4],dec_kernels[4],stride=dec_strides[4],padding=dec_padding[4]))
     G.append(           Upsample(scale_factor=dec_strides[4]*2))
     G.append(           Conv1d(dec_channels[3],dec_channels[4],dec_kernels[4],stride=2,padding=dec_padding[4]))
-    G.append(           BatchNorm1d(dec_channels[4]))
-    G.append(           LeakyReLU(leak,True))
+    # G.append(           BatchNorm1d(dec_channels[4]))
+    # G.append(           LeakyReLU(leak,True))
 
-    #G.append(           ConvTranspose1d(dec_channels[4],dec_channels[5],dec_kernels[5],stride=dec_strides[5],padding=dec_padding[5]))
-    G.append(           Upsample(scale_factor=dec_strides[5]*2))
-    G.append(           Conv1d(dec_channels[4],dec_channels[5],dec_kernels[5],stride=2,padding=dec_padding[5]))
+    # #G.append(           ConvTranspose1d(dec_channels[4],dec_channels[5],dec_kernels[5],stride=dec_strides[5],padding=dec_padding[5]))
+    # G.append(           Upsample(scale_factor=dec_strides[5]*2))
+    # G.append(           Conv1d(dec_channels[4],dec_channels[5],dec_kernels[5],stride=2,padding=dec_padding[5]))
     # G.append(           BatchNorm1d(dec_channels[5]))
     # G.append(           LeakyReLU(leak,True))
 
@@ -102,9 +102,10 @@ def build_encdec(in_factors=[],enc_factors=[],dec_factors=[],bs=8,leak=.2):
 
 
 if __name__ == "__main__":
-    insize      = 1008*2
+    insize      = 1008*2*3
 
-    g = build_encdec(in_factors=[2,2,2,3,3,7],enc_factors=[2,3,7],dec_factors=[3,3,5,5,7,7],bs=8)
+    g = build_encdec(in_factors=[2,2,2,3,3,3,7],enc_factors=[2,3,7],dec_factors=[3,5,5,7,7],bs=8)
+
     print(g)
     print(model_size(g))
 
