@@ -18,12 +18,12 @@ import math
 #Inizialize directories properly
 if "linux" in sys.platform:
     DOWNLOAD_PATH           = r"/media/steinshark/stor_sm/music/downloads"
-    CHUNK_PATH              = r"/media/steinshark/stor_sm/music/chunked/"
-    DATASET_PATH            = r"/media/steinshark/stor_lg/music/dataset/"
+    CHUNK_PATH              = r"/media/steinshark/stor_sm/music/chunked"
+    DATASET_PATH            = r"/media/steinshark/stor_lg/music/dataset"
 else:
-    DOWNLOAD_PATH           = r"C:\data\music\downloads"
-    CHUNK_PATH              = r"C:\data\music\chunked\Scale5_60s"
-    DATASET_PATH            = r"C:\data\music\dataset\Scale5_60s"
+    DOWNLOAD_PATH           = r"C:/data/music/downloads"
+    CHUNK_PATH              = r"C:/data/music/chunked"
+    DATASET_PATH            = r"C:/data/music/dataset"
 
 MINUTES                 = 0 
 
@@ -387,6 +387,8 @@ if __name__ == "__main__":
             input("even,odd, or both?")
         while True:
             chunk_all(60,"LOFI","LOFI_sf5_t60",only=sys.argv[2])
+            print("\n"*100)
+            print("waiting for job")
             time.sleep(30)
     
     ####################################################################################    
@@ -397,10 +399,12 @@ if __name__ == "__main__":
             print("need worker and numworkers")
         while True:
             read_all("LOFI_sf5_t60",sf=5,prescale_outputsize=5292000/2,worker=int(sys.argv[2]),numworkers=int(sys.argv[3]))
+            print("\n"*100)
+            print("waiting for job")
             time.sleep(30)
     
     elif mode == "-t":
-        input_vect  =numpy.load("/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60/7d657ea173_116.npy",allow_pickle=True)
+        input_vect  =a = numpy.load(r"C:\data\music\dataset\LOFI_sf5_t60\4aea5761a3_37.npy",allow_pickle=True)
         outsout     = reconstruct(upscale(input_vect,5),"Test.wav")
     else:
         print("chose from -d (download), -c (chunk), or -r (read)")

@@ -10,8 +10,8 @@ import random
 import sys 
 import pprint 
 from utilities import weights_init, config_explorer, lookup, G_CONFIGS, D_CONFIGS, print_epoch_header,model_size
-from sandboxG import build_gen
-
+from sandboxG import build_gen,build_gen2, build_short_gen
+from generatordev import build_encdec
 class AudioDataSet(Dataset):
 
     def __init__(self,fnames,out_len):
@@ -252,7 +252,7 @@ class Trainer:
             
             #Generate samples
             t_0 = time.time()
-            random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
+            random_inputs           = torch.randn(size=(x_len,1,self.ncz),dtype=torch.float,device=self.device)
             generator_outputs       = self.Generator(random_inputs)
             t_g[-1] += time.time()-t_0
 
@@ -463,15 +463,13 @@ class Trainer:
         print(f"saved audio to {out_file_path}")
 
     #Train easier
-    def c_exec(self,load,epochs,bs,D,G,lr,beta,filenames,ncz,outsize,sample_out,sf,verbose=False):
+    def c_exec(self,load,epochs,bs,D,G,optim_d,optim_g,filenames,ncz,outsize,sample_out,sf,verbose=False):
         self.outsize        =outsize
         self.ncz            = ncz
         self.Discriminator  = D 
         self.Generator      = G
 
-        d_params            = self.Discriminator.parameters()
-        g_params            = self.Generator.parameters()
-        self.set_learners(torch.optim.Adam(d_params,lr=lr[0],betas=(beta[0],.999)),torch.optim.Adam(g_params,lr=lr[1],betas=(beta[1],.999)),torch.nn.BCELoss())
+        self.set_learners(optim_d,optim_g,torch.nn.BCELoss())
 
         for e in range(epochs):
             filenames   = random.sample(filenames,load)
@@ -480,47 +478,52 @@ class Trainer:
                 print_epoch_header(e,epochs)
                 self.train(verbose=verbose)
         
-            if (e+1) % 8 == 0:
-                self.sample(f"{sample_out}_{e}.wav",sf=sf)
+            if (e+1) % 4 == 0:
+                self.sample(f"{sample_out}_{e+1}.wav",sf=sf)
 
 if __name__ == "__main__" and True:
 
-    load    = 18 
+    load    = 1024 
     ep      = 32
     dev     = torch.device('cuda')
 
     
-    D       = AudioDiscriminator(channels=[2,256,128,128,128,1],kernels=[9,33,33,33,33],paddings=[4,4,4,4,4],strides=[7,5,5,4,4,3,3,3],final_layer=182).to(dev)
-
+    D       = AudioDiscriminator(channels=[2,300,250,200,32,1],kernels=[9,33,33,33,33],paddings=[4,4,4,4,4],strides=[7,5,5,4,4,3,3,3],final_layer=182).to(dev)
     #ins     = torch.randn(size=(1,2,529200),device=dev)
     #input(f"outs {D(ins).shape}")
     if "linux" in sys.platform:
         root    = "/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60"
     else:
-        root    = "C:/data/music/dataset/Scale5_60s"
+        root    = "C:/data/music/dataset/LOFI_sf5_t60"
     
     files   = [os.path.join(root,f) for f in os.listdir(root)]
 
     outsize = 529200
-    for ncz in [128,1024]:
-        for r_fc in [True,False]:
-            for r_ch in [True,False]:
-                G   = build_gen(ncz,reverse_factors=r_fc,reverse_channels=r_ch)
-                for bs in [9]:
-                    for beta in [(.7,.7)]:
-                        for lrs in [(.0001,.0001)]:
-                            t       = Trainer(dev,ncz,outsize)
-                            build_gen()
-                            if torch.cuda.device_count() > 1:
-                                G = torch.nn.DataParallel(G,device_ids=[0,1,2])
-                                D = torch.nn.DataParallel(D,device_ids=[0,1,2])
-                                print("Models created as DataParalell\n\n")
+    for ncz in [2016]:
+        for leak in [.02]:
+            for r_fc in [False]:
+                for r_ch in [False]:
+                    for ver in [1]:
+                    #G   = build_gen(ncz,reverse_factors=r_fc,reverse_channels=r_ch,ver=ver)
+                        for bs in [8]:
+                            for beta in [(.7,.7)]:
+                                for lrs in [(.0001,.0001)]:
+                                    t       = Trainer(dev,ncz,outsize)
+                                    G = build_encdec(in_factors=[2,2,2,3,3,7],enc_factors=[2,3,7],dec_factors=[3,3,5,5,7,7],bs=8)
+                                
+                                    if torch.cuda.device_count() > 1:
+                                        G = torch.nn.DataParallel(G,device_ids=[0,1,2])
+                                        D = torch.nn.DataParallel(D,device_ids=[0,1,2])
+                                        print("Models created as DataParalell\n\n")
 
+                                    #Create optims 
+                                    optim_g = torch.optim.Adam(G.parameters(),lrs[1],betas=(beta[1],.999))
+                                    optim_d = torch.optim.Adam(D.parameters(),lrs[0],betas=(beta[0],.999))
 
-                            series_name = f"outputs/{ncz}_beta{beta}_{lrs}_revCH{r_ch}_revFCT{r_fc}"
-                            if not os.path.exists("outputs"):
-                                os.mkdir("outputs")
-                            if not os.path.isdir(series_name):
-                                os.mkdir(series_name)
-                            
-                            t.c_exec(load,ep,bs,D,G,lrs,beta,files,ncz,outsize,f"{series_name}/",5,verbose=True)
+                                    series_name = f"outputs/{ncz}_beta{r_ch}_lrs{lrs}_ver{ver}"
+                                    if not os.path.exists("outputs"):
+                                        os.mkdir("outputs")
+                                    if not os.path.isdir(series_name):
+                                        os.mkdir(series_name)
+                                    
+                                    t.c_exec(load,ep,bs,D,G,optim_d,optim_g,files,ncz,outsize,f"{series_name}/",5,verbose=True)

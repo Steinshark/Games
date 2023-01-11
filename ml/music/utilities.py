@@ -66,6 +66,7 @@ G_CONFIGS ={
                 }
 }
 
+OPTIMIZER = {}
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -107,8 +108,5 @@ def model_size(model:torch.nn.Module):
 
 if __name__ == "__main__":
     import numpy 
-    a = numpy.load("C:\data\music\dataset\Scale5_60s\-802589122.npy") 
-    from matplotlib import pyplot as plt 
-
-    plt.plot(a[0][:1000])
-    plt.show()
+    a = numpy.load(r"C:\data\music\dataset\LOFI_sf5_t60\0f03823a5c_0.npy") 
+    
