@@ -500,12 +500,12 @@ if __name__ == "__main__" and True:
 
     outsize = 529200
     for ncz in [2016*3]:
-        for leak in [.02]:
+        for leak in [.2]:
             for r_fc in [False]:
                 for r_ch in [False]:
                     for ver in [1]:
                     #G   = build_gen(ncz,reverse_factors=r_fc,reverse_channels=r_ch,ver=ver)
-                        for bs in [4]:
+                        for bs in [8]:
                             for beta in [(.5,.5)]:
                                 for lrs in [(.0001,.0005)]:
                                     

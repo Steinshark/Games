@@ -48,8 +48,8 @@ def build_encdec(in_factors=[],enc_factors=[],dec_factors=[],bs=8,leak=.2):
         # dec_strides     = dec_factors
         # dec_padding     = [0 for k in dec_kernels]
         #                 UPTO --------------]
-    dec_channels    = [1024,512,512,256,2]
-    dec_kernels     = [9,9,17,17,17,17,17,17]
+    dec_channels    = [512,256,128,64,2]
+    dec_kernels     = [65,65,65,65,65,65,65,65]
     dec_strides     = dec_factors
     dec_padding     = [math.floor(k/2) for k in dec_kernels]
 
