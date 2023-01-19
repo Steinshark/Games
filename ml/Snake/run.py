@@ -29,20 +29,20 @@ ADA     = torch.optim.Adamax
 
 #SETTINGS 
 settings = {
-    "x"     : 15,
-    "y"     : 15,
+    "x"     : 10,
+    "y"     : 10,
     "lr"    : 25e-4,
-    "it"    : 1024*32,
-    "te"    : 16,
+    "it"    : 1024*64,
+    "te"    : 64,
     "ps"    : 1024*8,
     "ss"    : 1024,
-    "bs"    : 32,
+    "bs"    : 16,
     "ep"    : 1,
     "ms"    : 2,
-    "mx"    : 15*3,
+    "mx"    : 200,
     "lo"    : MSE,
     "op"    : ADAMW,
-    "tr"    : 10,
+    "tr"    : 16,
     "ga"    : .75,
     "rw"    : {"die":-.65,"eat":1.45,"step":0},
     "arch"  : ARCHITECTURES

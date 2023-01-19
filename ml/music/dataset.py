@@ -14,6 +14,7 @@ import hashlib
 import time 
 from http.client import IncompleteRead
 import math 
+import random 
 
 #Inizialize directories properly
 if "linux" in sys.platform:
@@ -235,7 +236,9 @@ def chunk_all(chunk_length:int,category:str,outpath:str,only=""):
         print(f"created path for audio outputs: {audio_out_path}")
 
     #Chunk the files 
-    for fname in os.listdir(audio_base_path):
+    flist = os.listdir((audio_base_path))
+    random.shuffle(flist)
+    for fname in flist:
 
         #Dont chunk incomplete files
         if not "_final" in fname:
@@ -263,8 +266,8 @@ def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker
 
     #Get workers ready
     split = math.ceil(16 / numworkers) 
-    worker_split = ["0123456789abcdef"[i*split:i*split+split] for i in range(numworkers)][worker]
-
+    worker_split = ["0123456789abcdeffff"[i*split:i*split+split] for i in range(numworkers)][worker]
+    print(f"my split: {worker_split}")
     #Ensure dataset path exists 
     if not os.path.exists(DATASET_PATH):
         os.mkdir(DATASET_PATH)

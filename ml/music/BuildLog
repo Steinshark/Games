@@ -1,0 +1,6 @@
+1.  It seems that strides ought to go from sm to lg. I can't tell why this would be, it appears that it is 
+    is simply emprically the case.
+
+2. Conv layers are not needed on the expansion phase when using ConvTranspose1d. Only at the end.
+   The kernel size can be of order 10^2
+

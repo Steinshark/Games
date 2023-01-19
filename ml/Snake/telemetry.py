@@ -2,8 +2,9 @@ import random
 import os 
 from matplotlib import pyplot as plt
 import torch 
-from torch.nn import ReLU,MaxPool2d,Conv2d,Linear,Softmax,Flatten, BatchNorm2d
+from torch.nn import ReLU,MaxPool2d,Conv2d,Linear,Softmax,Flatten, BatchNorm2d, LeakyReLU
 from tkinter import BooleanVar
+from networks import ConvolutionalNetwork
 #Plot a list of scores and lives from a run of snake trainer
 def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],graph_name="NoName",f_name="iterations"):
 
@@ -51,7 +52,8 @@ ARCHITECTURES = {
                     "med"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,5,1,0),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4)                         ]},
                     "medS"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,5,1,0),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4), Softmax(dim=1)                         ]},
                     "lg"        : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),ReLU(),Conv2d(64,64,5,1,0),ReLU(),Flatten(),Linear(1,512),ReLU(),Linear(512,64),ReLU() ,Linear(64,4)                       ]},
-                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(2,32,3,1,2),BatchNorm2d(32) ,ReLU(),MaxPool2d(2, 2),Conv2d(32,64,3,1,1),BatchNorm2d(64),ReLU(),MaxPool2d(2,2),Conv2d(64, 128, 3, 1, 1),BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4) ]}
+                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(2,32,3,1,2),BatchNorm2d(32) ,ReLU(),MaxPool2d(2, 2),Conv2d(32,64,3,1,1),BatchNorm2d(64),ReLU(),MaxPool2d(2,2),Conv2d(64, 128, 3, 1, 1),BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4) ]},
+                    "new"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(16,4)]}
 
 }#,Softmax(dim=0)]}}
 
@@ -84,3 +86,12 @@ DEFAULTS    = { "gameX"     : 20,
                 "gpu"       : False,
                 "rew"       : "{'die':-.7,'eat':1.85,'step':0}"
                 }
+
+
+
+
+in_v    = torch.randn(size=(1,2,20,20),dtype=torch.float)
+
+model = ConvolutionalNetwork(torch.nn.MSELoss,torch.optim.Adam,lr=.0001,architecture=ARCHITECTURES['new']['arch'],input_shape=(1,2,20,20))
+
+print(f"Model Out: {model.forward(in_v).shape}")

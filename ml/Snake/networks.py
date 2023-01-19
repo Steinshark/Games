@@ -84,7 +84,7 @@ class FullyConnectedNetwork(nn.Module):
 
 class ConvolutionalNetwork(nn.Module):
 	
-	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[[3,2,5,3,2]],input_shape=(1,3,30,20),device=torch.device("cpu"),verbose=False):
+	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[],input_shape=(1,3,30,20),device=torch.device("cpu"),verbose=False):
 		super(ConvolutionalNetwork,self).__init__()
 		self.input_shape 	= input_shape
 		through 			= torch.ones(size=input_shape,device=device)
@@ -105,7 +105,11 @@ class ConvolutionalNetwork(nn.Module):
 				through = module(through)
 				flat_size = through.size()[1]
 				old_outs = architecture[i+1].out_features
-				old_next_outs = architecture[i+3].out_features
+				try:
+					old_next_outs = architecture[i+3].out_features
+				except IndexError:
+					architecture[i+1] = torch.nn.Linear(flat_size,4)
+					break
 				while flat_size <= old_outs*2:
 					old_outs /= 2
 					old_outs = int(old_outs) 
@@ -166,6 +170,16 @@ class ConvNet(nn.Module):
 		
 		self.loss = loss_fn()
 
+
+
+
+def init_weights(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
 
 if __name__ == "__main__":
 	function = lambda x : math.sin(x*.01) + 4
