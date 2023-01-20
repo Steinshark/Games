@@ -43,7 +43,7 @@ parser.add_argument('--combine', metavar='CHARS', type=int, default=50000, help=
 parser.add_argument('--encoding', type=str, default='utf-8', help='Set the encoding for reading and writing files.')
 
 parser.add_argument('--batch_size', metavar='SIZE', type=int, default=1, help='Batch size')
-parser.add_argument('--learning_rate', metavar='LR', type=float, default=0.00002, help='Learning rate for Adam')
+parser.add_argument('--learning_rate', metavar='LR', type=float, default=0.0002, help='Learning rate for Adam')
 parser.add_argument('--accumulate_gradients', metavar='N', type=int, default=1, help='Accumulate gradients across N minibatches.')
 parser.add_argument('--memory_saving_gradients', default=False, action='store_true', help='Use gradient checkpointing to reduce vram usage.')
 parser.add_argument('--twremat', default=False, action='store_true', help='Use tensor rematerialization (better than memory_saving_gradients and works with tensorflow 2.0).')

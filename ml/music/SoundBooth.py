@@ -757,9 +757,9 @@ if __name__ == "__main__" and True:
         root    = "C:/data/music/dataset/LOFI_sf5_t60_c1"
     
     files   = [os.path.join(root,f) for f in os.listdir(root)]
-    bs      = 2
+    bs      = 4
     outsize = (1,529200)
-    ncz     = 1024
+    ncz     = 1024*8
     leak    = .2
     g_iters = 1
     
@@ -771,8 +771,8 @@ if __name__ == "__main__" and True:
 
     })
 
-    for beta in [(.5,.5)]:
-        for lrs in [(.00004,.0002)]:
+    for beta in [(.9,.9)]:
+        for lrs in [(.00008,.0004)]:
             for g_name in generators: 
                     #for kv in [1,2,3,4]:
                     G       = generators[g_name]
