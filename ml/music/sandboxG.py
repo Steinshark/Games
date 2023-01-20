@@ -55,17 +55,17 @@ def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,device=torch.device('cuda
 
 
 def build_short_gen(ncz=512,leak=.2,kernel_ver=0,fact_ver=1,device=torch.device('cuda')):
-    factors     = [2,5,8,9,15,49]
+    factors     = [15,2,5,8,9,49]
 
-    ch          = [512,256,256,128,64]
+    ch          = [2048,2048,2048,512,256]
 
     ker         = [3,7,15,65,101,501]
 
 
-    final_ch1    = 64
+    final_ch1    = 128
     final_ch2    = 64 
-    final_kern1  = 7
-    final_kern2  = 11
+    final_kern1  = 9
+    #final_kern2  = 11
 
     pad         = [int(k/2) for k in ker] 
     Gen     = Sequential(   ConvTranspose1d(ncz,ch[0],factors[0],factors[0]),
@@ -82,11 +82,11 @@ def build_short_gen(ncz=512,leak=.2,kernel_ver=0,fact_ver=1,device=torch.device(
             Gen.append(         BatchNorm1d(final_ch1,momentum=.5))
             Gen.append(         LeakyReLU(leak,True))
 
-            Gen.append(         Conv1d(final_ch1,final_ch2,final_kern1,1,int(final_kern1/2)))
-            Gen.append(         BatchNorm1d(final_ch2,momentum=.9))
-            Gen.append(         LeakyReLU(leak,True))
+            #Gen.append(         Conv1d(final_ch1,final_ch2,final_kern1,1,int(final_kern1/2)))
+            #Gen.append(         BatchNorm1d(final_ch2,momentum=.5))
+            #Gen.append(         LeakyReLU(leak,True))
 
-            Gen.append(         Conv1d(final_ch2,2,final_kern2,1,int(final_kern2/2)))
+            Gen.append(         Conv1d(final_ch1,2,final_kern1,1,int(final_kern1/2)))
             Gen.append(         Tanh())
 
         else:
@@ -183,9 +183,9 @@ def build_encdec(ncz,encoder_factors=[2,3],encoder_kernels=[5,7],dec_factors=[7,
 
 
 if __name__ == "__main__":
-    g = build_gen(ncz=512)
-    print(g)
-    print(model_size(g))
+    kernels     = [15,17,21,23,25,7,5]
+    paddings    = [int(k/2) for k in kernels]
+    D2      = AudioDiscriminator(channels=[2,32,64,128,256,512,1024,1],kernels=kernels,strides=[12,9,7,7,5,5,4],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
+    inp = torch.randn((1,2,529200),device=torch.device('cuda'))
 
-    rands = torch.randn(size=(1,512,1),device=torch.device("cuda"))
-    print(g(rands).shape)
+    print(f"shape: {D2.forward(inp).item()}")

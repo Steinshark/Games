@@ -29,7 +29,7 @@ class AudioDataSet(Dataset):
         for file in fnames:
             arr = numpy.load(file,allow_pickle=True)
             arr = torch.from_numpy(arr).type(torch.float)
-            if not arr.size()[-1] == out_len:
+            if not arr.size()[-1] == out_len[-1]:
                 input(f"{file} is bad w size {arr.size()}")
             self.data.append([arr,1])
 
@@ -331,7 +331,7 @@ class Trainer:
                 t_d[-1] += time.time()-t_0
                 
                 #Classify random vector 
-                random_vect             = torch.randn(size=(1,2,self.outsize),dtype=torch.float,device=self.device)
+                random_vect             = torch.randn(size=(1,self.outsize[0],self.outsize[1]),dtype=torch.float,device=self.device)
 
                 if final_batch and (gen_i == gen_train_iters-1):
                     with torch.no_grad():
@@ -375,6 +375,128 @@ class Trainer:
         if (d_error_real < .00001) and ((d_error_fake) < .00001):
             return True
 
+    #Train NOT the DCGAN way 
+    def train_online(self,verbose,g_train_iters=1,d_train_iters=1,g_train_ratio=4):
+        
+        torch.backends.cudnn.benchmark = True
+
+
+        #Telemetry
+        if verbose:
+            width       = 100
+            num_equals  = 50
+            indent      = 4 
+            n_batches   = len(self.dataset) / self.batch_size 
+            t_init      = time.time()
+            printed     = 0
+            t_d         = [0] 
+            t_g         = [0] 
+            t_op_d      = [0]
+            t_op_g      = [0]    
+
+            print(" "*indent,end='')
+            prefix = f"{int(n_batches)} batches  Progress" 
+            print(f"{prefix}",end='')
+            print(" "*(width-indent-len(prefix)-num_equals-2),end='')
+            print("[",end='')
+        
+        d_error_fake = 0 
+        d_error_real = 0 
+        g_error = 0
+
+        #Run all batches
+        for i, data in enumerate(self.dataloader,0):
+
+            #Keep track of which batch we are on 
+            final_batch     = i == len(self.dataloader)-1
+
+            if verbose:
+                percent = i / n_batches
+                while (printed / num_equals) < percent:
+                    print("-",end='',flush=True)
+                    printed+=1
+
+
+
+            #####################################################################
+            #                           TRAIN REAL                              #
+            #####################################################################
+            
+            #Put discriminator in training mode
+            self.Discriminator.train()
+
+            #Zero D
+            for p in self.Discriminator.parameters():
+                p.grad = None 
+
+            #Train on real set 
+            real_lofi       = data[0].to(self.device)
+            real_labels     = torch.ones(size=(bs,1,1),device=self.device)
+
+            real_class      = self.Discriminator.forward(real_lofi)
+
+            #Calc loss 
+            d_err_r           = self.error_fn(real_class,real_labels)
+            d_err_r.backward()
+
+            #Put generator in non-training mode 
+            self.Generator.eval()
+
+            #Get fake batch
+            if self.mode == "single-channel":
+                    random_inputs           = torch.randn(size=(self.batch_size,1,self.ncz),dtype=torch.float,device=self.device)  
+            elif self.mode == "multi-channel":
+                random_inputs           = torch.randn(size=(self.batch_size,self.ncz,1),dtype=torch.float,device=self.device)
+            with torch.no_grad():
+                fake_lofi       = self.Generator(random_inputs)
+
+            fake_class      = self.Discriminator(fake_lofi)
+            fake_labels     = torch.zeros(size=(bs,1,1),device=self.device)
+            
+            #Add to loss 
+            d_err_f           = self.error_fn(fake_class,fake_labels)
+
+            d_err_f.backward()
+            self.D_optim.step()
+            
+
+            #Switch to train generator
+            for p in self.Generator:
+                p.grad  = None 
+
+            self.Discriminator.eval()
+            self.Generator.train()  
+
+            #Get fake batch
+            if self.mode == "single-channel":
+                    random_inputs           = torch.randn(size=(self.batch_size*g_train_ratio,1,self.ncz),dtype=torch.float,device=self.device)  
+            elif self.mode == "multi-channel":
+                random_inputs           = torch.randn(size=(self.batch_size*g_train_ratio,self.ncz,1),dtype=torch.float,device=self.device)
+            fake_lofi_t       = self.Generator(random_inputs)
+
+            fake_class_g    = self.Discriminator(fake_lofi_t)
+            real_labels     = torch.ones(size=(bs*g_train_ratio,1,1),device=self.device)
+            g_err           = self.error_fn(fake_class_g,real_labels)
+
+            g_err.backward()
+            self.G_optim.step()
+
+        print(f"]")
+        print("\n")
+        out_1 = f"G forw={sum(t_d):.3f}s    G forw={sum(t_g):.3f}s    D back={sum(t_op_d):.3f}s    G back={sum(t_op_g):.3f}s    tot = {(time.time()-t_init):.2f}s"
+        print(" "*(width-len(out_1)),end='')
+        print(out_1,flush=True)
+        out_2 = f"data_ld={(0):.3f}s    D(real)={real_class.cpu().mean():.3f}    D(fake)={fake_class.cpu().mean():.4f}    D(genr)={fake_class_g.cpu().mean():.3f}"
+
+        print(" "*(width-len(out_2)),end='')
+        print(out_2)
+        
+        out_3 = f"d_error={(d_err):.3f}    g_error={(g_error):.3f}"
+        print(" "*(width-len(out_3)),end='')
+        print(out_3)
+        print("\n\n")
+        if (d_error_real < .00001) and ((d_error_fake) < .00001) and False:
+            return True
 
     #Train models with NO accumulation
     def train_with_autocast(self,verbose=True,gen_train_iters=1,proto_optimizers=True):
@@ -602,7 +724,7 @@ class Trainer:
             self.build_dataset(filenames,bs,True,4)
             if verbose:
                 print_epoch_header(e,epochs)
-                failed = self.train(verbose=verbose,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
+                failed = self.train(verbose=verbose)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
                 if (e+1) % 2 == 0:
                     self.sample(f"{sample_out}_{e+1}.wav",sf=sf)
                 if failed:
@@ -616,13 +738,12 @@ class Trainer:
 
 if __name__ == "__main__" and True:
 
-    load    = 2048
+    load    = 8*200
     ep      = 256
     dev     = torch.device('cuda')
 
-    kernels     = [15,17,21,23,25,17,11,7,5]
+    kernels     = [15,11,9,9,5,5,5]
     paddings    = [int(k/2) for k in kernels]
-    strides     = [7,7,5,5,4,4,3,3,3]
 
 
 
@@ -632,9 +753,9 @@ if __name__ == "__main__" and True:
         root    = "C:/data/music/dataset/LOFI_sf5_t60"
     
     files   = [os.path.join(root,f) for f in os.listdir(root)]
-    bs      = 8
-    outsize = 529200
-    ncz     = 1024
+    bs      = 4
+    outsize = (2,529200)
+    ncz     = 2048
     leak    = .2
     g_iters = 1
     
@@ -646,8 +767,8 @@ if __name__ == "__main__" and True:
 
     })
 
-    for beta in [(.6,.6)]:
-        for lrs in [(.00005,.0002)]:
+    for beta in [(.5,.5)]:
+        for lrs in [(.0002,.001)]:
             for g_name in generators: 
                     #for kv in [1,2,3,4]:
                     G       = generators[g_name]
@@ -659,7 +780,7 @@ if __name__ == "__main__" and True:
                     print(f"{g_name} out : {G.forward(inpv2).shape}")
                    
                    #OLD 
-                    D2      = AudioDiscriminator(channels=[2,32,32,64,128,256,512,1024,2048,1],kernels=kernels,strides=[7,7,5,5,4,4,3,3,3],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
+                    D2      = AudioDiscriminator(channels=[outsize[0],16,32,64,64,256,256,1],kernels=kernels,strides=[12,9,7,7,5,5,4],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
                     #D2      = AudioDiscriminator(channels=[2,20,32,64,128,256,512,1024,2048,1],kernels=kernels,strides=[7,7,5,5,4,4,3,3,3],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
 
 

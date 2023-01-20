@@ -88,7 +88,7 @@ def little_to_big(hex,con=False):
     return int(big_repr,base=16) if con else big_repr
 
 #Convert a wav file to a 2-channel numpy array
-def read_wav(filename,outname,sf,prescale_outputsize):
+def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel"):
     file_hex        = open(filename,"rb").read().rstrip().hex()
     
     file_header     = file_hex[:8]
@@ -167,7 +167,15 @@ def read_wav(filename,outname,sf,prescale_outputsize):
         ch2 = ch2[:prescale_outputsize]
 
     #Create and save the numpy array
-    arr = numpy.array([ch1,ch2],dtype=float)
+    if mode == 'single-channel':
+        arr_avg = [(ch1[i]+ch2[i])/2 for i in range(len(ch1))]
+        arr = numpy.array([arr_avg,arr_avg])
+    elif mode == 'dual-chanel':
+        arr = numpy.array([ch1,ch2],dtype=float)
+    else:
+        print(f"bad mode specified: {mode}")
+        exit()
+
     if sf > 1:
         arr = downscale(arr,sf)
     numpy.save(outname.replace(".wav",""),arr)
@@ -262,7 +270,7 @@ def chunk_all(chunk_length:int,category:str,outpath:str,only=""):
     print(f"added {MINUTES} to dataset")
 
 #Convert all wav files to numpy
-def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker=0,numworkers=0):
+def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker=0,numworkers=0,mode="dual-chanel"):
 
     #Get workers ready
     split = math.ceil(16 / numworkers) 
@@ -296,7 +304,7 @@ def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker
             print(f" -already existed!")
             continue 
         try:
-            read_wav(input_full_path,output_full_path,sf=sf,prescale_outputsize=prescale_outputsize)
+            read_wav(input_full_path,output_full_path,sf=sf,prescale_outputsize=prescale_outputsize,mode=mode)
         except ValueError:
             print(f" got bad value reading")
             pass
@@ -389,7 +397,7 @@ if __name__ == "__main__":
         if not len(sys.argv) > 2:
             input("even,odd, or both?")
         while True:
-            chunk_all(60,"LOFI","LOFI_sf5_t60",only=sys.argv[2])
+            chunk_all(60,"LOFI","LOFI_sf5_t60_c1",only=sys.argv[2])
             print("\n"*100)
             print("waiting for job")
             time.sleep(30)
@@ -401,13 +409,16 @@ if __name__ == "__main__":
         if not len(sys.argv) > 3:
             print("need worker and numworkers")
         while True:
-            read_all("LOFI_sf5_t60",sf=5,prescale_outputsize=5292000/2,worker=int(sys.argv[2]),numworkers=int(sys.argv[3]))
+            read_all("LOFI_sf5_t60_c1",sf=5,prescale_outputsize=5292000/2,worker=int(sys.argv[2]),numworkers=int(sys.argv[3]),mode="single-channel")
             print("\n"*100)
             print("waiting for job")
             time.sleep(30)
     
     elif mode == "-t":
-        input_vect  =a = numpy.load(r"C:\data\music\dataset\LOFI_sf5_t60\4aea5761a3_37.npy",allow_pickle=True)
+        input_vect  = numpy.load(r"C:\data\music\dataset\LOFI_sf5_t60_c1\3dc6d2931d_102.npy",allow_pickle=True)
+
+        #input_vect[0] = (input_vect[0]+input_vect[1])/2
+        #input_vect[1] = input_vect[0]
         outsout     = reconstruct(upscale(input_vect,5),"Test.wav")
     else:
         print("chose from -d (download), -c (chunk), or -r (read)")
