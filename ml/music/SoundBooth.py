@@ -12,9 +12,8 @@ import sys
 import pprint 
 from utilities import weights_initG,weights_initD, config_explorer, lookup, G_CONFIGS, D_CONFIGS, print_epoch_header,model_size
 import sandboxG2
-import sandboxG2
-from generatordev import build_encdec
 import sandboxG
+from generatordev import build_encdec
 from torch.distributed import init_process_group,destroy_process_group
 from torch.utils.data.distributed import DistributedSampler 
 from torch.nn.parallel import DistributedDataParallel as DDP  
@@ -28,9 +27,11 @@ class AudioDataSet(Dataset):
         self.data = []
         for file in fnames:
             arr = numpy.load(file,allow_pickle=True)
+            if out_len[0] == 1:
+                arr = numpy.array([arr[0]])
             arr = torch.from_numpy(arr).type(torch.float)
-            if not arr.size()[-1] == out_len[-1]:
-                input(f"{file} is bad w size {arr.size()}")
+            if not (arr.size()[-1] > out_len[-1]-2 and arr.size()[-1] < out_len[-1]+2):
+                print(f"{file} is bad w size {arr.size()}")
             self.data.append([arr,1])
 
         print(f"loaded {self.__len__()} samples")
@@ -705,6 +706,9 @@ class Trainer:
             inputs = torch.randn(size=(1,1,self.ncz),dtype=torch.float,device=self.device)
         outputs = self.Generator.forward(inputs)
         outputs = outputs[0].cpu().detach().numpy()
+        
+        if self.outsize[0] == 1:
+            outputs = numpy.array([outputs[0],outputs[0]]) 
         if sf > 1:
             outputs = upscale(outputs,sf)
         reconstruct(outputs,out_file_path)
@@ -750,12 +754,12 @@ if __name__ == "__main__" and True:
     if "linux" in sys.platform:
         root    = "/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60"
     else:
-        root    = "C:/data/music/dataset/LOFI_sf5_t60"
+        root    = "C:/data/music/dataset/LOFI_sf5_t60_c1"
     
     files   = [os.path.join(root,f) for f in os.listdir(root)]
-    bs      = 4
-    outsize = (2,529200)
-    ncz     = 2048
+    bs      = 2
+    outsize = (1,529200)
+    ncz     = 1024
     leak    = .2
     g_iters = 1
     
@@ -763,12 +767,12 @@ if __name__ == "__main__" and True:
     # for ch_i,ch in enumerate([[200,150,100,50,25,2]]):
     #     for k_i,ker in enumerate([[1001,501,201,33,33,17]]):
     generators  = OrderedDict({
-                    "shortgen0":sandboxG.build_short_gen(ncz,kernel_ver=0,leak=.2),
+                    "shortgen0":sandboxG.build_short_gen(ncz,kernel_ver=0,leak=.2,out_ch=1),
 
     })
 
     for beta in [(.5,.5)]:
-        for lrs in [(.0002,.001)]:
+        for lrs in [(.00004,.0002)]:
             for g_name in generators: 
                     #for kv in [1,2,3,4]:
                     G       = generators[g_name]
@@ -780,7 +784,7 @@ if __name__ == "__main__" and True:
                     print(f"{g_name} out : {G.forward(inpv2).shape}")
                    
                    #OLD 
-                    D2      = AudioDiscriminator(channels=[outsize[0],16,32,64,64,256,256,1],kernels=kernels,strides=[12,9,7,7,5,5,4],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
+                    D2      = AudioDiscriminator(channels=[outsize[0],32,32,64,64,256,256,1],kernels=kernels,strides=[12,9,7,7,5,5,4],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
                     #D2      = AudioDiscriminator(channels=[2,20,32,64,128,256,512,1024,2048,1],kernels=kernels,strides=[7,7,5,5,4,4,3,3,3],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
 
 

@@ -54,7 +54,7 @@ def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,device=torch.device('cuda
     return Gen.to(device)
 
 
-def build_short_gen(ncz=512,leak=.2,kernel_ver=1,fact_ver=0,device=torch.device('cuda'),ver=1):
+def build_short_gen(ncz=512,leak=.2,kernel_ver=1,fact_ver=0,device=torch.device('cuda'),ver=1,out_ch=2):
     factors     = [[15,9,8,7,7,5,2],[2,5,7,7,8,9,15],[15,5,9,7,8,7,2]][fact_ver]
 
     ch          = [1024,1024,512,256,128,64]
@@ -76,7 +76,7 @@ def build_short_gen(ncz=512,leak=.2,kernel_ver=1,fact_ver=0,device=torch.device(
     
     for i,c in enumerate(ch):
         if i+1 == len(ch):
-            Gen.append(         ConvTranspose1d(c,2,factors[i+1],factors[i+1]))
+            Gen.append(         ConvTranspose1d(c,out_ch,factors[i+1],factors[i+1]))
             Gen.append(         Tanh())
 
         else:

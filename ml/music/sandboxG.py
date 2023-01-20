@@ -54,17 +54,17 @@ def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,device=torch.device('cuda
     return Gen.to(device)
 
 
-def build_short_gen(ncz=512,leak=.2,kernel_ver=0,fact_ver=1,device=torch.device('cuda')):
+def build_short_gen(ncz=512,leak=.2,kernel_ver=0,fact_ver=1,device=torch.device('cuda'),out_ch=2):
     factors     = [15,2,5,8,9,49]
 
-    ch          = [2048,2048,2048,512,256]
+    ch          = [2048,2048,2048,2048,1024]
 
     ker         = [3,7,15,65,101,501]
 
 
-    final_ch1    = 128
+    final_ch1    = 444
     final_ch2    = 64 
-    final_kern1  = 9
+    final_kern1  = 7
     #final_kern2  = 11
 
     pad         = [int(k/2) for k in ker] 
@@ -86,7 +86,7 @@ def build_short_gen(ncz=512,leak=.2,kernel_ver=0,fact_ver=1,device=torch.device(
             #Gen.append(         BatchNorm1d(final_ch2,momentum=.5))
             #Gen.append(         LeakyReLU(leak,True))
 
-            Gen.append(         Conv1d(final_ch1,2,final_kern1,1,int(final_kern1/2)))
+            Gen.append(         Conv1d(final_ch1,out_ch,final_kern1,1,int(final_kern1/2)))
             Gen.append(         Tanh())
 
         else:
