@@ -13,33 +13,29 @@ from torch.nn import Upsample
 #random_input    = torch.randn(size=(1,ncz,1))
 
 
-def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,device=torch.device('cuda'),ver=1):
+def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,device=torch.device('cuda'),ver=1,out_ch=1):
 
     factors     = [[2,2,2,2,3,3,3,5,5,7,7], [7,7,5,5,3,3,3,2,2,2,2],[7,2,2,7,2,2,5,3,5,3,3]][fact_ver]
-    channels    = [1024,512,256,128,64,32,32,32,32,32,2] 
+    channels    = [8192,4096,4096,2048,2048,1024,1024,512,256,256,256] 
 
     kernels = [
-            [65,    65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65],                 #   MED 
-            [3,     5,  5,  9,  13, 13, 17, 17, 25, 25, 33, 35, 37, 33],                #   LG-SM 
-            [101,   201,251,301,251,201,151,101,51, 41, 31, 21, 11, 5],         #   MED-LG-SM
+            [3,     3,  5,  5,  5, 5, 7, 7, 7, 7, 7, 7, 7, 7],                #   LG-SM 
+            [3,     17, 65, 65 ,65 ,129 ,129 ,101,51, 41, 31, 21, 11, 5],         #   MED-LG-SM
             [19,    19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19],                #   MED_SM
-            [3,     7,  9,  11, 15, 19, 21, 25, 35, 45, 55, 65, 75, 85]
     ][kernel_ver]
    
     Gen     = Sequential(   ConvTranspose1d(ncz,channels[0],factors[0],factors[0]),
                             BatchNorm1d(channels[0]),
                             LeakyReLU(leak,True))
 
-    Gen.append(         Conv1d(channels[0],channels[0],3,1,1))
-    Gen.append(         BatchNorm1d(channels[0]))
-    Gen.append(         LeakyReLU(leak,True)) 
 
     for i,ch in enumerate(channels):
         if i+2 == len(channels):
-            Gen.append(         ConvTranspose1d(ch,2,factors[i+1],factors[i+1]))
+            Gen.append(         ConvTranspose1d(ch,channels[i+1],factors[i+1],factors[i+1]))
             Gen.append(         BatchNorm1d(    channels[i+1]))
             Gen.append(         LeakyReLU(leak,True)) 
-            Gen.append(         Conv1d(         channels[i+1],channels[i+1],kernels[i],1,padding=int(kernels[i]/2),bias=False))
+
+            Gen.append(         Conv1d(         channels[i+1],out_ch,kernels[i],1,padding=int(kernels[i]/2),bias=False))
             Gen.append(         Tanh())
             break
 

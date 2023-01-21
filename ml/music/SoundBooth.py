@@ -757,7 +757,7 @@ if __name__ == "__main__" and True:
         root    = "C:/data/music/dataset/LOFI_sf5_t60_c1"
     
     files   = [os.path.join(root,f) for f in os.listdir(root)]
-    bs      = 4
+    bs      = 1
     outsize = (1,529200)
     ncz     = 1024*8
     leak    = .2
@@ -767,12 +767,12 @@ if __name__ == "__main__" and True:
     # for ch_i,ch in enumerate([[200,150,100,50,25,2]]):
     #     for k_i,ker in enumerate([[1001,501,201,33,33,17]]):
     generators  = OrderedDict({
-                    "shortgen0":sandboxG.build_short_gen(ncz,kernel_ver=0,leak=.2,out_ch=1),
+                    "shortgen0":sandboxG.build_gen(ncz=ncz,kernel_ver=0,leak=.2,out_ch=1),
 
     })
 
-    for beta in [(.9,.9)]:
-        for lrs in [(.00008,.0004)]:
+    for beta in [(.8,.8)]:
+        for lrs in [(.00004,.0002)]:
             for g_name in generators: 
                     #for kv in [1,2,3,4]:
                     G       = generators[g_name]
