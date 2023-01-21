@@ -53,12 +53,12 @@ def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,device=torch.device('cuda
 def build_short_gen(ncz=512,leak=.2,kernel_ver=0,fact_ver=1,device=torch.device('cuda'),out_ch=2):
     factors     = [9,2,5,8,15,49]
 
-    ch          = [4096,2048,2048,2048,512]
+    ch          = [ncz,500,250,120,60]
 
     ker         = [3,7,15,65,101,501]
 
 
-    final_ch1    = 128
+    final_ch1    = 30
     final_ch2    = 64 
     final_kern1  = 5
     #final_kern2  = 11
