@@ -169,7 +169,7 @@ def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel"):
     #Create and save the numpy array
     if mode == 'single-channel':
         arr_avg = [(ch1[i]+ch2[i])/2 for i in range(len(ch1))]
-        arr = numpy.array([arr_avg,arr_avg])
+        arr = numpy.array([arr_avg])
     elif mode == 'dual-chanel':
         arr = numpy.array([ch1,ch2],dtype=float)
     else:
@@ -177,7 +177,7 @@ def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel"):
         exit()
 
     if sf > 1:
-        arr = downscale(arr,sf)
+        arr = downscale(arr,sf,mode)
     numpy.save(outname.replace(".wav",""),arr)
 
 #Chunks a file into 'chunk_length' millisecond-sized chunks
@@ -360,16 +360,18 @@ def reconstruct(arr_in:numpy.array,output_file:str):
     file.close()
 
 #Scale a numpy array down 
-def downscale(arr_in:numpy.array,sf:int):
+def downscale(arr_in:numpy.array,sf:int,mode="dual-channel"):
 
     import time 
     ch1_split   = [arr_in[0][i*sf:(i+1)*sf] for i in range(int(len(arr_in[0])/sf))]
-    ch2_split   = [arr_in[1][i*sf:(i+1)*sf] for i in range(int(len(arr_in[1])/sf))]
+    if mode == 'dual-channel':
+        ch2_split   = [arr_in[1][i*sf:(i+1)*sf] for i in range(int(len(arr_in[1])/sf))]
     
     ch1_avg     = [sum(item)/sf for item in ch1_split]
-    ch2_avg     = [sum(item)/sf for item in ch2_split]
+    if mode == 'dual-channel':
+        ch2_avg     = [sum(item)/sf for item in ch2_split]
     
-    arr_out     = numpy.array([ch1_avg,ch2_avg])
+    arr_out     = numpy.array([ch1_avg,ch2_avg] if mode == "dual-channel" else [ch1_avg])
 
     return arr_out
 
@@ -397,7 +399,7 @@ if __name__ == "__main__":
         if not len(sys.argv) > 2:
             input("even,odd, or both?")
         while True:
-            chunk_all(60,"LOFI","LOFI_sf5_t60_c1",only=sys.argv[2])
+            chunk_all(20,"LOFI","LOFI_sf5_t20_c1",only=sys.argv[2])
             print("\n"*100)
             print("waiting for job")
             time.sleep(30)
@@ -409,7 +411,7 @@ if __name__ == "__main__":
         if not len(sys.argv) > 3:
             print("need worker and numworkers")
         while True:
-            read_all("LOFI_sf5_t60_c1",sf=5,prescale_outputsize=5292000/2,worker=int(sys.argv[2]),numworkers=int(sys.argv[3]),mode="single-channel")
+            read_all("LOFI_sf5_t20_c1",sf=5,prescale_outputsize=int(5292000/6),worker=int(sys.argv[2]),numworkers=int(sys.argv[3]),mode="single-channel")
             print("\n"*100)
             print("waiting for job")
             time.sleep(30)

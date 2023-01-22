@@ -219,7 +219,7 @@ class AudioDiscriminator(nn.Module):
             model[str(3*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],strides[i],paddings[i],bias=False)
             if not (i == (len(channels)-2)):
                 model[str(3*i+1)]       = nn.BatchNorm1d(channels[i+1])
-                model[str(3*i+2)]       = nn.LeakyReLU(.02,True)
+                model[str(3*i+2)]       = nn.LeakyReLU(1,True)
 
             else:
                 if final_layer > 1:

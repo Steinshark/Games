@@ -19,6 +19,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP  
 from torch.optim import Adam 
 from hashlib import md5
+
 class AudioDataSet(Dataset):
 
     def __init__(self,fnames,out_len,save_to_sc=False):
@@ -28,13 +29,6 @@ class AudioDataSet(Dataset):
         saved = 0 
         for file in fnames:
             arr = numpy.load(file,allow_pickle=True)
-            if out_len[0] == 1:
-                arr = numpy.array([arr[0]])
-                if save_to_sc:
-                    newname = file.replace("LOFI_sf5_t60","LOFI_sf5_t60_c1")
-                    if not os.path.exists(newname):
-                        numpy.save(newname,arr)
-                        saved += 1
             arr = torch.from_numpy(arr).type(torch.float)
             if not (arr.size()[-1] > out_len[-1]-2 and arr.size()[-1] < out_len[-1]+2):
                 print(f"{file} is bad w size {arr.size()}")
@@ -49,6 +43,9 @@ class AudioDataSet(Dataset):
         x = self.data[i][0]
         y = self.data[i][1]
         return x,y
+    
+    def __repr__():
+        return "ADS"
 
 
 
@@ -194,7 +191,7 @@ class Trainer:
         self.error_fn   = error_fn
 
     #Train models with NO accumulation
-    def train(self,verbose=True,gen_train_iters=1,proto_optimizers=True):
+    def train(self,verbose=True,gen_train_iters=1,proto_optimizers=True,t_dload=0):
         t_start = time.time()
         
         if proto_optimizers:
@@ -270,13 +267,9 @@ class Trainer:
             #Calc error
             t0                  = time.time()
             d_error_real        = self.error_fn(real_class,y_set)
+            d_error_real.backward()
             t_op_d[-1]          += time.time() - t0
             
-            #Back Propogate
-            t_0                 = time.time()
-            d_error_real.backward()
-            t_op_d[-1]          += time.time()-t_0
-
             #####################################################################
             #                           TRAIN FAKE                              #
             #####################################################################
@@ -287,6 +280,7 @@ class Trainer:
                 random_inputs           = torch.randn(size=(x_len,1,self.ncz),dtype=torch.float,device=self.device)    
             elif self.mode == "multi-channel":
                 random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
+           
             generator_outputs       = self.Generator(random_inputs)
             t_g[-1] += time.time()-t_0
 
@@ -314,49 +308,43 @@ class Trainer:
             #####################################################################
             #                           TRAIN GENR                              #
             #####################################################################
-            for gen_i in range(gen_train_iters):
                 
-                #OLD IMPLIMENTATION - self.Generator.zero_grad()
-                for param in self.Generator.parameters():
-                    param.grad = None
-                #Generate samples
-                t_0 = time.time()
-                if self.mode == "single-channel":
-                    random_inputs           = torch.randn(size=(x_len,1,self.ncz),dtype=torch.float,device=self.device)  
+            #OLD IMPLIMENTATION - self.Generator.zero_grad()
+            for param in self.Generator.parameters():
+                param.grad = None
+            #Generate samples - TRY USING ONLY PREVIOUS FROM TRAIN DISC ON FAKE 
+            #t_0 = time.time()
+            #if self.mode == "single-channel":
+            #    random_inputs           = torch.randn(size=(x_len,1,self.ncz),dtype=torch.float,device=self.device)  
+#
+            #elif self.mode == "multi-channel":
+            #    random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
+            #generator_outputs       = self.Generator(random_inputs)
+            #t_g[-1] += time.time()-t_0
+            
+            #Classify the fakes again after Discriminator got updated 
+            t_0 = time.time()
+            fake_class2                 = self.Discriminator.forward(generator_outputs).view(-1)
+            t_d[-1] += time.time()-t_0
+            
 
-                elif self.mode == "multi-channel":
-                    random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
-                generator_outputs       = self.Generator(random_inputs)
-                t_g[-1] += time.time()-t_0
-                
-                #Classify the fakes again after Discriminator got updated 
-                t_0 = time.time()
-                fake_class2             = self.Discriminator.forward(generator_outputs).view(-1)
-
-                if final_batch:
-                    d_fake2                 = fake_class2.mean().item()
-                
-                t_d[-1] += time.time()-t_0
-                
+            if final_batch:
                 #Classify random vector 
                 random_vect             = torch.randn(size=(1,self.outsize[0],self.outsize[1]),dtype=torch.float,device=self.device)
+                with torch.no_grad():
+                    d_random            = self.Discriminator.forward(random_vect).cpu().detach().item()
+            
+            #Find the error between the fake batch and real set  
+            t_0 = time.time()
+            g_error                 = self.error_fn(fake_class2,y_set)
+            t_op_g[-1] += time.time()-t_0
+            
+            #Back Propogate
+            t_0 = time.time()
+            g_error.backward()   
+            self.G_optim.step()
+            t_op_g[-1] += time.time()-t_0
 
-                if final_batch and (gen_i == gen_train_iters-1):
-                    with torch.no_grad():
-                        d_random            = self.Discriminator.forward(random_vect).cpu().detach().item()
-                
-                #Find the error between the fake batch and real set  
-                t_0 = time.time()
-                g_error                 = self.error_fn(fake_class2,y_set)
-                t_op_g[-1] += time.time()-t_0
-                
-                #Back Propogate
-                t_0 = time.time()
-                g_error.backward()   
-                self.G_optim.step()
-                t_op_g[-1] += time.time()-t_0
-
-            del data
         if verbose:
             percent = (i+1) / n_batches
             while (printed / num_equals) < percent:
@@ -368,7 +356,7 @@ class Trainer:
         out_1 = f"G forw={sum(t_d):.3f}s    G forw={sum(t_g):.3f}s    D back={sum(t_op_d):.3f}s    G back={sum(t_op_g):.3f}s    tot = {(time.time()-t_init):.2f}s"
         print(" "*(width-len(out_1)),end='')
         print(out_1,flush=True)
-        out_2 = f"ep_time={(time.time()-t_start):.2f}s    D(real)={d_real:.3f}    D(gen1)={d_fake:.4f}    D(rand)={d_random:.3f}"
+        out_2 = f"t_dload={(t_dload):.2f}s    D(real)={d_real:.3f}    D(gen1)={d_fake:.4f}    D(rand)={d_random:.3f}"
 
         print(" "*(width-len(out_2)),end='')
         print(out_2)
@@ -533,11 +521,12 @@ class Trainer:
         self.set_learners(optim_d,optim_g,torch.nn.BCELoss())
 
         for e in range(epochs):
+            t0 = time.time()
             train_set   = random.sample(filenames,load)
             self.build_dataset(train_set,bs,True,4)
             if verbose:
                 print_epoch_header(e,epochs)
-                failed = self.train(verbose=verbose)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
+                failed = self.train(verbose=verbose,t_dload=time.time()-t0)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
                 if (e+1) % 2 == 0:
                     self.sample(f"{sample_out}_{e+1}.wav",sf=sf)
                 if failed:
@@ -554,8 +543,8 @@ if __name__ == "__main__" and True:
     load    = eval(sys.argv[sys.argv.index("ld")+1]) if "ld" in sys.argv else 8*250
     ep      = 1024
     dev     = torch.device('cuda')
-
-    kernels     = [15,11,9,9,5,5,5]
+    wd      = .00002
+    kernels     = [5,7,9,9,5,5,15]
     paddings    = [int(k/2) for k in kernels]
 
 
@@ -563,25 +552,24 @@ if __name__ == "__main__" and True:
     if "linux" in sys.platform:
         root    = "/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60"
     else:
-        root    = "C:/data/music/dataset/LOFI_sf5_t60"
+        root    = "C:/data/music/dataset/LOFI_sf5_t20_c1"
     
     files   = [os.path.join(root,f) for f in os.listdir(root)]
-    bs      = 32
-    outsize = (1,529200)
-    ncz     = 1024*2
-    leak    = .2
-    g_iters = 1
+    bs      = 16
+    outsize = (1,int(529200/3))
+    ncz     = 256
+
     
 
     # for ch_i,ch in enumerate([[200,150,100,50,25,2]]):
     #     for k_i,ker in enumerate([[1001,501,201,33,33,17]]):
     generators  = OrderedDict({
-                    "shortgen0":sandboxG.build_short_gen(ncz=ncz,kernel_ver=0,leak=.2,out_ch=1),
+                    "shortgen0":sandboxG.build_upsamp(ncz=ncz,out_ch=1),
 
     })
 
-    for beta in [(.8,.8)]:
-        for lrs in [(.0004,.002)]:
+    for beta in [(.5,.5)]:
+        for lrs in [(.0002,.001)]:
             for g_name in generators: 
                     #for kv in [1,2,3,4]:
                     G       = generators[g_name]
@@ -593,7 +581,7 @@ if __name__ == "__main__" and True:
                     print(f"{g_name} out : {G.forward(inpv2).shape}")
                    
                    #OLD 
-                    D2      = AudioDiscriminator(channels=[outsize[0],32,32,64,64,128,128,1],kernels=kernels,strides=[12,9,7,7,5,5,4],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
+                    D2      = AudioDiscriminator(channels=[outsize[0],64,64,128,256,512,1024,1],kernels=kernels,strides=[3,4,5,5,7,7,12],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
                     #D2      = AudioDiscriminator(channels=[2,20,32,64,128,256,512,1024,2048,1],kernels=kernels,strides=[7,7,5,5,4,4,3,3,3],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
 
 
@@ -601,8 +589,8 @@ if __name__ == "__main__" and True:
                     D2.apply(weights_initD)
 
                     #Create optims 
-                    optim_d = torch.optim.Adam(D2.parameters(),lrs[0],betas=(beta[0],.999))
-                    optim_g = torch.optim.Adam(G.parameters(),lrs[1],betas=(beta[1],.999))
+                    optim_d = torch.optim.Adam(D2.parameters(),lrs[0],betas=(beta[0],.999),weight_decay=wd)
+                    optim_g = torch.optim.Adam(G.parameters(),lrs[1],betas=(beta[1],.999),weight_decay=wd)
 
                     
                     series_name = f"outputs/build_{g_name}-lr_{lrs}"
@@ -611,4 +599,4 @@ if __name__ == "__main__" and True:
                     if not os.path.isdir(series_name):
                         os.mkdir(series_name)
                     
-                    t.c_exec(load,ep,bs,D2,G,optim_d,optim_g,files,ncz,outsize,f"{series_name}/",5,verbose=True,gen_train_iters=g_iters,proto_optimizers=True)
+                    t.c_exec(load,ep,bs,D2,G,optim_d,optim_g,files,ncz,outsize,f"{series_name}/",5,verbose=True,gen_train_iters=1,proto_optimizers=True)

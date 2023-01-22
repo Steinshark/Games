@@ -78,9 +78,9 @@ def weights_initG(m):
 def weights_initD(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        torch.nn.init.uniform_(m.weight.data,0,.2)
+        torch.nn.init.normal_(m.weight.data,0,.02)
     elif classname.find('BatchNorm') != -1:
-        torch.nn.init.uniform_(m.weight.data,0,.2)
+        torch.nn.init.normal_(m.weight.data,1,.02)
         torch.nn.init.constant_(m.bias.data, 0)
 
 def config_explorer(configs,qualifications):
