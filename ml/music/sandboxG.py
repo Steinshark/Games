@@ -58,7 +58,7 @@ def build_short_gen(ncz=512,leak=.2,momentum=.95,device=torch.device('cuda'),out
     ker         = [3,7,15,65,101,501]
 
 
-    final_ch1    = 50
+    final_ch1    = 100
     final_ch2    = 64 
     final_kern1  = 17
     #final_kern2  = 11
@@ -140,24 +140,23 @@ def build_sig(ncz=512,out_ch=1,device=torch.device('cuda')):
 
 def build_upsamp(ncz=512,out_ch=1,device=torch.device('cuda')):
     factors     = [7,7,5,5,4,2,2]
-    kernels     = [3,5,7,9,11,13,15,13,11,9,3]
-    channels        = [1024,1024,512,256,128,64,64,32]        
+    kernels     = [11,13,33,65,513,65,65,65,33,7,3]
+    channels        = [1024,512,512,256,128,64,64,64]        
     Gen     = Sequential(   ConvTranspose1d(ncz,channels[0],9,factors[0]),
                             BatchNorm1d(channels[0]),
                             ReLU())
 
-    kernel_1        = 513 
-    kernel_2        = 65
-    kernel_3        = 49 
-    kernel_4        = 21
-    kernel_5        = 13 
-    kernel_6        = 3 
+    kernel_1        = 257 
+    kernel_2        = 5
+    kernel_3        = 7 
+    kernel_4        = 3
 
-    ch_1            = 16
-    ch_2            = 16
-    ch_3            = 16
-    ch_4            = 16
-    ch_5            = 16
+
+    ch_1            = 64
+    ch_2            = 64
+    ch_3            = 32
+    ch_4            = 32
+    ch_5            = 32
 
     cur_shape       = 9
     for i,ch in enumerate(channels):
@@ -165,9 +164,10 @@ def build_upsamp(ncz=512,out_ch=1,device=torch.device('cuda')):
         if not i+2 == len(channels):
             Gen.append(         Upsample(size=(factors[i]*cur_shape)))
 
-            Gen.append(         Conv1d(channels[i],channels[i+1],kernel_size=kernels[i],stride=1,padding=int(kernels[i]/2),bias=False))
-            Gen.append(         BatchNorm1d(channels[i+1]))
-            Gen.append(         LeakyReLU(negative_slope=.2,inplace=True))
+            if i % 2 == 0:
+                Gen.append(         Conv1d(channels[i],channels[i+1],kernel_size=kernels[i],stride=1,padding=int(kernels[i]/2),bias=False))
+                Gen.append(         BatchNorm1d(channels[i+1]))
+                Gen.append(         LeakyReLU(negative_slope=.2,inplace=True))
 
             
             #Gen.append(         BatchNorm1d(channels[i+1]))
@@ -176,27 +176,20 @@ def build_upsamp(ncz=512,out_ch=1,device=torch.device('cuda')):
         else:
             Gen.append(         Upsample(size=(factors[i]*cur_shape)))
 
-            Gen.append(         Conv1d(channels[i],ch_1,kernel_size=kernel_1,stride=1,padding=int(kernel_1/2),bias=False))
-            Gen.append(         BatchNorm1d(ch_1))
+            Gen.append(         Conv1d(channels[i],ch_1,kernel_size=kernel_1,stride=1,padding=int(kernel_1/2),bias=True))
+            #Gen.append(         BatchNorm1d(ch_1))
             Gen.append(         Sigmoid())
 
-            Gen.append(         Conv1d(ch_1,ch_2,kernel_size=kernel_2,stride=1,padding=int(kernel_2/2),bias=False))
-            Gen.append(         BatchNorm1d(ch_2))
+            Gen.append(         Conv1d(ch_1,ch_2,kernel_size=kernel_2,stride=1,padding=int(kernel_2/2),bias=True))
+            #Gen.append(         BatchNorm1d(ch_2))
             Gen.append(         Sigmoid())
 
-            Gen.append(         Conv1d(ch_2,ch_3,kernel_size=kernel_3,stride=1,padding=int(kernel_3/2),bias=False))
-            Gen.append(         BatchNorm1d(ch_3))
-            Gen.append(         Sigmoid())
+            #Gen.append(         Conv1d(ch_2,ch_3,kernel_size=kernel_3,stride=1,padding=int(kernel_3/2),bias=True))
+            #Gen.append(         BatchNorm1d(ch_3))
+            #Gen.append(         Sigmoid())
 
-            Gen.append(         Conv1d(ch_3,ch_4,kernel_size=kernel_4,stride=1,padding=int(kernel_4/2),bias=False))
-            Gen.append(         BatchNorm1d(ch_4))
-            Gen.append(         Sigmoid())
-
-            Gen.append(         Conv1d(ch_4,ch_5,kernel_size=kernel_5,stride=1,padding=int(kernel_5/2),bias=False))
-            Gen.append(         BatchNorm1d(ch_5)) 
-            Gen.append(         Sigmoid())
-
-            Gen.append(         Conv1d(ch_5,out_ch,kernel_size=kernel_6,stride=1,padding=int(kernel_6/2),bias=True))
+            Gen.append(         Conv1d(ch_2,out_ch,kernel_size=kernel_4,stride=1,padding=int(kernel_4/2),bias=True))
+            #Gen.append(         BatchNorm1d(ch_4))
 
             Gen.append(         Tanh())
             break

@@ -29,9 +29,9 @@ class AudioDataSet(Dataset):
         saved = 0 
         for file in fnames:
             arr = numpy.load(file,allow_pickle=True)
-            arr = torch.from_numpy(arr).type(torch.float)
-            if not (arr.size()[-1] > out_len[-1]-2 and arr.size()[-1] < out_len[-1]+2):
-                print(f"{file} is bad w size {arr.size()}")
+            #arr = torch.from_numpy(arr).type(torch.float)
+            #if not (arr.shape[-1] > out_len[-1]-2 and arr.size()[-1] < out_len[-1]+2):
+             #   print(f"{file} is bad w size {arr.size()}")
             self.data.append([arr,1])
 
         print(f"loaded {self.__len__()} samples and saved {saved}")
@@ -308,7 +308,7 @@ class Trainer:
             #####################################################################
             #                           TRAIN GENR                              #
             #####################################################################
-
+                
             #OLD IMPLIMENTATION - self.Generator.zero_grad()
             for param in self.Generator.parameters():
                 param.grad = None
@@ -526,11 +526,11 @@ class Trainer:
             self.build_dataset(train_set,bs,True,4)
             if verbose:
                 print_epoch_header(e,epochs)
-            failed = self.train(verbose=verbose,t_dload=time.time()-t0)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
-            if (e+1) % 2 == 0:
-                self.sample(f"{sample_out}_{e+1}.wav",sf=sf)
-            if failed:
-                return 
+                failed = self.train(verbose=verbose,t_dload=time.time()-t0)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
+                if (e+1) % 2 == 0:
+                    self.sample(f"{sample_out}_{e+1}.wav",sf=sf)
+                if failed:
+                    return 
 
 
 
@@ -539,65 +539,41 @@ class Trainer:
 
 
 if __name__ == "__main__" and True:
+    bs      = 1 
+    model = torch.nn.Sequential(torch.nn.LSTM(input_size=441,hidden_size=441,num_layers=400))
 
-    load    = eval(sys.argv[sys.argv.index("ld")+1]) if "ld" in sys.argv else 8*250
-    ep      = 128
-    dev     = torch.device('cuda')
-    wd      = .00002
-    kernels     = [9,17,65,9,5,5,15]
-    paddings    = [int(k/2) for k in kernels]
+    h0      = torch.zeros(400,bs,441)
+    c0      = torch.zeros(400,bs,441)
+    inp0    = torch.zeros(400,bs,441)
 
-
-
-    if "linux" in sys.platform:
-        root    = "/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60"
-    else:
-        root    = "C:/data/music/dataset/LOFI_sf5_t20_c1"
     
+    root    = "C:/data/music/dataset/LOFI_sf5_t20_c1"
     files   = [os.path.join(root,f) for f in os.listdir(root)]
-    bs      = 8
-    outsize = (1,int(529200/3))
-    ncz     = 1024
-
     
+    a = AudioDataSet(fnames=files[:20],out_len=(1,(529200/3)))
+    dl  = DataLoader(a,batch_size=bs,shuffle=True)
 
-    # for ch_i,ch in enumerate([[200,150,100,50,25,2]]):
-    #     for k_i,ker in enumerate([[1001,501,201,33,33,17]]):
-    generators  = OrderedDict({
-                    "shortgen0":sandboxG2.build_short_gen(ncz=ncz,out_ch=1,kernel_ver=1),
-                    "shortgen0":sandboxG2.build_short_gen(ncz=ncz,out_ch=1,kernel_ver=0)
+    err_fn  = torch.nn.MSELoss
+    optim   = torch.optim.Adam(params = model.parameters())
+    for i, data in enumerate(dl,0):
+        x_set   = data[0]
 
-    })
+        music_set   = torch.zeros(size=(400,bs,441))
 
-    for beta in [(.5,.5)]:
-        for lrs in [(.0002,.0002)]:
-            for g_name in generators: 
-                    #for kv in [1,2,3,4]:
-                    G       = generators[g_name]
-                    print(G)
-                    t       = Trainer(dev,ncz,outsize,mode="multi-channel")
-                    
+        for i,d in enumerate(x_set):
+            d = list(d[0])
+            d = numpy.array([d[i*441:i*441+441] for i in range(int(len(d)/441))])
+            d= torch.from_numpy(d)
+            for j,row in enumerate(d):
+                music_set[j:i:] = row
 
-                    inpv2   = torch.randn(size=(1,ncz,1),device=torch.device("cuda"),dtype=torch.float)
-                    print(f"G out : {G.forward(inpv2).shape}")
-                   
-                    #OLD 
-                    D2      = AudioDiscriminator(channels=[outsize[0],64,128,128,256,512,1024,1],kernels=kernels,strides=[3,4,5,5,7,7,12],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
-                    #D2      = AudioDiscriminator(channels=[2,20,32,64,128,256,512,1024,2048,1],kernels=kernels,strides=[7,7,5,5,4,4,3,3,3],paddings=paddings,device=torch.device('cuda'),final_layer=1,verbose=False)
-                    print(f"D out : {D2(G.forward(inpv2)).shape}")
 
-                    G.apply(weights_initD)
-                    D2.apply(weights_initD)
 
-                    #Create optims 
-                    optim_d = torch.optim.AdamW(D2.parameters(),lrs[0],betas=(beta[0],.999))
-                    optim_g = torch.optim.AdamW(G.parameters(),lrs[1],betas=(beta[1],.999))
 
-                    
-                    series_name = f"outputs/build_{g_name}-lr_{lrs}"
-                    if not os.path.exists("outputs"):
-                        os.mkdir("outputs")
-                    if not os.path.isdir(series_name):
-                        os.mkdir(series_name)
-                    
-                    t.c_exec(load,ep,bs,D2,G,optim_d,optim_g,files,ncz,outsize,f"{series_name}/",5,verbose=True,gen_train_iters=1,proto_optimizers=True)
+        out, (h0,c0) = model(music_set,(h0,c0))
+        m_out = torch.nn.GlobalPool(torch.nn.Flatten()(c0))
+
+        loss = err_fn(h0,music_set)
+        
+
+

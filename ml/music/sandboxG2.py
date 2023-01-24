@@ -1,5 +1,5 @@
 import torch 
-from torch.nn import ConvTranspose1d,Upsample,BatchNorm1d,ReLU,LeakyReLU,Conv1d,Sequential,Tanh
+from torch.nn import ConvTranspose1d,Upsample,BatchNorm1d,ReLU,LeakyReLU,Conv1d,Sequential,Tanh,Sigmoid
 from networks import AudioGenerator,AudioDiscriminator
 
 from utilities import model_size
@@ -55,15 +55,13 @@ def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,device=torch.device('cuda
 
 
 def build_short_gen(ncz=512,leak=.2,kernel_ver=1,fact_ver=0,device=torch.device('cuda'),ver=1,out_ch=2):
-    factors     = [[15,9,8,7,7,5,2],[2,5,7,7,8,9,15],[15,5,9,7,8,7,2]][fact_ver]
+    factors     = [[15,8,7,7,5,2,3],[2,5,7,7,8,9,15],[15,5,9,7,8,7,2]][fact_ver]
 
-    ch          = [1024,1024,512,256,128,64]
+    ch          = [2048,2048,2048,512,256,128]
 
     ker         = [
-                    [3,17,65,101,1001],
-                    [3,7,17,17,17],
-                    [3,5,9,17,65],
-                    [5,9,13,17,25]][kernel_ver]
+                    [3,17,33,65,129],
+                    [3,5,9,17,65]][kernel_ver]
 
     pad         = [int(k/2) for k in ker] 
     Gen         = Sequential(   ConvTranspose1d(ncz,ch[0],factors[0],factors[0]),
@@ -76,7 +74,11 @@ def build_short_gen(ncz=512,leak=.2,kernel_ver=1,fact_ver=0,device=torch.device(
     
     for i,c in enumerate(ch):
         if i+1 == len(ch):
-            Gen.append(         ConvTranspose1d(c,out_ch,factors[i+1],factors[i+1]))
+            Gen.append(         ConvTranspose1d(c,128,factors[i+1],factors[i+1]))
+
+            Gen.append(         Conv1d(128,64,factors[i+1]*3,1,int((factors[i+1]*3)/2)))
+            Gen.append(         Sigmoid())
+            Gen.append(         Conv1d(64,out_ch,factors[i+1],1,int((factors[i+1])/2)))
             Gen.append(         Tanh())
 
         else:
