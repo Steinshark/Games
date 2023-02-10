@@ -219,15 +219,18 @@ class AudioDiscriminator(nn.Module):
             model[str(3*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],strides[i],paddings[i],bias=False)
             if not (i == (len(channels)-2)):
                 model[str(3*i+1)]       = nn.BatchNorm1d(channels[i+1])
-                model[str(3*i+2)]       = nn.LeakyReLU(.2,True)
+                model[str(3*i+2)]       = nn.LeakyReLU(.5,True)
 
             else:
                 if final_layer > 1:
                     model[str(3*i+3)]   = nn.Flatten()
                     model[str(3*i+4)]   = nn.Linear(final_layer,1)
                     model[str(3*i+5)]   = nn.Sigmoid()
+                    
                 else:
-                    model[str(3*i+3)]       = nn.Sigmoid()
+                    model[str(3*i+3)]       = nn.Flatten()
+                    model[str(3*i+4)]       = nn.Sigmoid()
+                    
 
         self.model = nn.Sequential(model)
         if verbose:
@@ -239,14 +242,99 @@ class AudioDiscriminator(nn.Module):
         return self.model(input)
 
 
+class AudioDiscriminator2(nn.Module):
+    def __init__(self,channels=[2,8,4,4,4,2,2,1,1],kernels=[22050,5000,10,5],mp_kernels=[1,1,1,1],paddings=[],final_layer=0,device=torch.device("cpu"),verbose=False):
+        super(AudioDiscriminator2, self).__init__()
+
+        if not len(channels) == len(kernels)+1:
+            print(f"bad channel size {len(channels)} must be {len(kernels)+1}")
+            exit(-1)
+
+        model = OrderedDict()
+        for i,config in enumerate(zip(channels,kernels,mp_kernels,paddings)):
+            f,k,s,p = config 
+
+
+            if not (i == (len(channels)-2)):
+                model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1,paddings[i],bias=False)
+                model[str(4*i+1)]       = nn.BatchNorm1d(channels[i+1])
+                model[str(4*i+2)]       = nn.LeakyReLU(.2,False)
+                model[str(4*i+3)]       = nn.MaxPool1d(mp_kernels[i+1])
+
+            else:
+                if final_layer > 1:
+                    model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i], 1,paddings[i],bias=False)
+                    model[str(4*i+1)]       = nn.BatchNorm1d(channels[i+1])
+                    model[str(4*i+1)]       = nn.LeakyReLU(.2,False)
+                    model[str(4*i+2)]       = nn.Flatten()
+                    model[str(4*i+3)]       = nn.Linear(final_layer,1)
+                    model[str(4*i+4)]       = nn.Sigmoid()
+                    
+                else:
+                    model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1,paddings[i],bias=True)
+                    model[str(4*i+1)]       = nn.Flatten()
+                    model[str(4*i+2)]       = nn.Sigmoid()
+                    
+
+        self.model = nn.Sequential(model)
+        if verbose:
+            print(self.model)
+        self.model.to(device)
+        self.channels = channels
+
+    def forward(self, input):
+        return self.model(input)
+
+
+class AudioDiscriminator3(nn.Module):
+    def __init__(self,channels=[2,8,4,4,4,2,2,1,1],kernels=[22050,5000,10,5],mp_kernels=[1,1,1,1],paddings=[],final_layer=0,device=torch.device("cpu"),verbose=False):
+        super(AudioDiscriminator3, self).__init__()
+
+        if not len(channels) == len(kernels)+1:
+            print(f"bad channel size {len(channels)} must be {len(kernels)+1}")
+            exit(-1)
+
+        model = OrderedDict()
+        for i,config in enumerate(zip(channels,kernels,mp_kernels,paddings)):
+            f,k,s,p = config 
+
+
+            if not (i == (len(channels)-2)):
+                model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1 if i == 0 else 3,paddings[i],bias=False)
+                model[str(4*i+1)]       = nn.BatchNorm1d(channels[i+1])
+                model[str(4*i+2)]       = nn.LeakyReLU(.2,False)
+                model[str(4*i+3)]       = nn.MaxPool1d(mp_kernels[i+1])
+
+            else:
+                if final_layer > 1:
+                    model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1,paddings[i],bias=True)
+                    model[str(4*i+1)]       = nn.LeakyReLU(.2,False)
+                    model[str(4*i+2)]       = nn.Flatten()
+                    model[str(4*i+3)]       = nn.Linear(final_layer,1)
+                    model[str(4*i+4)]       = nn.Sigmoid()
+                    
+                else:
+                    model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1,paddings[i],bias=True)
+                    model[str(4*i+1)]       = nn.Flatten()
+                    model[str(4*i+2)]       = nn.Sigmoid()
+                    
+
+        self.model = nn.Sequential(model)
+        if verbose:
+            print(self.model)
+        self.model.to(device)
+        self.channels = channels
+
+    def forward(self, input):
+        return self.model(input)
 
 if __name__ == "__main__":
-    nc = 5
-    config =    {"kernels":[8192, 8192, 64, 4, 4, 4, 4], "strides": [3, 3, 3, 3, 3, 3, 2], "paddings": [0, 0, 0, 0, 0, 0, 0], "out_pad":[0, 0, 0, 0, 0, 0, 0], "in_size":1, "num_channels":2}
-    kernels_ct = config['kernels']
-    strides_ct = config['strides']
-    padding_ct = config['paddings']
-    out_pad_ct = config['out_pad']
+    nc          = 5
+    config      = {"kernels":[8192, 8192, 64, 4, 4, 4, 4], "strides": [3, 3, 3, 3, 3, 3, 2], "paddings": [0, 0, 0, 0, 0, 0, 0], "out_pad":[0, 0, 0, 0, 0, 0, 0], "in_size":1, "num_channels":2}
+    kernels_ct  = config['kernels']
+    strides_ct  = config['strides']
+    padding_ct  = config['paddings']
+    out_pad_ct  = config['out_pad']
 
     channels   = [nc] + [2]*len(padding_ct)
     channels[1] = 8 

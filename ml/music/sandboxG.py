@@ -138,13 +138,14 @@ def build_sig(ncz=512,out_ch=1,device=torch.device('cuda')):
     
     return Gen.to(device)
 
-def build_upsamp(ncz=512,out_ch=1,device=torch.device('cuda')):
-    factors     = [7,7,5,5,4,2,2]
-    kernels     = [11,13,33,65,513,65,65,65,33,7,3]
-    channels        = [1024,512,512,256,128,64,64,64]        
+def build_upsamp(ncz=512,out_ch=1,kernel_ver=0,factor_ver=0,leak=.2,device=torch.device('cuda')):
+    factors     = [[7,7,5,5,4,2,2]][factor_ver]
+    kernels     = [[[3,7,5],[3,9,5],[5,33,7],[5,65,9],[5,129,9],[5,513,9],[7,129,11],[5,129,5]]][kernel_ver]
+    channels        = [2048,1024,1024,512,128,128,78,64]  
+
     Gen     = Sequential(   ConvTranspose1d(ncz,channels[0],9,factors[0]),
                             BatchNorm1d(channels[0]),
-                            ReLU())
+                            LeakyReLU(negative_slope=.02,inplace=True))
 
     kernel_1        = 257 
     kernel_2        = 5
@@ -153,7 +154,7 @@ def build_upsamp(ncz=512,out_ch=1,device=torch.device('cuda')):
 
 
     ch_1            = 64
-    ch_2            = 64
+    ch_2            = 48
     ch_3            = 32
     ch_4            = 32
     ch_5            = 32
@@ -164,10 +165,17 @@ def build_upsamp(ncz=512,out_ch=1,device=torch.device('cuda')):
         if not i+2 == len(channels):
             Gen.append(         Upsample(size=(factors[i]*cur_shape)))
 
-            if i % 2 == 0:
-                Gen.append(         Conv1d(channels[i],channels[i+1],kernel_size=kernels[i],stride=1,padding=int(kernels[i]/2),bias=False))
-                Gen.append(         BatchNorm1d(channels[i+1]))
-                Gen.append(         LeakyReLU(negative_slope=.2,inplace=True))
+            Gen.append(         Conv1d(channels[i],channels[i+1],kernel_size=kernels[i][0],stride=1,padding=int(kernels[i][0]/2),bias=False))
+            Gen.append(         BatchNorm1d(channels[i+1]))
+            Gen.append(         LeakyReLU(negative_slope=.05,inplace=True))
+
+            Gen.append(         Conv1d(channels[i+1],channels[i+1],kernel_size=kernels[i][1],stride=1,padding=int(kernels[i][1]/2),bias=False))
+            Gen.append(         BatchNorm1d(channels[i+1]))
+            Gen.append(         LeakyReLU(negative_slope=.05,inplace=True))
+
+            Gen.append(         Conv1d(channels[i+1],channels[i+1],kernel_size=kernels[i][2],stride=1,padding=int(kernels[i][2]/2),bias=False))
+            Gen.append(         BatchNorm1d(channels[i+1]))
+            Gen.append(         LeakyReLU(negative_slope=.05,inplace=True))
 
             
             #Gen.append(         BatchNorm1d(channels[i+1]))
@@ -177,20 +185,18 @@ def build_upsamp(ncz=512,out_ch=1,device=torch.device('cuda')):
             Gen.append(         Upsample(size=(factors[i]*cur_shape)))
 
             Gen.append(         Conv1d(channels[i],ch_1,kernel_size=kernel_1,stride=1,padding=int(kernel_1/2),bias=True))
-            #Gen.append(         BatchNorm1d(ch_1))
-            Gen.append(         Sigmoid())
+            Gen.append(         BatchNorm1d(ch_1))
+            Gen.append(         LeakyReLU(negative_slope=.2,inplace=True))
 
             Gen.append(         Conv1d(ch_1,ch_2,kernel_size=kernel_2,stride=1,padding=int(kernel_2/2),bias=True))
-            #Gen.append(         BatchNorm1d(ch_2))
-            Gen.append(         Sigmoid())
+            Gen.append(         BatchNorm1d(ch_2))
+            Gen.append(         LeakyReLU(negative_slope=.5,inplace=True))
 
             #Gen.append(         Conv1d(ch_2,ch_3,kernel_size=kernel_3,stride=1,padding=int(kernel_3/2),bias=True))
             #Gen.append(         BatchNorm1d(ch_3))
             #Gen.append(         Sigmoid())
 
             Gen.append(         Conv1d(ch_2,out_ch,kernel_size=kernel_4,stride=1,padding=int(kernel_4/2),bias=True))
-            #Gen.append(         BatchNorm1d(ch_4))
-
             Gen.append(         Tanh())
             break
             
@@ -248,6 +254,97 @@ def build_encdec(ncz,encoder_factors=[2,3],encoder_kernels=[5,7],dec_factors=[7,
             G.append(           LeakyReLU(leak,True))
 
     return G.to(torch.device("cuda"))
+
+#BEST 
+def buildBest(ncz=512,leak=.2,kernel_ver=1,factor_ver=0,device=torch.device('cuda'),ver=1,out_ch=2):
+    factors     = [[15,8,7,7,5,2,3],[2,5,7,7,8,9,15],[15,5,9,7,8,7,2]][factor_ver]
+
+    ch          = [2048,2048,2048,512,256,128]
+
+    ker         = [
+                    [3,61,513,1025,129],
+                    [3,5,9,17,65]][kernel_ver]
+
+    pad         = [int(k/2) for k in ker] 
+    Gen         = Sequential(   ConvTranspose1d(ncz,ch[0],factors[0],factors[0]),
+                                BatchNorm1d(ch[0]),
+                                LeakyReLU(leak,True))
+
+    Gen.append(                 Conv1d(ch[0],ch[0],3,1,1))
+    Gen.append(                 BatchNorm1d(ch[0]))
+    Gen.append(                 LeakyReLU(leak,True)) 
+    
+    for i,c in enumerate(ch):
+        if i+1 == len(ch):
+            Gen.append(         ConvTranspose1d(c,128,factors[i+1],factors[i+1]))
+
+            Gen.append(         Conv1d(128,64,factors[i+1]*3,1,int((factors[i+1]*3)/2)))
+            Gen.append(         Sigmoid())
+            Gen.append(         Conv1d(64,out_ch,factors[i+1],1,int((factors[i+1])/2)))
+            Gen.append(         Tanh())
+
+        else:
+            Gen.append(         ConvTranspose1d(c,ch[i+1],factors[i+1],factors[i+1]))
+            Gen.append(         BatchNorm1d(ch[i+1])) 
+            Gen.append(         LeakyReLU(leak,True)) 
+
+            Gen.append(         Conv1d(ch[i+1],ch[i+1],ker[i],1,pad[i]))
+            Gen.append(         BatchNorm1d(ch[i+1]))
+            Gen.append(         LeakyReLU(leak,True)) 
+    
+    return Gen.to(device)
+
+def buildBestMod1(ncz=512,leak=.2,kernel_ver=1,factor_ver=0,device=torch.device('cuda'),ver=1,out_ch=2):
+    factors     = [[15,8,7,7,5,2,3],[2,3,5,7,7,8,15],[15,5,9,7,8,7,2]][factor_ver]
+
+    ch          = [ncz,2048,512,256,96,64]
+
+    ker         = [
+                    [7,11,33,129,65],
+                    [3,33,65,65,65],
+                    [3,5,9,17,257]][kernel_ver]
+
+
+    pad         = [int(k/2) for k in ker] 
+    Gen         = Sequential(   ConvTranspose1d(ncz,ch[0],factors[0],factors[0]),
+                                BatchNorm1d(ch[0]),
+                                LeakyReLU(leak,True))
+
+    Gen.append(                 Conv1d(ch[0],ch[0],11,1,5))
+    Gen.append(                 BatchNorm1d(ch[0]))
+    Gen.append(                 LeakyReLU(leak,True)) 
+    
+    for i,c in enumerate(ch):
+        if i+1 == len(ch):
+            Gen.append(         ConvTranspose1d(c,64,factors[i+1],factors[i+1]))
+
+            Gen.append(         Conv1d(64,48,factors[i+1]*7,1,int((factors[i+1]*7)/2),bias=False))
+            Gen.append(         BatchNorm1d(48))
+            Gen.append(         Sigmoid())
+
+
+            Gen.append(         Conv1d(48,48,factors[i+1]*3,1,int((factors[i+1]*3)/2),bias=False))
+            Gen.append(         BatchNorm1d(48))
+            Gen.append(         Sigmoid())
+
+            Gen.append(         Conv1d(48,out_ch,5,1,2))
+            Gen.append(         Tanh())
+
+        else:
+            Gen.append(         ConvTranspose1d(c,ch[i+1],factors[i+1],factors[i+1]))
+            Gen.append(         BatchNorm1d(ch[i+1])) 
+            Gen.append(         LeakyReLU(leak,True)) 
+
+            Gen.append(         Conv1d(ch[i+1],ch[i+1],ker[i]*3,1,int(ker[i]*3/2),bias=False))
+            Gen.append(         BatchNorm1d(ch[i+1]))
+            Gen.append(         LeakyReLU(leak,True)) 
+
+            Gen.append(         Conv1d(ch[i+1],ch[i+1],ker[i]*1,1,int((ker[i]*1)/2),bias=False))
+            Gen.append(         BatchNorm1d(ch[i+1]))
+            Gen.append(         LeakyReLU(leak,True)) 
+
+    return Gen.to(device)
+
 
 
 
