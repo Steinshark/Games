@@ -10,15 +10,15 @@ import json
 import time 
 
 _DEV        = torch.device('cuda')
-_KERNELS    = [5,13,11,9,7,5,3]
+_KERNELS    = [5,7,13,11,9,7,5,3]
 _PADDINGS   = [int(k/2) for k in _KERNELS]
 _OUTSIZE    = (1,int(529200/3))
-_D          = AudioDiscriminator2(  channels=[_OUTSIZE[0],64,64,128,128,256,512,1],
-                                    kernels=_KERNELS,mp_kernels=list([4,5,7,7,5,3,3]),
+_D          = AudioDiscriminator2(  channels=[_OUTSIZE[0],128,128,128,256,256,512,512,1],
+                                    kernels=_KERNELS,mp_kernels=list([1,4,5,7,7,5,3,3]),
                                     paddings=_PADDINGS,
                                     device=torch.device('cuda'),
-                                    final_layer=16,
-                                    verbose=False)
+                                    final_layer=4,
+                                    verbose=False,)
 
 class classDataSet(Dataset):
     def __init__(self,fnames_good,fnames_bad):

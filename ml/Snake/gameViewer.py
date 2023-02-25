@@ -342,9 +342,9 @@ class TrainerApp:
         self.game_canvas                = Canvas(self.view_frame,background="gray",width=self.IMG_W,height=self.IMG_H)
         self.game_canvas                .grid(row=1,column=0,sticky=tk.NSEW,columnspan=3)
         self.game_image                 = None
+    
     def run_loop(self):
         self.window.mainloop()
-
 
     def set_vars(self):
 
@@ -364,7 +364,6 @@ class TrainerApp:
                 self.settings[s_key] = eval(self.fields[s_key].get())
             else:
                 self.settings[s_key] = float(eval(self.fields[s_key].get()))
-
 
     def run_training(self):
         self.set_vars()

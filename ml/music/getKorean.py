@@ -42,39 +42,53 @@ def save_progess(vocab):
         file.write(writer)
     return
 
+if __name__ == "__main__":
 
-vocab = {}
-last_stopped = 0 
-fails = 0
-for unit in [1,2,3,4,5]:
-    for lesson in list(range(last_stopped,100)):
-        request_url = f"https://www.howtostudykorean.com/unit-{unit}/unit-{unit}-lesson-{lesson}"
-        if unit == 1 and lesson > 8:
-            if lesson > 16: 
-                last_stopped = 16 
-                break
-            request_url = links[lesson]
-        if unit > 1:
-            request_url = f"https://www.howtostudykorean.com/unit-{unit}/lesson-{lesson}/"
-        r   = requests.get(request_url,timeout=.5)
+    filecontents = ""
+    with open("korean_vocab.csv","r",encoding="utf-16") as kfile:
+        
+        for item in kfile: 
+            korean = item.split(",")[0].rstrip()
+            translation = ' or'.join(item.split(",")[1:]).rstrip().replace("/ ", "/").replace(" /", "/").replace(" / ", "/")
 
-        if r.status_code == 200:
-            print(f"Unit-{unit} Lesson-{lesson}\tsuccess")
-            #input(r.text)
+            newline = f"{korean},{translation}"
+            filecontents += f"\n{newline}"
+        
+    with open("textl.csv","w",encoding="utf-16") as newfile:
+        newfile.write(filecontents)
+    
+    # vocab = {}
+    # last_stopped = 0 
+    # fails = 0
+    # for unit in [1,2,3,4,5]:
+    #     for lesson in list(range(last_stopped,100)):
+    #         request_url = f"https://www.howtostudykorean.com/unit-{unit}/unit-{unit}-lesson-{lesson}"
+    #         if unit == 1 and lesson > 8:
+    #             if lesson > 16: 
+    #                 last_stopped = 16 
+    #                 break
+    #             request_url = links[lesson]
+    #         if unit > 1:
+    #             request_url = f"https://www.howtostudykorean.com/unit-{unit}/lesson-{lesson}/"
+    #         r   = requests.get(request_url,timeout=.5)
 
-            new_vocab = parse_grammar(r.text)
-            for word in new_vocab:
-                if word in vocab:
-                    vocab[word] = f"{vocab[word]} / {new_vocab[word]}"
-                else:
-                    vocab[word] = new_vocab[word]
-            
-        else:
-            print(f"Unit-{unit} Lesson-{lesson}\tfailed with {r.status_code}")
-            print(request_url)
-            fails += 1 
-            if fails > 2:
-                last_stopped = lesson-3
-                break
-        time.sleep(random.random()+2)
-    save_progess(vocab)
+    #         if r.status_code == 200:
+    #             print(f"Unit-{unit} Lesson-{lesson}\tsuccess")
+    #             #input(r.text)
+
+    #             new_vocab = parse_grammar(r.text)
+    #             for word in new_vocab:
+    #                 if word in vocab:
+    #                     vocab[word] = f"{vocab[word]} / {new_vocab[word]}"
+    #                 else:
+    #                     vocab[word] = new_vocab[word]
+                
+    #         else:
+    #             print(f"Unit-{unit} Lesson-{lesson}\tfailed with {r.status_code}")
+    #             print(request_url)
+    #             fails += 1 
+    #             if fails > 2:
+    #                 last_stopped = lesson-3
+    #                 break
+    #         time.sleep(random.random()+2)
+    #     save_progess(vocab)

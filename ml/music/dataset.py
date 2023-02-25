@@ -34,7 +34,7 @@ def normalize_level(sound:AudioSegment,normalization_level):
     return sound.apply_gain(delta_dBFS)
 
 #Normalize to  [-peak,peak]
-def normalize_peak(arr,peak=.6):
+def normalize_peak(arr,peak=1):
     max_ampl    = numpy.amax(arr)
     if max_ampl == 0:
         raise ValueError
@@ -152,12 +152,12 @@ def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel",peak_no
             ch1[i] = c1/max_val
             ch2[i] = c2/max_val
 
-        except ValueError:
+        except ValueError as ve:
 
             if ((n_samples - sample) / n_samples) < .001:
                 pass
             else:
-                print("-\tBAD")
+                print(f" {ve}\n-\tBAD")
 
     #Ensure output is correct length
     count = 0 
@@ -403,7 +403,7 @@ def upscale(arr_in,sf):
 if __name__ == "__main__":
     mode = sys.argv[1]
 
-    category    = "LOFI_sf5_t20_c1_redo2"
+    category    = "LOFI_sf5_t20_c1_peak1"
     ####################################################################################    
     #                                      DOWNLOAD                                    # 
     ####################################################################################    

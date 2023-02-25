@@ -6,7 +6,7 @@ import numpy
 import time 
 import json
 import os 
-from dataset import reconstruct, upscale
+from dataset import reconstruct, upscale, normalize_peak
 import random 
 import sys 
 import pprint 
@@ -27,9 +27,9 @@ from torch.profiler import record_function
 #Dataset that is from all data combined
 class AudioDataSet(Dataset):
 
-    def __init__(self,fnames,out_len,save_to_sc=False):
+    def __init__(self,fnames,out_len,save_to_sc=False,normalizing=1):
         print(f"DATA")
-        print(f"creating dataset: {md5(str(fnames).encode()).hexdigest()[:10]}")
+        print(f"creating dataset: {md5(str(fnames).encode()).hexdigest()[:10]}\tnormalizing to {normalizing}")
         
         #Load files as torch tensors 
         self.data = []
@@ -38,6 +38,8 @@ class AudioDataSet(Dataset):
         for f in fnames:
 
             arr = numpy.load(f)
+            if normalizing:
+                arr = (normalize_peak(arr,peak=normalizing))
             tensor = torch.from_numpy(arr).view(1,-1).type(torch.float32)
 
             #Tensor has to be sent back to CPU
@@ -421,7 +423,7 @@ class Trainer:
        
         t_d.append(0)
         t_g.append(0)
-        if (d_error_real < .00001) and ((d_error_fake) < .00001):
+        if (d_error_real < .0001) and ((d_error_fake) < .0001):
             return True
 
     #Train models with NO accumulation
@@ -821,7 +823,7 @@ class Trainer:
             self.build_dataset(train_set,load,bs,True,4)
             if verbose:
                 print_epoch_header(e,epochs)
-            failed = self.train(verbose=verbose,t_dload=time.time()-t0)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
+            failed = self.train(verbose=verbose,t_dload=time.time()-t0,proto_optimizers=False)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
             if (e+1) % sample_rate == 0:
                 self.sample(f"{sample_out}_{e+1}.wav",sf=sf)
             if failed:
@@ -833,9 +835,8 @@ class Trainer:
 if __name__ == "__main__" and True:
 
     bs          = 8
-    ep          = 64
+    ep          = 128
     dev         = torch.device('cuda')
-    wd          = .00002
     kernels     = [5,17,65,33,33,17,9]
     paddings    = [int(k/2) for k in kernels]
     load        = eval(sys.argv[sys.argv.index("ld")+1]) if "ld" in sys.argv else bs*250
@@ -846,7 +847,7 @@ if __name__ == "__main__" and True:
     if "linux" in sys.platform:
         root    = "/media/steinshark/stor_lg/music/dataset/LOFI_sf5_t60"
     else:
-        root    = "C:/data/music/dataset/LOFI_sf5_t20_thrsh.9"
+        root    = "C:/data/music/dataset/LOFI_sf5_t20_c1_peak1"
     
     files   = [os.path.join(root,f) for f in os.listdir(root)]
 
@@ -855,24 +856,31 @@ if __name__ == "__main__" and True:
     # for ch_i,ch in enumerate([[200,150,100,50,25,2]]):
     #     for k_i,ker in enumerate([[1001,501,201,33,33,17]]):
     configs = { 
-                #"upsample" : {"init":sandboxG.build_upsamp,"beta":(.5,.5),"lrs":(.0002,.0002),"ncz":2048,"kernel":0,"factor":0,"leak":.05}
-                #"TEST" : {"init":sandboxG.buildBest,"beta": (.5,.5),"lrs": (.0001,.0002), "ncz":1024,"kernel":0,"factor":0,"leak":.2},
-                #"best_SGD_f0"  : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00004,.00006), "ncz":512,"kernel":0,"factor":0,"leak":.2},
-                #"best_SGD_f1_1024"  : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.0001,.0002), "ncz":512,"kernel":0,"factor":1,"leak":.2},
-                "best_SGD"   : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00004,.00006), "ncz":256,"kernel":0,"factor":0,"leak":.2},
-                #"best_SGD_f1_512"   : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.0001,.0002), "ncz":256,"kernel":0,"factor":1,"leak":.2},
-                
-                #"conf_2" : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00002,.0002), "ncz":1024,"kernel":1,"factor":0,"leak":.2}
-                #"conf_2" : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00002,.00002), "ncz":128,"kernel":1,"factor":0,"leak":.2},
-                #"conf_3" : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00002,.00002), "ncz":1024,"kernel":2,"factor":0,"leak":.2},
+                "mod1"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":64,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":2},
+                "mod2"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":128,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":2},
+                "mod3"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":256,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":2},
 
-                #"conf_4" : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00002,.00002), "ncz":64,"kernel":0,"factor":1,"leak":.2},
-                #"conf_5" : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00002,.00002), "ncz":128,"kernel":1,"factor":1,"leak":.2},
-                #"conf_6" : {"init":sandboxG.buildBestMod1,"beta": (.5,.5),"lrs": (.00002,.00002), "ncz":1024,"kernel":2,"factor":1,"leak":.2},
+                "mod4"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":64,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":4},
+                "mod5"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":128,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":4},
+                "mod6"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":256,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":4},
 
-                #"conf_7" : {"init":sandboxG.buildBestMod1,"beta": (.2,.2),"lrs": (.00002,.00002), "ncz":64,"kernel":0,"factor":0,"leak":.2},
-                #"conf_8" : {"init":sandboxG.buildBestMod1,"beta": (.2,.2),"lrs": (.00002,.00002), "ncz":128,"kernel":1,"factor":0,"leak":.2},
-                #"conf_9" : {"init":sandboxG.buildBestMod1,"beta": (.2,.2),"lrs": (.00002,.00002), "ncz":1024,"kernel":2,"factor":0,"leak":.2},
+                "mod7"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":64,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":8},
+                "mod8"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":128,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":8},
+                "mod9"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":256,"kernel":0,"factor":0,"leak":.2,"momentum":.9,"bs":8},
+
+
+
+                "mod1"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":64,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":2},
+                "mod2"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":128,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":2},
+                "mod3"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":256,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":2},
+
+                "mod4"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":64,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":4},
+                "mod5"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":128,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":4},
+                "mod6"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":256,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":4},
+
+                "mod7"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":64,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":8},
+                "mod8"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":128,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":8},
+                "mod9"   : {"init":sandboxG.buildBestMod1,"lrs": (.00015,.0003), "ncz":256,"kernel":0,"factor":0,"leak":.2,"momentum":.7,"bs":8},
                 
 
     }
@@ -882,11 +890,12 @@ if __name__ == "__main__" and True:
         name                = config 
         ncz                 = configs[config]['ncz'] 
         lrs                 = configs[config]['lrs']
-        betas               = configs[config]['beta']
+        momentum            = configs[config]['momentum']
         kernel              = configs[config]['kernel']
         factor              = configs[config]['factor']
         leak                = configs[config]['leak']
-        series_name = f"outputs/{name}_ncz{ncz}_lr{lrs}_beta{betas}_kern{kernel}_fact{factor}_l{leak}"
+        bs                  = configs[config]['bs']
+        series_name = f"outputs/{name}_ncz{ncz}_lr{lrs}_moment{momentum}_l{leak}"
         loading             = True if not "lf" in sys.argv else eval(sys.argv[sys.argv.index("lf")+1]) 
         
         #Build Trainer 
@@ -914,15 +923,15 @@ if __name__ == "__main__" and True:
             print("loaded models")
         else:
             t.epoch_num     = 0
-        print(f"G stats:\tout  - {G.forward(inpv2).shape}\n        \tsize - {(sum([p.nelement()*p.element_size() for p in G.parameters()])/1000000):.2f}MB")
-        print(f"D stats:\tout  - {D(G.forward(inpv2)).shape}\n        \tsize - {(sum([p.nelement()*p.element_size() for p in D.parameters()])/1000000):.2f}MB\n        \tval  - {D(G.forward(inpv2)).detach().cpu().item():.3f}")
+        print(f"G stats:\tout  - {   G.forward(inpv2).shape }\n        \tsize - {(sum([p.nelement()*p.element_size() for p in G.parameters()])/1000000):.2f}MB")
+        print(f"D stats:\tout  - {D( G.forward(inpv2)).shape}\n        \tsize - {(sum([p.nelement()*p.element_size() for p in D.parameters()])/1000000):.2f}MB\n        \tval  - {D(G.forward(inpv2)).detach().cpu().item():.3f}")
 
         #Create optims 
         #optim_d = torch.optim.AdamW(D.parameters(),lrs[0],betas=(betas[0],.999))
         #optim_g = torch.optim.AdamW(G.parameters(),lrs[1],betas=(betas[1],.999))
-        
-        optim_d = torch.optim.SGD(D.parameters(),lrs[0],momentum=.9,weight_decay=lrs[0]/10)
-        optim_g = torch.optim.SGD(G.parameters(),lrs[1],momentum=.9,weight_decay=lrs[1]/10)
+    
+        optim_d = torch.optim.SGD(D.parameters(),lrs[0],momentum=momentum,weight_decay=lrs[0]/10)
+        optim_g = torch.optim.SGD(G.parameters(),lrs[1],momentum=momentum,weight_decay=lrs[1]/10)
         
         
         if not os.path.exists("outputs"):
