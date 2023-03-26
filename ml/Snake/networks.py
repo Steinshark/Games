@@ -84,7 +84,7 @@ class FullyConnectedNetwork(nn.Module):
 
 class ConvolutionalNetwork(nn.Module):
 	
-	def __init__(self,loss_fn=None,optimizer_fn=None,lr=1e-6,wd:float=1e-6,architecture:list=[],input_shape=(1,3,30,20),device=torch.device("cpu"),verbose=False):
+	def __init__(self,loss_fn=None,optimizer_fn=None,kwargs={},architecture:list=[],input_shape=(1,3,30,20),device=torch.device("cpu"),verbose=False):
 		super(ConvolutionalNetwork,self).__init__()
 		self.input_shape 	= input_shape
 		through 			= torch.ones(size=input_shape,device=device)
@@ -97,7 +97,7 @@ class ConvolutionalNetwork(nn.Module):
 		pad     = module.padding
 		kernel  = module.kernel_size
 		stride  = module.stride
-		architecture[0] = torch.nn.Conv2d(ch_in,ch_out,kernel,stride,pad,device=device)
+		architecture[0] = torch.nn.Conv2d(ch_in,ch_out,kernel,stride,pad,device=devic,bias=Falsee)
 		
 		for i,module in enumerate(architecture):
 
@@ -121,7 +121,7 @@ class ConvolutionalNetwork(nn.Module):
 		o_d 				= OrderedDict({str(i) : n for i,n in enumerate(architecture)})
 		self.model 			= nn.Sequential(o_d)
 		self.loss = loss_fn()
-		self.optimizer = optimizer_fn(self.model.parameters(),lr=lr)
+		self.optimizer = optimizer_fn(self.model.parameters(),**kwargs)
 		self.to(device)
 
 		if verbose:
@@ -156,10 +156,10 @@ class ConvNet(nn.Module):
 		self.layers = {}
 
 		for l in architecture:
-			#Add Conv2d layers
+			#Add Conv2d laye,bias=Falsers
 			if len(l) == 3:
 				in_c,out_c,kernel_size = l[0],l[1],l[2]
-				self.layers.append(len(self.layers),nn.Conv2d(in_c,out_c,kernel_size))
+				self.layers.append(len(self.layers),nn.Conv2d(in_c,out_c,kernel_size,bias=False))
 				self.layers.append(nn.ReLU())
 			#Add Linear layers
 			elif len(l) == 2:
@@ -171,43 +171,86 @@ class ConvNet(nn.Module):
 		self.loss = loss_fn()
 
 
+class IMG_NET(nn.Module):
+
+	def __init__(self,input_shape=(3,540,960),loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.75,.999)},device=torch.device('cuda')):
+		super(IMG_NET,self).__init__()
+
+		self.model 			= nn.Sequential(
+
+			# #960x540
+			# nn.Conv2d(input_shape[1],32,5,1,2,bias=False),
+			# nn.LeakyReLU(negative_slope=.02),
+			# nn.BatchNorm2d(32),
+			# nn.MaxPool2d(2),		
+			#480x270
+			nn.Conv2d(input_shape[1],64,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(64),
+			nn.MaxPool2d(2),	
+			#240x135
+			nn.Conv2d(64,64,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(64),
+			nn.MaxPool2d(2),
+			#120,67
+			nn.Conv2d(64,128,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(128),
+			nn.MaxPool2d(2),
+			#60,33
+			nn.Conv2d(128,128,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(128),
+			nn.MaxPool2d(2),
+			#30,16
+			nn.Conv2d(128,128,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(128),
+			nn.Conv2d(128,128,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(128),
+			nn.MaxPool2d(2),
+			#15x8
+			nn.Conv2d(128,128,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(128),
+			nn.MaxPool2d(2),
+			#9x6
+			nn.Conv2d(128,128,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(128),
+			nn.MaxPool2d(2),
+			#5x4
+			nn.Conv2d(128,128,3,1,2,bias=False),
+			nn.ReLU(),#negative_slope=.02),
+			nn.BatchNorm2d(128),
+			nn.MaxPool2d(2),
+			#3x3
+			nn.Flatten(1),
+			nn.Linear(768,256),
+			nn.Sigmoid(),#negative_slope=.02),
+			nn.Linear(256,4)
+		).to(device)
+
+		self.loss 		= loss_fn()
+		self.optimizer		= optimizer_fn(self.model.parameters(),**kwargs)
+
+	def forward(self,x):
+		return self.model(x)
 
 
-def init_weights(m):
+def init_weights(m,conv_av=0.0,conv_var=0.02,bn_av=1.0,bn_var=.02):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
+        nn.init.normal_(m.weight.data, conv_av, conv_var)
     elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.normal_(m.weight.data, bn_av, bn_var)
         nn.init.constant_(m.bias.data, 0)
 
 if __name__ == "__main__":
-	function = lambda x : math.sin(x*.01) + 4
-	x_fun = lambda x : [x, x**2, 1 / (x+.00000001), math.sin(x * .01)]
-	x_train = torch.tensor([[x] for x in range(2000) if random.randint(0,100) < 80],dtype=torch.float)
-	x_train1 =  torch.tensor([x_fun(x) for x in range(2000) if random.randint(0,100) < 80],dtype=torch.float)
-	y_train = torch.tensor([[function(x[0])] for x in x_train1],dtype=torch.float)
+	inv 	= torch.randn(size=(3,3,540,960),dtype=torch.float,device=torch.device('cuda'))
 
-	#print(x_train.shape)
-	#print(y_train.shape)
-	#plt.scatter(x_train,y_train)
-	#plt.show()
-	print("Prelim dataset")
+	model = IMG_NET(960,540,3)
 
-	model = FullyConnectedNetwork(len(x_train1[0]))
-	model.train(x_train1,y_train)
-
-
-
-	x_pred = torch.tensor([[x] for x in range(2000) if random.randint(0,100) < 20],dtype=torch.float)
-	x_pred1 = torch.tensor([x_fun(x) for x in range(2000) if random.randint(0,100) < 20],dtype=torch.float)
-
-	y_actual = torch.tensor([[function(x[0])] for x in x_pred1],dtype=torch.float)
-
-
-	y_pred = model.forward(x_pred1).cpu().detach().numpy()
-
-	plt.scatter([i for i in range(len(x_pred1))],y_actual)
-	plt.scatter([i for i in range(len(x_pred1))],y_pred)
-	plt.show()
-	print("model output")
+	print(f"{model.forward(inv).shape}")

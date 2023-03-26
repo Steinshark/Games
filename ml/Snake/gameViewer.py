@@ -11,12 +11,14 @@ import random
 from matplotlib import pyplot as plt 
 import random 
 import pygame
-from trainer import Trainer
+#from trainer import Trainer
+from trainerIMG import Trainer
 from PIL import Image
 from telemetry import ARCHITECTURES, LOSSES ,OPTIMIZERS, DEFAULTS
 import copy 
 from threading import Thread
 from multiprocessing import Process
+from threading import Thread
 import numpy 
 import time 
 from torch.nn import Conv2d
@@ -99,6 +101,7 @@ class TrainerApp:
                             "ss"            : None,
                             "bs"            : None,
                             "lr"            : None,
+                            "kw"            : None,
                             "ep"            : None,
                             "ms"            : None,
                             "mx"            : None,
@@ -108,7 +111,8 @@ class TrainerApp:
                             "tr"            : None,
                             "gam"           : None,
                             "gpu"           : BooleanVar(),
-                            "rew"           : None
+                            "rew"           : None,
+                            "rpick"         : None
         }
         self.settings['gpu'].set(False)
 
@@ -122,6 +126,7 @@ class TrainerApp:
                         "ss"    : Frame(self.control_frame,padx=1,pady=1),
                         "bs"    : Frame(self.control_frame,padx=1,pady=1),
                         "lr"    : Frame(self.control_frame,padx=1,pady=1),
+                        "kw"    : Frame(self.control_frame,padx=1,pady=1),
                         "ep"    : Frame(self.control_frame,padx=1,pady=1),
                         "ms"    : Frame(self.control_frame,padx=1,pady=1),
                         "mx"    : Frame(self.control_frame,padx=1,pady=1),
@@ -132,7 +137,8 @@ class TrainerApp:
                         "tr"    : Frame(self.control_frame,padx=1,pady=1),
                         "gam"   : Frame(self.control_frame,padx=1,pady=1),
                         "gpu"   : Frame(self.control_frame,padx=1,pady=1),
-                        "rew"   : Frame(self.control_frame,padx=1,pady=1)
+                        "rew"   : Frame(self.control_frame,padx=1,pady=1),
+                        "rpick" : Frame(self.control_frame,padx=1,pady=1)
         }
         
         for sf in self.setting_frames:
@@ -158,6 +164,8 @@ class TrainerApp:
                                                     text="Batch Size"),
                                 "lr"        :   Label( self.setting_frames['lr'],
                                                     text="Learning Rate"),
+                                "kw"        :   Label( self.setting_frames['kw'],
+                                                    text="optimizer kwargs"),
                                 "ep"        :   Label( self.setting_frames["ep"],
                                                     text="Epochs"),
                                 "ms"        :   Label( self.setting_frames["ms"],
@@ -175,16 +183,18 @@ class TrainerApp:
                                 "tr"        :   Label( self.setting_frames["tr"],
                                                     text="Transfer Rate"),
                                 "gam"        :   Label( self.setting_frames["gam"],
-                                                    text="Gamma"),
+                                                    text="Gamma γ"),
                                 "gpu"       :   Label( self.setting_frames['gpu'],
                                                     text="GPU Acceleration"),
                                 "rew"       :   Label( self.setting_frames['rew'],
-                                                    text="Reward")
+                                                    text="Reward"),
+                                "rpick"     :   Label( self.setting_frames['rpick'],
+                                                    text="Rand Pick Drop")
                                         
         }
         self.game_tracker = []
+        self.training_epoch_finished        = False 
 
-        
         #Prepr Vars
         arch_options    = list(ARCHITECTURES.keys())
         losses_options  = list(LOSSES.keys())
@@ -201,6 +211,7 @@ class TrainerApp:
                                 "ss"        :   Entry(self.setting_frames["ss"],width=entry_w),
                                 "bs"        :   Entry(self.setting_frames["bs"],width=entry_w),
                                 "lr"        :   Entry(self.setting_frames["lr"],width=entry_w),
+                                "kw"        :   Entry(self.setting_frames["kw"],width=entry_w),
                                 "ep"        :   Entry(self.setting_frames["ep"],width=entry_w),
                                 "ms"        :   Entry(self.setting_frames["ms"],width=entry_w),
                                 "mx"        :   Entry(self.setting_frames["mx"],width=entry_w),
@@ -211,7 +222,8 @@ class TrainerApp:
                                 "tr"        :   Entry(self.setting_frames["tr"],width=entry_w),
                                 "gam"       :   Entry(self.setting_frames['gam'],width=entry_w),
                                 "gpu"       :   Checkbutton(self.setting_frames["gpu"],variable=self.settings['gpu'],onvalue=True,offvalue=False),
-                                "rew"       :   Entry(self.setting_frames['rew'],width=entry_w*3)
+                                "rew"       :   Entry(self.setting_frames['rew'],width=entry_w*3),
+                                "rpick"     :   Entry(self.setting_frames['rpick'],width=entry_w*3)
         }
 
         #Place all Items
@@ -273,8 +285,10 @@ class TrainerApp:
         self.stats_frame.columnconfigure(3,weight=1)
 
 
-        self.var_step    = StringVar()
-        self.var_score   = StringVar()
+        self.gui_var_step       = None 
+        self.gui_var_score      = None 
+        self.var_step           = StringVar()
+        self.var_score          = StringVar()
         self.var_step.set("0")
         self.var_score.set("0") 
         self.steps_avg_label    = Label(self.stats_frame,text="Steps:",width=5)
@@ -344,7 +358,9 @@ class TrainerApp:
         self.game_image                 = None
     
     def run_loop(self):
+        self.window.after(100,self.update)
         self.window.mainloop()
+        print("exit window mainloop")
 
     def set_vars(self):
 
@@ -360,7 +376,7 @@ class TrainerApp:
             elif s_key == "gpu":
                 #print(f"value of gpu is {self.settings['gpu'].get()}")
                 pass
-            elif s_key == 'rew':
+            elif s_key in ['kw','rew']:
                 self.settings[s_key] = eval(self.fields[s_key].get())
             else:
                 self.settings[s_key] = float(eval(self.fields[s_key].get()))
@@ -371,9 +387,9 @@ class TrainerApp:
         pprint.pp(self.settings)
 
         self.longest_run        = []
-        self.cur_game_steps      = [] 
-        self.cur_game_scores     = []
-
+        self.cur_game_steps     = [] 
+        self.cur_game_scores    = []
+        self.cancel_var         = False 
         self.trainer = Trainer( int(self.settings["gameX"]),
                                 int(self.settings["gameY"]),
                                 visible         = False,
@@ -381,24 +397,27 @@ class TrainerApp:
                                 memory_size     = int(self.settings["ms"]),
                                 loss_fn         = self.settings["lo"],
                                 optimizer_fn    = self.settings['op'],
-                                lr              = self.settings['lr'],
+                                kwargs          = dict(self.settings['kw'],**{"lr":self.settings['lr']}),
                                 architecture    = self.settings['arch']['arch'],
                                 gpu_acceleration= self.settings["gpu"].get(),
                                 m_type          = self.settings['arch']['type'],
                                 progress_var    = self.progress_var,
                                 output          = self.telemetry_box,
-                                steps           = self.var_step,
-                                scored          = self.var_score,
+                                steps           = self.gui_var_step,
+                                scored          = self.gui_var_score,
                                 score_tracker   = self.cur_game_scores,
                                 step_tracker    = self.cur_game_steps,
-                                parent_instance = self,
+                                best_score      = self.best_score,
+                                best_game       = self.best_game,
                                 game_tracker    = self.game_tracker,
                                 gamma           = self.settings['gam'],
+                                instance      = self,
                                 gui=True
                                 ) 
         
+        
         self.telemetry_box.insert(tk.END,"\n\nTrainer Created Successfully\n")
-        self.train_thread = Process( target=self.trainer.train_concurrent,
+        self.train_thread = Thread( target=self.trainer.train_concurrent,
                                      kwargs={       "iters":int(self.settings['iters']),
                                                     "train_every":int(self.settings['te']),
                                                     "pool_size":int(self.settings['ps']),
@@ -407,28 +426,30 @@ class TrainerApp:
                                                     "epochs":int(self.settings['ep']),
                                                     "transfer_models_every":int(self.settings['tr']),
                                                     "rewards":self.settings['rew'],
-                                                    "verbose":True
+                                                    "verbose":True,
+                                                    "random_pick":False,
+                                                    "drop_rate":self.settings['rpick']
                                             },
                                      )
+        
         self.telemetry_box.insert(tk.END,"Starting train thread\n")
-        self.train_thread.run()
+        self.train_thread.start()
 
     def cancel_training(self):
         self.var_step.set("0")
         self.var_score.set("0") 
-        self.trainer.cancelled = True 
+        self.cancel_var = True 
         self.progress_var.set(0)
+        self.broke_training     = False 
         try:
-            self.train_thread.close()
-            self.train_thread = None
             self.telemetry_box.insert(tk.END,"Cancelling Training\n")
         except AssertionError as AE:
             print(f"error joining thread")
             print(AE)
             
-        print(f"cancelled")
     
     def place_steps(self):
+        self.step_canvas.update()
         self.step_telemetry.update()
         self.score_telemetry.update()
 
@@ -458,9 +479,9 @@ class TrainerApp:
         self.telemetry_box.yview(tk.END)
     
     def place_scores(self): 
+        self.score_canvas.update()
         self.step_telemetry.update()
         self.score_telemetry.update()
-
         avg = int(len(self.cur_game_scores) / 128) 
         avg = 1 if avg < 1 else avg
         #scores = copy.deepcopy(self.cur_game_scores)
@@ -597,7 +618,7 @@ class TrainerApp:
         pixs[x,y] = red 
 
         #Scale img up to size 
-        self.game_image = prescaled_image.resize((self.IMG_W,self.IMG_H),resample=Image.NEAREST)
+        self.game_image = prescaled_image.resize((self.IMG_W,self.IMG_H),resample=Image.Resampling.NEAREST)
         self.show_image = ImageTk.PhotoImage(self.game_image)
         self.view_frame.update()
         self.top_x = self.game_canvas.winfo_width()/2 
@@ -606,40 +627,27 @@ class TrainerApp:
         self.game_canvas.create_image(self.top_x,self.top_y,image=self.show_image)
         self.game_canvas.update()
 
+    def update(self):
+        self.lock                   = True 
+        if self.training_epoch_finished:
+            self.place_steps()
+            self.place_scores()
+            self.training_epoch_finished = False
+        self.lock                   = False 
+        self.window.after(100,self.update)
 
 if __name__ == "__main__":
     #    OPTIONS                                        GAME 
-    ######################################################################################
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    #                       #
-    ######################################################################################
+
     #Create the root frame 
-    
     try:
         ta = TrainerApp(1200,800)
 
         ta.run_loop()
+    
+    except Exception as e:
+        print(e)
 
-    except Exception:
-        pass
 
 
 

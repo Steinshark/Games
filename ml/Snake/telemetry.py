@@ -6,6 +6,7 @@ from torch.nn import ReLU,MaxPool2d,Conv2d,Linear,Softmax,Flatten, BatchNorm2d, 
 from tkinter import BooleanVar
 from networks import ConvolutionalNetwork
 #Plot a list of scores and lives from a run of snake trainer
+
 def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],graph_name="NoName",f_name="iterations"):
 
     colors = ["red","green","orange","cyan","black","mediumblue","chocolate","deepskyblue","gold"]
@@ -48,12 +49,14 @@ def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],grap
 #                  "CNN_4"    : {"type":"CNN","arch":[[3,32,3],[32,64,3],[128,64],[64,4]]}}
 
 ARCHITECTURES = {   
-                    "sm"        : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4)]},
-                    "med"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,5,1,0),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4)                         ]},
-                    "medS"      : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),ReLU(),Conv2d(32,32,5,1,0),ReLU(),Flatten(),Linear(512,128),ReLU(),Linear(128,4), Softmax(dim=1)                         ]},
-                    "lg"        : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),ReLU(),Conv2d(64,64,5,1,0),ReLU(),Flatten(),Linear(1,512),ReLU(),Linear(512,64),ReLU() ,Linear(64,4)                       ]},
-                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(2,32,3,1,2),BatchNorm2d(32) ,ReLU(),MaxPool2d(2, 2),Conv2d(32,64,3,1,1),BatchNorm2d(64),ReLU(),MaxPool2d(2,2),Conv2d(64, 128, 3, 1, 1),BatchNorm2d(128)   ,ReLU()     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,ReLU() ,Linear(128, 4) ]},
-                    "new"       : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),LeakyReLU(.2),Conv2d(64,64,5,1,1),LeakyReLU(.2),Conv2d(64,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(16,4)]}
+                    "sm"        : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4)]},
+                    "sm5"       : {"type":"CNN","arch":[Conv2d(2,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4)]},
+                    "med"       : {"type":"CNN","arch":[Conv2d(2,16,3,1,1),LeakyReLU(.2),Conv2d(16,32,5,1,0),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4)                         ]},
+                    "med7"      : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),LeakyReLU(.2),Conv2d(64,64,7,1,0),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4),                         ]},
+                    "lg"        : {"type":"CNN","arch":[Conv2d(2,16,3,1,1),LeakyReLU(.2),Conv2d(16,64,5,1,0),LeakyReLU(.2),Conv2d(64,64,5,1,0),LeakyReLU(.2),Flatten(),Linear(1,512),LeakyReLU(.2),Linear(512,64),LeakyReLU(.2) ,Linear(64,4)                       ]},
+                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(2,32,3,1,2),BatchNorm2d(32) ,LeakyReLU(.2),MaxPool2d(2, 2),Conv2d(32,64,3,1,1),BatchNorm2d(64),LeakyReLU(.2),MaxPool2d(2,2),Conv2d(64, 128, 3, 1, 1),BatchNorm2d(128)   ,LeakyReLU(.2)     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,LeakyReLU(.2) ,Linear(128, 4) ]},
+                    "new"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),LeakyReLU(.2),Conv2d(32,64,5,1,1),LeakyReLU(.2),Conv2d(64,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(16,4)]},
+                    "newsm"     : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),LeakyReLU(.2),Conv2d(32,64,5,1,1),LeakyReLU(.2),Conv2d(64,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(8,4)]}
 
 }#,Softmax(dim=0)]}}
 
@@ -68,30 +71,32 @@ OPTIMIZERS  = { "Adam"      : torch.optim.Adam,
 
 DEFAULTS    = { "gameX"     : 20,
                 "gameY"     : 20,
-                "iters"     : 1024*32,
-                "te"        : 16,
-                "ps"        : 1024*16,
-                "ss"        : 1024*4,
-                "bs"        : 1024,
-                "lr"        : .0015,
+                "iters"     : 1024*64,
+                "te"        : 8,
+                "ps"        : 2048,
+                "ss"        : 1024,
+                "bs"        : 32,
+                "lr"        : .000001,
+                "kw"        : "{'weight_decay':.0000001}",
                 "ep"        : 1,
                 "ms"        : 2,
-                "mx"        : 100,
+                "mx"        : 200,
                 "sf"        : 1,
                 "arch"      : "",
                 "lo"        : "",
                 "op"        : "",
-                "tr"        : 16,
-                "gam"       : .79,
-                "gpu"       : False,
-                "rew"       : "{'die':-.7,'eat':1.85,'step':0}"
+                "tr"        : 4,
+                "gam"       : .85,
+                "gpu"       : True,
+                "rew"       : "{'die':-1.25,'eat':1.99,'step':0}",
+                "rpick"     : .25
                 }
 
 
 
 
-in_v    = torch.randn(size=(1,2,20,20),dtype=torch.float)
+# in_v    = torch.randn(size=(1,2,20,20),dtype=torch.float)
 
-model = ConvolutionalNetwork(torch.nn.MSELoss,torch.optim.Adam,lr=.0001,architecture=ARCHITECTURES['new']['arch'],input_shape=(1,2,20,20))
+# model = ConvolutionalNetwork(torch.nn.MSELoss,torch.optim.Adam,lr=.0001,architecture=ARCHITECTURES['new']['arch'],input_shape=(1,2,20,20))
 
-print(f"Model Out: {model.forward(in_v).shape}")
+# print(f"Model Out: {model.forward(in_v).shape}")

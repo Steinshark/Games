@@ -2,7 +2,7 @@ import networks
 import torch 
 import os 
 import time 
-import SnakeConcurrent
+import SnakeConcurrentIMG
 import random 
 from matplotlib import pyplot as plt 
 import numpy 
@@ -21,8 +21,7 @@ class Trainer:
 					memory_size=4,
 					loss_fn=torch.nn.MSELoss,
 					optimizer_fn=torch.optim.Adam,
-					lr=5e-4,
-					wd=0,
+					kwargs={"lr":1e-5},
 					fname="experiences",
 					name="generic",
 					gamma=.96,
@@ -42,6 +41,7 @@ class Trainer:
 					gui=False):
 
 
+		
 
 		#Set file handling vars 
 		self.PATH 				= PATH
@@ -78,11 +78,9 @@ class Trainer:
 		#Set training vars 
 		self.gamma 				= gamma
 		self.memory_size 		= memory_size
-		self.lr 				= lr
-		self.wd 				= wd
 		self.epsilon 			= epsilon
 		self.e_0 				= self.epsilon
-
+		self.kwargs				= kwargs
 		#Enable cuda acceleration if specified 
 		self.device 			= torch.device('cuda') if gpu_acceleration else torch.device('cpu')
 
@@ -92,18 +90,26 @@ class Trainer:
 		#Generate models for the learner agent 
 		if m_type == "FCN":
 			self.input_dim *= 3
-			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
-			self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture)
+			self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,architecture=architecture)
+			self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,architecture=architecture)
 			self.encoding_type = "one_hot"
 		elif m_type == "CNN":
 			self.input_shape = (1,architecture[0].in_channels*memory_size,game_w,game_h)
-			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device,verbose=True)
+			self.target_model 	= networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,architecture=architecture,input_shape=self.input_shape,device=self.device,verbose=True)
 			if self.gui:
 				self.output.insert(tk.END,f"Generated training model\n\t{sum([p.numel() for p in self.target_model.model.parameters()])} params")
-			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,lr=lr,wd=wd,architecture=architecture,input_shape=self.input_shape,device=self.device)
+			self.learning_model = networks.ConvolutionalNetwork(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,architecture=architecture,input_shape=self.input_shape,device=self.device)
 			self.encoding_type = "6_channel"
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
+
+
+
+		#print(self.learning_model)
+		#REMOVE 
+		networks.init_weights(self.learning_model)
+		networks.init_weights(self.target_model)
+
 
 
 
@@ -170,7 +176,9 @@ class Trainer:
 						if verbose and e_i % 1024 == 0:
 							print(f"quality of exps is {(100*quality / len(indices)+.1):.2f}%")
 						while not len(best_sample) == sample_size:
-							if random.uniform(0,1) < .5:
+							pick_rate 	= .1 
+							#With odds 'pick_rate', pick a scoring sample 
+							if random.uniform(0,1) < .1:
 								if len(indices) > 0:
 									i = indices.pop(0)
 									blacklist.append(i)
@@ -322,27 +330,18 @@ class Trainer:
 				else:
 					training_set 	= []
 					training_ind	= []
-					drop_rate = .8
+					drop_rate = .3
 
-					#Drop non-food examples with rate .75
 					while len(training_set) < sample_size: 
 
 						cur_i = random.randint(0,len(memory_pool)-1)
 						while cur_i in training_ind:
 							cur_i = random.randint(0,len(memory_pool)-1)
 
-						if not memory_pool[cur_i]['r'] > 0:# or not memory_pool[cur_i]['r'] < .5: 
-
-							if random.random() < drop_rate:
-								continue 
-							else:
-								
-								training_ind.append(cur_i)
-								training_set.append(memory_pool[cur_i])
+						#Drop non-scoring experiences with odds: 'drop_rate'
+						if abs(memory_pool[cur_i]['r']) < .1 and random.random() < drop_rate:
+								continue
 						else:
-							if memory_pool[cur_i]['r'] < .5 and False:
-								if random.random < drop_rate*.5:
-									continue
 							training_set.append(memory_pool[cur_i])
 							training_ind.append(cur_i)
 
@@ -495,7 +494,7 @@ class Trainer:
 			#	Telemetry Vars 
 			t0 			= time.time()
 			t_gpu 		= 0
-			num_equals 	= 53 
+			num_equals 	= 45 
 			printed 	= 0
 			total_loss	= 0
 			#	Telemetry
@@ -583,10 +582,18 @@ class Trainer:
 			if self.m_type == "FCN":
 				self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
 			elif self.m_type == "CNN":
-				self.target_model = networks.ConvolutionalNetwork(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture,input_shape=self.input_shape)
+				self.target_model = networks.ConvolutionalNetwork(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,architecture=self.architecture,input_shape=self.input_shape)
 
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
 			self.target_model.to(self.device)
+
+	def load_prev_models(self):
+		
+		self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
+		self.learning_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
+		
+		self.target_model.to(self.device)
+		self.learning_model.to(self.device)
 
 	@staticmethod
 	def update_epsilon(percent):
