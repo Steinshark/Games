@@ -10,14 +10,14 @@ import json
 import time 
 
 _DEV        = torch.device('cuda')
-_KERNELS    = [5,7,13,11,9,7,5,3]
+_KERNELS    = [3,5,7,11,9,7,5,3]
 _PADDINGS   = [int(k/2) for k in _KERNELS]
 _OUTSIZE    = (1,int(529200/3))
-_D          = AudioDiscriminator2(  channels=[_OUTSIZE[0],128,128,128,256,256,512,512,1],
-                                    kernels=_KERNELS,mp_kernels=list([1,4,5,7,7,5,3,3]),
+_D          = AudioDiscriminator2(  channels=[_OUTSIZE[0],64,128,128,256,256,512,512,1],
+                                    kernels=_KERNELS,mp_kernels=list([5,7,7,5,4,4,3,3,3]),
                                     paddings=_PADDINGS,
                                     device=torch.device('cuda'),
-                                    final_layer=4,
+                                    final_layer=5,
                                     verbose=False,)
 
 class classDataSet(Dataset):
@@ -259,11 +259,11 @@ def train():
 def get_tests():
     dev = torch.device("cuda")
     outsize = (1,int(529200/3))
-    state_dict = torch.load("class_models/model_0.0617")
+    state_dict = torch.load("class_models/model_0.0532")
     
     _D.load_state_dict(state_dict)
 
-    root = "C:/data/music/dataset/LOFI_sf5_t20_c1_redo2"
+    root = "C:/data/music/dataset/LOFI_sf5_t20_c1_peak1"
     files = [os.path.join(root,f) for f in os.listdir(root)]
     random.shuffle(files)
 
@@ -333,9 +333,9 @@ def get_tests():
             plt.cla()
 
 
-def divide_dataset(load_path,store_path,threshold=.9):
+def divide_dataset(load_path,store_path,threshold=.95):
     
-    load_state(fname="class_models/model_0.0617")
+    load_state(fname="class_models/model_0.0532")
     size        = len(os.listdir(load_path))
     saved       = 0
 
@@ -379,6 +379,6 @@ if __name__ == "__main__":
         get_tests()
     
     elif sys.argv[1] == '-d':
-        divide_dataset("C:/data/music/dataset/LOFI_sf5_t20_c1_redo2","C:/data/music/dataset/LOFI_sf5_t20_thrsh.9")
+        divide_dataset("C:/data/music/dataset/LOFI_sf5_t20_c1_peak1","C:/data/music/dataset/LOFI_sf5_t20_peak1_thrsh.9")
 
         

@@ -11,7 +11,7 @@ import time
 from networks import ConvolutionalNetwork, IMG_NET
 import copy
 from matplotlib import pyplot as plt 
-from utilities import build_snake_img
+import utilities
 
 #This class interfaces only with NP 
 class Snake:
@@ -20,7 +20,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,memory_size=2,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(322,189)):
+	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(240,135),min_thresh=.03):
 
 
 		#Set global Vars
@@ -33,6 +33,7 @@ class Snake:
 		self.simul_games 		= simul_games
 		self.cur_step			= 0
 		self.img_repr_size 		= img_repr_size
+		self.min_thresh			= min_thresh
 
 		#	GPU or CPU computation are both possible 
 		#	Requires pytorch for NVIDIA GPU Computing Toolkit 11.7
@@ -58,8 +59,8 @@ class Snake:
 		self.active_games 		= list(range(simul_games))
 
 
-		#Encode games as a 3-channel 1920x1080 imgage 
-		self.game_vectors	    = torch.zeros(size=(simul_games,3*memory_size,img_repr_size[1],img_repr_size[0]),device=device,dtype=torch.float16)
+		#Encode games as a 3-channel m x n imgage 
+		self.game_vectors	    = torch.zeros(size=(simul_games,3,img_repr_size[1],img_repr_size[0]),device=device,dtype=torch.float16)
 
 		#	The game directions are tracked in this list. 
 		# 	Each tuple encodes the step taken in (x,y).
@@ -98,22 +99,17 @@ class Snake:
 		#	Maintain some global parameters 
 		self.cur_step = 0
 
+		#	Setup utils to make the snake frames 
+		utilities.init_utils((self.grid_w,self.grid_h),self.img_repr_size[0],self.img_repr_size[1],torch.float16)
 		#	Spawn the snake in a random location each time
 		# 	Create the initial state_imgs for snakes 
 		for snake_i in range(self.simul_games):
 			game_start_x,game_start_y = random.randint(0,self.grid_w-1),random.randint(0,self.grid_h-1)
 			self.snake_tracker[snake_i] = [[game_start_x,game_start_y]]
 			t0 = time.time()
-			self.game_vectors[snake_i][0:3]	= build_snake_img(self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1])
-		
+			self.game_vectors[snake_i]			= utilities.build_snake_img(self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1])
 
-		if debugging: 			#SHOW IMAGE 
-			vect 		= self.game_vectors[0][0:3].view(3,self.img_repr_size[1],self.img_repr_size[0]).detach().cpu().numpy().transpose(1,2,0)
-			plt.imshow(vect)
-			plt.show()
-			vect 		= self.game_vectors[1][0:3].view(3,self.img_repr_size[1],self.img_repr_size[0]).detach().cpu().numpy().transpose(1,2,0)
-			plt.imshow(vect)
-			plt.show()
+
 
 
 
@@ -130,6 +126,13 @@ class Snake:
 			
 			# 	The model for this dropoff will probably change and is 
 			#	open to exploration
+
+			if debugging: 			#SHOW IMAGE 
+				print(f"GAME No. {self.active_games[-1]}")
+				vect 		= self.game_vectors[self.active_games[-1]].detach().cpu().numpy().transpose(1,2,0)
+				plt.imshow(vect.astype(numpy.float32))
+				plt.show()
+
 			for snake_i in self.active_games:
 				self.full_game_tracker[snake_i].append({"snake":self.snake_tracker[snake_i],'food':self.food_vectors[snake_i]})
 
@@ -253,12 +256,12 @@ class Snake:
 			#	START EXP CREATION 	
 			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':1}
 			
-			#	ROLL VECTORS 
-			#	Since the snake has survived, we can roll 3 channels down to be written with 
+			#	MOVE SNAKE  
+			#	Since the snake has survived, dim the previous snake and add over the new one  
 			#	the new snake state .
-			self.game_vectors[snake_i] = torch.roll(self.game_vectors[snake_i],3,dims=0)
-			self.game_vectors[snake_i][0:3] = torch.zeros(size=(3,self.img_repr_size[1],self.img_repr_size[0]),dtype=torch.float,device=self.device,requires_grad=False)
+			# self.game_vectors[snake_i] *= .333
 
+			#check to delete 
 			#Check if snake ate food
 			if next_head == self.food_vectors[snake_i]:
 				
@@ -282,12 +285,12 @@ class Snake:
 			#	Update snake tracker with some finicky magic 
 			#	If the snake grew, then snake tracker will have been made artificially longer 
 			# 	to account for growth 
-			self.snake_tracker[snake_i] = [next_head] + self.snake_tracker[snake_i][:-1]
+			self.snake_tracker[snake_i] 			= [next_head] + self.snake_tracker[snake_i][:-1]
 
 			#Update game_state repr 
-			self.game_vectors[snake_i][0:3]			= build_snake_img(self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1])
+			self.game_vectors[snake_i]				= utilities.step_snake_img(self.game_vectors[snake_i],self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1],min_thresh=self.min_thresh)
 			#	Add s` to the experience 
-			experience['s`'] = self.game_vectors.narrow(0,snake_i,1).clone()
+			experience['s`'] 						= self.game_vectors.narrow(0,snake_i,1).clone()
 			self.experiences.append(experience)
 			
 
@@ -342,9 +345,7 @@ class Snake:
 if __name__ == "__main__":
 	w = 10
 	h = 10
-	model 	= IMG_NET(960,540,in_ch=6)
-	s 		= Snake(w,h,model,dev=torch.device("cuda"),memory_size=2)
-
-
+	model 	= IMG_NET(input_shape=(3,480,270))
+	s 		= Snake(w,h,model,simul_games=2,device=torch.device("cuda"))
 
 	s.play_out_games()

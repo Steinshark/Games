@@ -11,14 +11,17 @@ import tkinter as tk
 from snakeAI import SnakeGame
 from telemetry import plot_game
 import copy
+from utilities import reduce_arr
 
 class Trainer:
 
-	def __init__(	self,game_w,game_h,
+	def __init__(	self,
+	      			game_w,
+	      			game_h,
 					visible=True,
 					loading=True,
 					PATH="models",
-					memory_size=4,
+					min_thresh=4,
 					loss_fn=torch.nn.MSELoss,
 					optimizer_fn=torch.optim.Adam,
 					kwargs={"lr":1e-5},
@@ -40,7 +43,7 @@ class Trainer:
 					best_game=[],
 					game_tracker=[],
 					gui=False,
-					instance=False,
+					instance=None,
 					channels=3):
 
 
@@ -53,7 +56,7 @@ class Trainer:
 
 		#Set model vars  
 		self.m_type 			= m_type
-		self.input_dim 			= game_w * game_h * memory_size
+		self.input_dim 			= game_w * game_h
 		self.progress_var 		= progress_var
 		self.gpu_acceleration 	= gpu_acceleration
 		self.movement_repr_tuples = [(0,-1),(0,1),(-1,0),(1,0)]
@@ -78,13 +81,15 @@ class Trainer:
 		self.best_score			= best_score
 		self.best_game			= best_game
 		self.instance 	 		= instance 
+		self.base_threshs		= [(-1,.0025),(1024,.001),(2048,.00001),(4096,1e-6),(8192,1e-7),(8192*2,1e-8),(8192*4,1e-9)]
 
 		#Set training vars 
 		self.gamma 				= gamma
-		self.memory_size 		= memory_size
+		self.min_thresh 		= min_thresh
 		self.epsilon 			= epsilon
 		self.e_0 				= self.epsilon
 		self.kwargs				= kwargs
+		self.softmax 			= True
 		#Enable cuda acceleration if specified 
 		self.device 			= torch.device('cuda') if gpu_acceleration else torch.device('cpu')
 
@@ -98,7 +103,7 @@ class Trainer:
 			self.learning_model = networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,architecture=architecture)
 			self.encoding_type = "one_hot"
 		elif m_type == "CNN":
-			self.input_shape = (1,channels*memory_size,game_w,game_h)
+			self.input_shape = (1,channels,game_w,game_h)
 			self.target_model 	= networks.IMG_NET(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device)
 			
 			if self.gui:
@@ -115,7 +120,7 @@ class Trainer:
 		torch.backends.cudnn.benchmark = True
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,transfer_models_every=2,verbose=False,rewards={"die":-3	 ,"eat":5,"step":-.01},max_steps=100,random_pick=True,blocker=256,drop_rate=.25):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,transfer_models_every=2,verbose=False,rewards={"die":-3	 ,"eat":5,"step":-.01},max_steps=100,random_pick=True,blocker=256,drop_rate=.25,x_scale=100):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
@@ -124,6 +129,10 @@ class Trainer:
 		memory_pool 	= []
 		window_i 		= 0
 
+
+
+		threshs			= copy.deepcopy(self.base_threshs)
+		stop_thresh 	= False 
 		#	Keep track of models progress throughout the training 
 		best_score 		= 0 
 
@@ -132,14 +141,26 @@ class Trainer:
 		while i < iters and not self.cancelled:
 			#	Keep some performance variables 
 			t0 				= time.time() 
-
+			
+			# 	TEST -REMOVE 
+			if not stop_thresh and i > threshs[0][0]:
+				new_lr 	= threshs[0][1]
+				self.learning_model.optimizer.param_groups[0]['lr']	= new_lr
+				if not len(threshs) == 1:
+					threshs = threshs[1:] 
+				else:
+					stop_thresh	= True 
+				
+				if self.gui:
+					self.output.insert(tk.END,f"\tlr updated to: {new_lr}\n")
+			# 	/TEST 
 			#	UPDATE EPSILON
 			e 				= self.update_epsilon(i/(iters))	
 			if self.gui:
 				self.progress_var.set(i/iters)
 
 			#	GET EXPERIENCES
-			metrics, experiences, new_games = SnakeConcurrentIMG.Snake(self.w,self.h,self.learning_model,simul_games=train_every,memory_size=self.memory_size,device=self.device,rewards=rewards,max_steps=max_steps).play_out_games(epsilon=e)
+			metrics, experiences, new_games = SnakeConcurrentIMG.Snake(self.w,self.h,self.learning_model,simul_games=train_every,device=self.device,rewards=rewards,max_steps=max_steps,min_thresh=self.min_thresh).play_out_games(epsilon=e)
 
 
 
@@ -204,7 +225,6 @@ class Trainer:
 				else:
 					training_set 	= []
 					training_ind	= []
-					drop_rate = .2
 
 					while len(training_set) < sample_size: 
 
@@ -223,7 +243,7 @@ class Trainer:
 
 				qual 		= 100*sum([int(t['r'] > 1) + int(t['r'] < -1) for t in training_set]) / len(training_set)
 				bad_set 	= random.sample(memory_pool,sample_size)
-				bad_qual 	= f"{100*sum([int(t['r'] > 1) + int(t['r'] < -1) for t in bad_set]) / len(bad_set):.2f}"
+				bad_qual 	= f"{100*sum([int(t['r'] > 1) + int(t['r'] < -1) for t in memory_pool]) / len(memory_pool):.2f}"
 
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
 				
@@ -232,7 +252,7 @@ class Trainer:
 					print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
 				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=verbose)
 
-				if self.instance.cancel_var:
+				if self.gui and self.instance.cancel_var:
 					return 
 			#	UPDATE MODELS 
 			if i/train_every % transfer_models_every == 0:
@@ -247,28 +267,21 @@ class Trainer:
 		#plot up to 500
 
 		
-		averager = int(len(self.all_scores)/blocker)
+
+
+		blocked_scores		= reduce_arr(self.all_scores,x_scale)
+		blocked_lived 		= reduce_arr(self.all_lived,x_scale)
+
+
 		
-		while True:
-			try:
-				blocked_scores = numpy.average(numpy.array(self.all_scores).reshape(-1,averager),axis=1)
-				blocked_lived = numpy.average(numpy.array(self.all_lived).reshape(-1,averager),axis=1)
-				break 
-			except ValueError:
-				averager += 1
-
-
-
-		x_scale = [averager*i for i in range(len(blocked_scores))] 
-		
-		graph_name = f"{self.name}_[{str(self.loss_fn).split('.')[-1][:-2]},{str(self.optimizer_fn).split('.')[-1][:-2]}@{self.lr}] x [{iters*train_every},{train_every}] mem size {pool_size} taking [{sample_size},{batch_size}]"
+		graph_name = f"{self.name}_[{str(self.loss_fn).split('.')[-1][:-2]},{str(self.optimizer_fn).split('.')[-1][:-2]}@{self.kwargs['lr']}] x [{iters*train_every},{train_every}] mem size {pool_size} taking [{sample_size},{batch_size}]"
 
 		if self.save_fig:
-			plot_game(blocked_scores,blocked_lived,graph_name,x_scale)
+			plot_game(blocked_scores,blocked_lived,graph_name)
 
 		if self.gui:
-			self.output.insert(tk.END,f"Completed Training\n\tHighScore:{best_score}\n\tSteps:{sum(self.all_lived[-100:])/100}")
-		return blocked_scores,blocked_lived,best_score,x_scale,graph_name
+			self.output.insert(tk.END,f"Completed Training\n\tHighScore:{best_score}\n\tSteps:{sum(self.all_lived[-1000:])/1000}")
+		return blocked_scores,blocked_lived,best_score,graph_name
 
 
 	def train_on_experiences_better(self,big_set,epochs=1,batch_size=8,early_stopping=True,verbose=False):
@@ -279,7 +292,7 @@ class Trainer:
 			print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'early-stop'.ljust(12)}: {early_stopping}\n")
 
 		for epoch_i in range(epochs):
-			if self.instance.cancel_var:
+			if self.gui and self.instance.cancel_var:
 				return
 			#	Telemetry Vars 
 			t0 			= time.time()

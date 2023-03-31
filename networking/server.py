@@ -1,11 +1,21 @@
 import socket 
+import os 
+import sys 
+
+class Job:
+    
+    #Creates a job instance that akddsfddfdaj 
+    def __init__(self):
+        pass
+
 class Server:
+
     def __init__(self,port,ip,packet_size=1024*8):
         self.port           = port
         self.ip             = ip
         self.packet_size    = packet_size
         self.s              = socket.socket()
- 
+    
     def start(self):
         # Bind to the port
         self.s.bind((self.ip, self.port))

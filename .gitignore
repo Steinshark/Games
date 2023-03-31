@@ -7,7 +7,10 @@
 *.txt*
 *.jpg*
 *.png*
+*.png*
+*.mp4*
 *.zip*
 *.pyc*
 *.wav*
 *.npz*
+*html*

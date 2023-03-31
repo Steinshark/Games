@@ -103,7 +103,7 @@ class TrainerApp:
                             "lr"            : None,
                             "kw"            : None,
                             "ep"            : None,
-                            "ms"            : None,
+                            "mt"            : None,
                             "mx"            : None,
                             "sf"            : None,
                             "lo"            : None,
@@ -128,7 +128,7 @@ class TrainerApp:
                         "lr"    : Frame(self.control_frame,padx=1,pady=1),
                         "kw"    : Frame(self.control_frame,padx=1,pady=1),
                         "ep"    : Frame(self.control_frame,padx=1,pady=1),
-                        "ms"    : Frame(self.control_frame,padx=1,pady=1),
+                        "mt"    : Frame(self.control_frame,padx=1,pady=1),
                         "mx"    : Frame(self.control_frame,padx=1,pady=1),
                         "sf"    : Frame(self.control_frame,padx=1,pady=1),
                         "arch"  : Frame(self.control_frame,padx=1,pady=1),
@@ -168,8 +168,8 @@ class TrainerApp:
                                                     text="optimizer kwargs"),
                                 "ep"        :   Label( self.setting_frames["ep"],
                                                     text="Epochs"),
-                                "ms"        :   Label( self.setting_frames["ms"],
-                                                    text="Memory Size"),
+                                "mt"        :   Label( self.setting_frames["mt"],
+                                                    text="Minimum Threshold"),
                                 "mx"        :   Label( self.setting_frames["mx"],
                                                     text="Max Steps"),
                                 "sf"        :   Label( self.setting_frames["sf"],
@@ -213,7 +213,7 @@ class TrainerApp:
                                 "lr"        :   Entry(self.setting_frames["lr"],width=entry_w),
                                 "kw"        :   Entry(self.setting_frames["kw"],width=entry_w),
                                 "ep"        :   Entry(self.setting_frames["ep"],width=entry_w),
-                                "ms"        :   Entry(self.setting_frames["ms"],width=entry_w),
+                                "mt"        :   Entry(self.setting_frames["mt"],width=entry_w),
                                 "mx"        :   Entry(self.setting_frames["mx"],width=entry_w),
                                 "sf"        :   Entry(self.setting_frames["sf"],width=entry_w),
                                 "arch"      :   Combobox(self.setting_frames["arch"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
@@ -383,8 +383,8 @@ class TrainerApp:
 
     def run_training(self):
         self.set_vars()
-        import pprint
-        pprint.pp(self.settings)
+        # import pprint
+        # pprint.pp(self.settings)
 
         self.longest_run        = []
         self.cur_game_steps     = [] 
@@ -394,7 +394,7 @@ class TrainerApp:
                                 int(self.settings["gameY"]),
                                 visible         = False,
                                 loading         = False,
-                                memory_size     = int(self.settings["ms"]),
+                                min_thresh      = int(self.settings["mt"]),
                                 loss_fn         = self.settings["lo"],
                                 optimizer_fn    = self.settings['op'],
                                 kwargs          = dict(self.settings['kw'],**{"lr":self.settings['lr']}),
