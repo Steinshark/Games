@@ -1,5 +1,5 @@
 import torch 
-from torch.nn import Linear, ConvTranspose2d, BatchNorm2d, LeakyReLU, Tanh, MaxPool2d, Upsample, Conv2d, Sigmoid, ReLU
+from torch.nn import Linear, ConvTranspose2d, BatchNorm2d, LeakyReLU, Tanh, MaxPool2d, Upsample, Conv2d, Sigmoid, ReLU, Dropout2d
 from torch.optim import Adam 
 from torch.nn import BCELoss
 import os 
@@ -20,6 +20,8 @@ from PIL import Image
 '''
 Target images: 256 x 256 
 '''
+
+### HELPER FUNCTIONS ### 
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -65,9 +67,14 @@ def sample(g_model,lvs,n_imgs,path="samples/IMGS_0",title="bread"):
 
 
 
-bs                      = 32
+def update_lr(optimizer:torch.optim.Optimizer,new_lr):
+    optimizer.param_groups[0]['lr'] = new_lr
+
+### /HELPER FUNCTIONS ### 
+
+bs                      = 16
 im_len                  = 128
-latent_vector_size      = 350
+latent_vector_size      = 256
 neg_slope               = .02
 dev                     = torch.device('cuda')
 epochs                  = 100 
@@ -79,15 +86,24 @@ DMODEL_SAVEPATH          = "models/Dmodel_state_dict"
 
 
 
-g_lr                    = .000025
+g_lr                    = .00002
+g_lr_thresh             = .00001
 g_betas                 = (.5,.999)
+g_wd                    = .00001
+dlg_dt                   = .9
 
-d_lr                    = .000025
+d_lr                    = .00002
+d_lr_thresh             = .00001
 d_betas                 = (.5,.999)
+d_wd                    = .00001
+dld_dt                   = .9
 
 
 use_bias                = False
+droprate                = .1
 
+
+ch_layers               = [512,512,256,256,256,256,128,64]
 #########################################################################
 #                           create models                               #
 #########################################################################
@@ -98,84 +114,83 @@ class GModel(torch.nn.Module):
         super().__init__()
         self.model = torch.nn.Sequential(
             
-            #Upsample x2
+            #Upsample x2                (1x1) -> (2x2)
             Upsample(scale_factor=2),
-            Conv2d(in_channels=latent_vector_size,out_channels=512,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(512),
+            Conv2d(in_channels=latent_vector_size,out_channels=ch_layers[0],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[0]),
             ReLU(inplace=True),
 
-            #Upsample x2
+            #Upsample x2                (2x2) -> (4x4)
             Upsample(scale_factor=2),
-            Conv2d(in_channels=512,out_channels=512,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(512),
+            Conv2d(in_channels=ch_layers[0],out_channels=ch_layers[1],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[1]),
             ReLU(inplace=True),
 
-            #Upsample x2 
+            #Upsample x2                (4x4) -> (8x8)
             Upsample(scale_factor=2),
-            Conv2d(in_channels=512,out_channels=512,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(512),
+            Conv2d(in_channels=ch_layers[1],out_channels=ch_layers[2],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[2]),
             ReLU(inplace=True),
-            Conv2d(in_channels=512,out_channels=512,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(512),
-            ReLU(inplace=True),
-            Conv2d(in_channels=512,out_channels=512,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(512),
+            Conv2d(in_channels=ch_layers[2],out_channels=ch_layers[2],kernel_size=5,stride=1,padding=2,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[2]),
             ReLU(inplace=True),
 
-            #Upsample x2 
+            #Upsample x2                (8x8) -> (16x16)
             Upsample(scale_factor=2),
-            Conv2d(in_channels=512,out_channels=256,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(256),
+            Conv2d(in_channels=ch_layers[2],out_channels=ch_layers[3],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[3]),
             ReLU(inplace=True),
-            Conv2d(in_channels=256,out_channels=256,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(256),
-            ReLU(inplace=True),
-            Conv2d(in_channels=256,out_channels=256,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(256),
+            Conv2d(in_channels=ch_layers[3],out_channels=ch_layers[3],kernel_size=5,stride=1,padding=2,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[3]),
             ReLU(inplace=True),
    
-
-            #Upsample x2 
+            #Upsample x2                (16x16) -> (32x32)
             Upsample(scale_factor=2),
-            Conv2d(in_channels=256,out_channels=256,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(256),
+            Conv2d(in_channels=ch_layers[3],out_channels=ch_layers[4],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[4]),
             ReLU(inplace=True),
-            Conv2d(in_channels=256,out_channels=256,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(256),
-            ReLU(inplace=True),
-            Conv2d(in_channels=256,out_channels=256,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(256),
+            Conv2d(in_channels=ch_layers[4],out_channels=ch_layers[4],kernel_size=5,stride=1,padding=2,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[4]),
             ReLU(inplace=True),
 
-            #BatchNorm 
-
-            #Upsample x2 
+            #Upsample x2                (32x32) -> (64x64)
             Upsample(scale_factor=2),
-            Conv2d(in_channels=256,out_channels=128,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(128),
+            Conv2d(in_channels=ch_layers[4],out_channels=ch_layers[6],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[6]),
             ReLU(inplace=True),
-            Conv2d(in_channels=128,out_channels=128,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(128),
+            Conv2d(in_channels=ch_layers[6],out_channels=ch_layers[6],kernel_size=5,stride=1,padding=2,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[6]),
             ReLU(inplace=True),
-            Conv2d(in_channels=128,out_channels=128,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(128),
+            Conv2d(in_channels=ch_layers[6],out_channels=ch_layers[6],kernel_size=5,stride=1,padding=2,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[6]),
             ReLU(inplace=True),
 
-            #Upsample x2 
+            #Upsample x2                (64x64) -> (128x128)
             Upsample(scale_factor=2),
-            Conv2d(in_channels=128,out_channels=128,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(128),
+            Conv2d(in_channels=ch_layers[6],out_channels=ch_layers[7],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[7]),
             ReLU(inplace=True),
-            Conv2d(in_channels=128,out_channels=128,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(128),
+            Conv2d(in_channels=ch_layers[7],out_channels=ch_layers[7],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[7]),
             ReLU(inplace=True),
-            Conv2d(in_channels=128,out_channels=64,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(64),
+            Conv2d(in_channels=ch_layers[7],out_channels=ch_layers[7],kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Dropout2d(p=droprate),
+            BatchNorm2d(ch_layers[7]),
             ReLU(inplace=True),
-            Conv2d(in_channels=64,out_channels=64,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(64),
-            ReLU(inplace=True),
-            Conv2d(in_channels=64,out_channels=3,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Conv2d(in_channels=ch_layers[7],out_channels=3,kernel_size=3,stride=1,padding=1,bias=use_bias),
             #Activate 
             #LeakyReLU(negative_slope=neg_slope,inplace=True),
             #BatchNorm 
@@ -266,7 +281,10 @@ class DModel(torch.nn.Module):
         super().__init__()
         self.model = torch.nn.Sequential(
             #INPUT (3,256,256)
-            Conv2d(in_channels=3,out_channels=128,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Conv2d(in_channels=3,out_channels=64,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            BatchNorm2d(64),
+            LeakyReLU(negative_slope=neg_slope,inplace=True),
+            Conv2d(in_channels=64,out_channels=128,kernel_size=3,stride=1,padding=1,bias=use_bias),
             BatchNorm2d(128),
             LeakyReLU(negative_slope=neg_slope,inplace=True),
             Conv2d(in_channels=128,out_channels=256,kernel_size=5,stride=1,padding=2,bias=use_bias),
@@ -278,21 +296,6 @@ class DModel(torch.nn.Module):
             Conv2d(in_channels=256,out_channels=256,kernel_size=3,stride=1,padding=1,bias=use_bias),
             BatchNorm2d(256),
             LeakyReLU(negative_slope=neg_slope,inplace=True),
-            Conv2d(in_channels=256,out_channels=256,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(256),
-            LeakyReLU(negative_slope=neg_slope,inplace=True),
-            MaxPool2d(kernel_size=2,stride=2),
-
-            #INPUT (256,64,64)
-            Conv2d(in_channels=256,out_channels=256,kernel_size=3,stride=1,padding=1,bias=use_bias),
-            BatchNorm2d(256),
-            LeakyReLU(negative_slope=neg_slope,inplace=True),
-            Conv2d(in_channels=256,out_channels=256,kernel_size=5,stride=1,padding=2,bias=use_bias),
-            BatchNorm2d(256),
-            LeakyReLU(negative_slope=neg_slope,inplace=True),
-            MaxPool2d(kernel_size=2,stride=2),
-
-            #INPUT (256,32,32)
             Conv2d(in_channels=256,out_channels=512,kernel_size=3,stride=1,padding=1,bias=use_bias),
             BatchNorm2d(512),
             LeakyReLU(negative_slope=neg_slope,inplace=True),
@@ -301,27 +304,54 @@ class DModel(torch.nn.Module):
             LeakyReLU(negative_slope=neg_slope,inplace=True),
             MaxPool2d(kernel_size=2,stride=2),
 
-            #INPUT (256,16,16)
+            #INPUT (256,64,64)
             Conv2d(in_channels=512,out_channels=512,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            BatchNorm2d(512),
+            LeakyReLU(negative_slope=neg_slope,inplace=True),
+            Conv2d(in_channels=512,out_channels=512,kernel_size=5,stride=1,padding=2,bias=use_bias),
             BatchNorm2d(512),
             LeakyReLU(negative_slope=neg_slope,inplace=True),
             MaxPool2d(kernel_size=2,stride=2),
 
-            #INPUT (512,8,8)
+            #INPUT (256,32,32)
+            Conv2d(in_channels=512,out_channels=512,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            BatchNorm2d(512),
+            LeakyReLU(negative_slope=neg_slope,inplace=True),
+            Conv2d(in_channels=512,out_channels=512,kernel_size=5,stride=1,padding=2,bias=use_bias),
+            BatchNorm2d(512),
+            LeakyReLU(negative_slope=neg_slope,inplace=True),
+            MaxPool2d(kernel_size=2,stride=2),
+
+            #INPUT (256,16,16)
             Conv2d(in_channels=512,out_channels=1024,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            BatchNorm2d(1024),
+            LeakyReLU(negative_slope=neg_slope,inplace=True),
+            Conv2d(in_channels=1024,out_channels=1024,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            BatchNorm2d(1024),
+            LeakyReLU(negative_slope=neg_slope,inplace=True),
+            MaxPool2d(kernel_size=2,stride=2),
+
+            #INPUT (512,8,8)
+            Conv2d(in_channels=1024,out_channels=1024,kernel_size=3,stride=1,padding=1,bias=use_bias),
             BatchNorm2d(1024),
             LeakyReLU(negative_slope=neg_slope,inplace=True),
             MaxPool2d(kernel_size=2,stride=2),
 
             #INPUT (512,4,4)
-            Conv2d(in_channels=1024,out_channels=3,kernel_size=3,stride=1,padding=1,bias=use_bias),
+            Conv2d(in_channels=1024,out_channels=1024,kernel_size=3,stride=1,padding=1,bias=use_bias),
 
             #INPUT (512,2,2)
             # Conv2d(in_channels=512,out_channels=1,kernel_size=3,stride=1,padding=1),
             # LeakyReLU(negative_slope=neg_slope,inplace=True),
             # MaxPool2d(kernel_size=2,stride=2),
             torch.nn.Flatten(),
-            torch.nn.Linear(12,1),
+            torch.nn.Linear(4096,512),
+            torch.nn.Dropout(p=.1),
+            torch.nn.LeakyReLU(negative_slope=neg_slope),
+            torch.nn.Linear(512,64),
+            torch.nn.Dropout(p=.1),
+            torch.nn.LeakyReLU(negative_slope=neg_slope),
+            torch.nn.Linear(64,1),
             Sigmoid()
         )
 
@@ -339,11 +369,12 @@ Discriminator.apply(weights_init)
 #load_model(Generator,GMODEL_SAVEPATH)
 #load_model(Discriminator,DMODEL_SAVEPATH)
 
-g_optim                 = Adam(Generator.parameters(),lr=g_lr,betas=g_betas)
-d_optim                 = Adam(Discriminator.parameters(),lr=d_lr,betas=d_betas)
+g_optim                 = Adam(Generator.parameters(),      lr=g_lr,betas=g_betas,weight_decay=g_wd)
+d_optim                 = Adam(Discriminator.parameters(),  lr=d_lr,betas=d_betas,weight_decay=d_wd)
 
 loss_fn                 = BCELoss()
 
+print(f"Created models\tG-{(sum([p.nelement() * p.element_size() for p in Generator.parameters()])/1000000):.2f}MB\tD-{(sum([p.nelement() * p.element_size() for p in Discriminator.parameters()])/1000000):.2f}MB")
 in_vect                 = torch.ones(size=(2,latent_vector_size,1,1),dtype=torch.float32,device=dev)
 print(f"passing {in_vect.shape} -> {Generator.forward(in_vect).shape}")
 out_vect                = Generator.forward(in_vect)
@@ -430,16 +461,21 @@ for ep in range(epochs):
         loss_fake_t.backward()
         g_optim.step()
 
-        if i % 100 == 0:
+        if i % 500 == 0:
             sample(Generator,latent_vector_size,64,path=f"samples/ep{ep}_batch{i}",title=f"Bread imgs ep{ep} batch{i}")
             print(f"\tbatch {i}/{dataloader.__len__()}\tep_t:{(time.time()-t0):.2f}s\tbatch_t:{(time.time()-tb):.2f}s")
-    
+            update_lr(g_optim,max(g_lr*pow(dlg_dt,ep),g_lr_thresh))
+            update_lr(d_optim,max(d_lr*pow(dld_dt,ep),d_lr_thresh))
 
-    print(f"Epoch\t{ep} - lossD_real:{(sum(l[0] for l in losses)/i):.3f} - lossD_fake:{(sum(l[1] for l in losses)/i):.3f} - lossG_fake:{(sum(l[2] for l in losses)/i):.3f} - t={(time.time()-t0):.2f}s")
+    
+    #Save model states 
     save_model(Generator,GMODEL_SAVEPATH)
     save_model(Discriminator,DMODEL_SAVEPATH)
 
-
+    #Update lrs 
+    update_lr(g_optim,max(g_lr*pow(dlg_dt,ep),g_lr_thresh))
+    update_lr(d_optim,max(d_lr*pow(dld_dt,ep),d_lr_thresh))
+    print(f"Epoch\t{ep} - lossD_real:{(sum(l[0] for l in losses)/i):.3f} - lossD_fake:{(sum(l[1] for l in losses)/i):.3f} - lossG_fake:{(sum(l[2] for l in losses)/i):.3f} - t:{(time.time()-t0):.2f}s\t - lr:{g_optim.param_groups[0]['lr']:.5f}")
         
 
 
