@@ -12,7 +12,7 @@ from networks import ConvolutionalNetwork, IMG_NET
 import copy
 from matplotlib import pyplot as plt 
 import utilities
-
+import torchvision.utils as vutils
 #This class interfaces only with NP 
 class Snake:
 
@@ -94,10 +94,15 @@ class Snake:
 
 	#	GAME PLAYER 
 	#	Calling this method will play out all games until completion
-	def play_out_games(self,epsilon=.2,debugging=False):
+	def play_out_games(self,epsilon=.2,debugging=False,display_img=False):
+
+		#	Track all imgs 
+		if display_img:
+			frame_sc		= torch.zeros(size=(64,3,self.img_repr_size[1],self.img_repr_size[0]))
 		
 		#	Maintain some global parameters 
-		self.cur_step = 0
+		self.cur_step 		= 0
+		self.graph_pending 	= False 
 
 		#	Setup utils to make the snake frames 
 		utilities.init_utils((self.grid_w,self.grid_h),self.img_repr_size[0],self.img_repr_size[1],torch.float16)
@@ -127,15 +132,19 @@ class Snake:
 			# 	The model for this dropoff will probably change and is 
 			#	open to exploration
 
-			if debugging: 			#SHOW IMAGE 
-				print(f"GAME No. {self.active_games[-1]}")
-				vect 		= self.game_vectors[self.active_games[-1]].detach().cpu().numpy().transpose(1,2,0)
-				plt.imshow(vect.astype(numpy.float32))
-				plt.show()
+			# if debugging: 			#SHOW IMAGE 
+			# 	print(f"GAME No. {self.active_games[-1]}")
+			# 	vect 		= self.game_vectors[self.active_games[-1]].detach().cpu().numpy().transpose(1,2,0).astype(numpy.float32)
+			# 	plt.imshow(vect.astype(numpy.float32))
+			# 	plt.show()
 
 			for snake_i in self.active_games:
 				self.full_game_tracker[snake_i].append({"snake":self.snake_tracker[snake_i],'food':self.food_vectors[snake_i]})
 
+			#Save first game 
+			if display_img:
+				if self.game_collection[0]['status'] == 'active' and self.cur_step < 64:
+					frame_sc[self.cur_step]	=self.game_vectors[0]
 			if random.random() < epsilon:
 				self.explore()
 			else:
@@ -150,11 +159,20 @@ class Snake:
 			 
 			# 	Check if we are done 
 			if len(self.active_games) == 0:
+				#Display frames
+				if display_img and self.game_collection[0]['highscore'] > 0:
+					ex 			= vutils.make_grid(frame_sc.detach().cpu(),padding=1,normalize=True)
+					fig,axs 	= plt.subplots(nrows=1,ncols=1)
+					axs.axis 	= 'off'
+					axs.imshow(numpy.transpose(ex,(1,2,0)))
+					img 		= plt.gcf()
+					img.set_size_inches(30,16)
+					img.savefig("EPOCH SAVE AFTER SCORE",dpi=100)	
+					plt.cla()			
 				return self.cleanup()
 			else:
 				self.cur_step+=1
 			
-		return
 	
 
 
@@ -199,7 +217,7 @@ class Snake:
 				with torch.autocast('cuda'):
 					model_out = self.learning_model.forward(self.game_vectors.type(torch.float))
 					#Find the direction for each game with highest EV 
-					next_dirs = torch.argmax(model_out,dim=1)
+					next_dirs = torch.argmax(model_out,dim=1).tolist()
 
 					#Update direction vectors accordingly 
 					self.direction_vectors = next_dirs
@@ -210,7 +228,7 @@ class Snake:
 					for snake_i in self.active_games:
 						model_out 	= self.learning_model.forward(self.game_vectors.narrow(0,snake_i,1).type(torch.float))
 						next_dir 	= torch.argmax(model_out)
-						self.direction_vectors[snake_i] = next_dir
+						self.direction_vectors[snake_i] = next_dir.item()
 
 	#	STEP SNAKE 
 	#	Move each snake in the direction that dir points 

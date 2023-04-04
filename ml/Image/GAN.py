@@ -1,3 +1,9 @@
+#Author Everett Stenberg - github: Steinshark
+
+#Description 
+# Create a GAN for image generation of 128x128
+# Currently used for images of bread in my kitchen 
+
 import torch 
 from torch.nn import Linear, ConvTranspose2d, BatchNorm2d, LeakyReLU, Tanh, MaxPool2d, Upsample, Conv2d, Sigmoid, ReLU, Dropout2d
 from torch.optim import Adam 
@@ -16,12 +22,10 @@ from torch.utils.data import Dataset, DataLoader
 from matplotlib import pyplot as plt 
 import numpy 
 from PIL import Image
-#PROJECT SETTINGS 
-'''
-Target images: 256 x 256 
-'''
 
-### HELPER FUNCTIONS ### 
+############################################################################################################################
+############################################          HELPER FUNCTIONS          ############################################ 
+############################################################################################################################
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -65,32 +69,40 @@ def sample(g_model,lvs,n_imgs,path="samples/IMGS_0",title="bread"):
         plt.cla()
         plt.close()
 
+def update_lr(optimizer:torch.optim.Optimizer,sf,thresh):
+    old_lr                          = optimizer.param_groups[0]['lr']
+    new_lr                          = old_lr * sf 
+    optimizer.param_groups[0]['lr'] = max(new_lr,thresh)
 
 
-def update_lr(optimizer:torch.optim.Optimizer,new_lr):
-    optimizer.param_groups[0]['lr'] = new_lr
 
-### /HELPER FUNCTIONS ### 
+############################################################################################################################
+############################################           USEFUL SETTINGS          ############################################ 
+############################################################################################################################
 
-bs                      = 16
+#Training parameters 
+bs                      = 32
 im_len                  = 128
-latent_vector_size      = 256
+latent_vector_size      = 512
 neg_slope               = .02
 dev                     = torch.device('cuda')
 epochs                  = 100 
 root                    = "C:/data/bread"
 im_dset                 = ImageFolder(root=root,transform=Compose([Resize(128),CenterCrop(128),ToTensor(),Normalize((.5,.5,.5),(.5,.5,.5))]))
 print(f"Dataset size: {im_dset.__len__()}")
-GMODEL_SAVEPATH          = "models/Gmodel_state_dict"
+use_bias                = False
+droprate                = .1
+ch_layers               = [512,512,256,256,256,256,128,64]
+GMODEL_SAVEPATH          = "models/Gmodel_state_dict"           # Used for saving model 
 DMODEL_SAVEPATH          = "models/Dmodel_state_dict"
+torch.backends.cudnn.benchmark = True
 
-
-
-g_lr                    = .00002
-g_lr_thresh             = .00001
+#Optimizer settings
+g_lr                    = .00002                # lr for generator 
+g_lr_thresh             = .00001                # Used to set lower bound for lr scheduler
 g_betas                 = (.5,.999)
-g_wd                    = .00001
-dlg_dt                   = .9
+g_wd                    = .00001                # Weight decay of generator optimizer
+dlg_dt                   = .9                   # Scale factor for lr scheduler
 
 d_lr                    = .00002
 d_lr_thresh             = .00001
@@ -98,15 +110,9 @@ d_betas                 = (.5,.999)
 d_wd                    = .00001
 dld_dt                   = .9
 
-
-use_bias                = False
-droprate                = .1
-
-
-ch_layers               = [512,512,256,256,256,256,128,64]
-#########################################################################
-#                           create models                               #
-#########################################################################
+############################################################################################################################
+############################################         Model Architecture         ############################################ 
+############################################################################################################################
 
 class GModel(torch.nn.Module):
     
@@ -360,7 +366,10 @@ class DModel(torch.nn.Module):
     def forward(self,x):
         return self.model(x)
 
-#Test output size 
+############################################################################################################################
+############################################           Training Init            ############################################ 
+############################################################################################################################
+
 Generator               = GModel()
 Discriminator           = DModel()
 Generator.apply(weights_init)
@@ -379,9 +388,11 @@ in_vect                 = torch.ones(size=(2,latent_vector_size,1,1),dtype=torch
 print(f"passing {in_vect.shape} -> {Generator.forward(in_vect).shape}")
 out_vect                = Generator.forward(in_vect)
 print(f"passing {out_vect.shape} -> {Discriminator.forward(out_vect).shape}")
-#########################################################################
-#                           create data                                 #
-#########################################################################
+
+
+############################################################################################################################
+############################################            Dataset Init            ############################################ 
+############################################################################################################################
 
 class IDataset(Dataset):
 
@@ -414,7 +425,6 @@ class VDataset(Dataset):
     def __getitem__(self,i):
         return self.data[i],1
 
-torch.backends.cudnn.benchmark = True
 
 dataloader              = DataLoader(im_dset,batch_size=bs,shuffle=True)
 
@@ -464,8 +474,8 @@ for ep in range(epochs):
         if i % 500 == 0:
             sample(Generator,latent_vector_size,64,path=f"samples/ep{ep}_batch{i}",title=f"Bread imgs ep{ep} batch{i}")
             print(f"\tbatch {i}/{dataloader.__len__()}\tep_t:{(time.time()-t0):.2f}s\tbatch_t:{(time.time()-tb):.2f}s")
-            update_lr(g_optim,max(g_lr*pow(dlg_dt,ep),g_lr_thresh))
-            update_lr(d_optim,max(d_lr*pow(dld_dt,ep),d_lr_thresh))
+            update_lr(g_optim,dlg_dt,g_lr_thresh)
+            update_lr(d_optim,dld_dt,d_lr_thresh)
 
     
     #Save model states 
@@ -473,8 +483,8 @@ for ep in range(epochs):
     save_model(Discriminator,DMODEL_SAVEPATH)
 
     #Update lrs 
-    update_lr(g_optim,max(g_lr*pow(dlg_dt,ep),g_lr_thresh))
-    update_lr(d_optim,max(d_lr*pow(dld_dt,ep),d_lr_thresh))
+    update_lr(g_optim,dlg_dt,g_lr_thresh)
+    update_lr(d_optim,dld_dt,d_lr_thresh)
     print(f"Epoch\t{ep} - lossD_real:{(sum(l[0] for l in losses)/i):.3f} - lossD_fake:{(sum(l[1] for l in losses)/i):.3f} - lossG_fake:{(sum(l[2] for l in losses)/i):.3f} - t:{(time.time()-t0):.2f}s\t - lr:{g_optim.param_groups[0]['lr']:.5f}")
         
 

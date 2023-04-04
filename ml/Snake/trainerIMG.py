@@ -21,7 +21,7 @@ class Trainer:
 					visible=True,
 					loading=True,
 					PATH="models",
-					min_thresh=4,
+					min_thresh=.03,
 					loss_fn=torch.nn.MSELoss,
 					optimizer_fn=torch.optim.Adam,
 					kwargs={"lr":1e-5},
@@ -39,12 +39,14 @@ class Trainer:
 					scored=None,
 					score_tracker=[],
 					step_tracker=[],
-					best_score=[],
+					best_score=0,
 					best_game=[],
 					game_tracker=[],
 					gui=False,
 					instance=None,
-					channels=3):
+					channels=3,
+					display_img=False,
+					dropout_p=.1):
 
 
 
@@ -78,10 +80,11 @@ class Trainer:
 		self.output 			= output
 		self.game_tracker 		= game_tracker
 		self.gui 				= gui
-		self.best_score			= best_score
+		self.best_score			= 0
 		self.best_game			= best_game
 		self.instance 	 		= instance 
-		self.base_threshs		= [(-1,.0025),(1024,.001),(2048,.00001),(4096,1e-6),(8192,1e-7),(8192*2,1e-8),(8192*4,1e-9)]
+		self.base_threshs		= [(-1,.0001),(1024+256,.00001),(1024+512+256,3e-6),(2048,1e-6),(4096,5e-7),(4096+2048,2.5e-7),(8192,1e-7),(8192*2,1e-8)]
+		self.display_img		= display_img
 
 		#Set training vars 
 		self.gamma 				= gamma
@@ -90,6 +93,7 @@ class Trainer:
 		self.e_0 				= self.epsilon
 		self.kwargs				= kwargs
 		self.softmax 			= True
+		self.dropout_p			= dropout_p
 		#Enable cuda acceleration if specified 
 		self.device 			= torch.device('cuda') if gpu_acceleration else torch.device('cpu')
 
@@ -104,11 +108,11 @@ class Trainer:
 			self.encoding_type = "one_hot"
 		elif m_type == "CNN":
 			self.input_shape = (1,channels,game_w,game_h)
-			self.target_model 	= networks.IMG_NET(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device)
+			self.target_model 	= networks.IMG_NET(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
 			
 			if self.gui:
 				self.output.insert(tk.END,f"Generated training model\n\t{sum([p.numel() for p in self.target_model.model.parameters()])} params")
-			self.learning_model = networks.IMG_NET(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device)
+			self.learning_model = networks.IMG_NET(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
 			self.encoding_type = "6_channel"
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
@@ -120,15 +124,31 @@ class Trainer:
 		torch.backends.cudnn.benchmark = True
 
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=10,transfer_models_every=2,verbose=False,rewards={"die":-3	 ,"eat":5,"step":-.01},max_steps=100,random_pick=True,blocker=256,drop_rate=.25,x_scale=100):
+	def train_concurrent(	self,
+		      				iters=1000,
+							train_every=1024,
+							pool_size=32768,
+							sample_size=128,
+							batch_size=32,
+							epochs=10,
+							transfer_models_every=2,
+							verbose=False,
+							rewards={"die":-3,"eat":5,"step":-.01},
+							max_steps=100,
+							random_pick=True,
+							drop_rate=.25,
+							x_scale=100,
+							timeout="inf"):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
 		#	upon overflow, simply replace the next window each time 
-
+		self.tstart 	= time.time()
+		self.x_scale 	= x_scale
 		memory_pool 	= []
 		window_i 		= 0
-
+		display_img		= False
+		self.pending_graph	= False
 
 
 		threshs			= copy.deepcopy(self.base_threshs)
@@ -139,10 +159,15 @@ class Trainer:
 		#	Train 
 		i = 0 
 		while i < iters and not self.cancelled:
+			
+			#Check no timeout 
+			if not timeout in ["none","inf"] and (time.time() - self.tstart) > timeout:
+				return self.cleanup()
+
 			#	Keep some performance variables 
 			t0 				= time.time() 
 			
-			# 	TEST -REMOVE 
+			# 	LR Scheduler
 			if not stop_thresh and i > threshs[0][0]:
 				new_lr 	= threshs[0][1]
 				self.learning_model.optimizer.param_groups[0]['lr']	= new_lr
@@ -153,16 +178,16 @@ class Trainer:
 				
 				if self.gui:
 					self.output.insert(tk.END,f"\tlr updated to: {new_lr}\n")
-			# 	/TEST 
+					
 			#	UPDATE EPSILON
 			e 				= self.update_epsilon(i/(iters))	
 			if self.gui:
 				self.progress_var.set(i/iters)
-
+				display_img			= self.instance.settings['dspl'].get()
+				
+		
 			#	GET EXPERIENCES
-			metrics, experiences, new_games = SnakeConcurrentIMG.Snake(self.w,self.h,self.learning_model,simul_games=train_every,device=self.device,rewards=rewards,max_steps=max_steps,min_thresh=self.min_thresh).play_out_games(epsilon=e)
-
-
+			metrics, experiences, new_games  = SnakeConcurrentIMG.Snake(self.w,self.h,self.learning_model,simul_games=train_every,device=self.device,rewards=rewards,max_steps=max_steps,min_thresh=self.min_thresh).play_out_games(epsilon=e,display_img=display_img)
 
 			#	UPDATE MEMORY POOL 
 			#	replace every element of overflow with the next 
@@ -175,40 +200,32 @@ class Trainer:
 				window_i += 1
 
 
-			#Update metrics 
-			#Find top scorer this round
-			round_best_scorer= 0
-			round_best_score = 0
+			#	UPDATE METRICS
+			#	Add average metrics to telemetry 
+			self.all_scores.append(sum([game['highscore'] for game in metrics])/len(metrics))
+			self.all_lived.append(sum([game['lived_for'] for game in metrics])/len(metrics))
 
-			for game_i,metr_dict in enumerate(metrics): 
-				
-				#Update large telemetry 
-				score = metr_dict["highscore"]
-				self.all_scores.append(score)
-				self.all_lived.append(metr_dict["lived_for"])
-				
-				#Check best scorer
-				if score > round_best_score:
-					round_best_score = score 
-					round_best_scorer = game_i					
-			
-			#Save best game for telemetry 
-			self.game_tracker.append(new_games[round_best_scorer])
+			#	Find best game
+			scores 				= [game['highscore'] for game in metrics]
+			round_top_score 	= max(scores)
+			round_top_game 		= new_games[scores.index(round_top_score)]
+			self.game_tracker.append(round_top_game)
 
-			#Check for best score ever
-			if round_best_score >= best_score:
+			#	Update local and possibly gui games
+			if round_top_score >= self.best_score:
+				self.best_score 	= round_top_score
+
 				if self.gui:
-					self.instance.best_score = best_score
-					self.instance.best_game = copy.deepcopy(new_games[round_best_scorer])
-					
-					if round_best_score > best_score:
-						best_score = round_best_score
-						self.output.insert(tk.END,f"  new hs: {best_score}\n")
+					self.instance.best_game 	= copy.deepcopy(round_top_game)
+					if round_top_score > self.instance.best_score:
+						self.instance.best_score	= round_top_score
+						self.output.insert(tk.END,f"\tnew hs: {self.best_score}\n")
 			
 
 			#	UPDATE VERBOSE 
 			if verbose:
-				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {best_score}\t] lived_avg: {(sum(self.all_lived[-100:])/100):.2f} score_avg: {(sum(self.all_scores[-100:])/100):.2f}")
+				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {self.best_score}\t] lived_avg: {(sum(self.all_lived[-100:])/100):.2f} score_avg: {(sum(self.all_scores[-100:])/100):.2f}")
+			
 			if self.gui:
 				self.instance.var_step.set(f"{(sum(self.all_lived[-100:])/100):.2f}")
 				self.instance.var_score.set(f"{(sum(self.all_scores[-100:])/100):.2f}")
@@ -241,19 +258,20 @@ class Trainer:
 							training_set.append(memory_pool[cur_i])
 							training_ind.append(cur_i)
 
-				qual 		= 100*sum([int(t['r'] > 1) + int(t['r'] < -1) for t in training_set]) / len(training_set)
+				qual 		= 100*sum([int(t['r'] >= 1) + int(t['r'] <= -1) for t in training_set]) / len(training_set)
 				bad_set 	= random.sample(memory_pool,sample_size)
-				bad_qual 	= f"{100*sum([int(t['r'] > 1) + int(t['r'] < -1) for t in memory_pool]) / len(memory_pool):.2f}"
+				bad_qual 	= f"{100*sum([int(t['r'] >= 1) + int(t['r'] <= -1) for t in memory_pool]) / len(memory_pool):.2f}"
 
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
 				
 				
 				if verbose:
 					print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
-				self.train_on_experiences_better(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=verbose)
+				self.train_on_experiences(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=verbose)
 
 				if self.gui and self.instance.cancel_var:
 					return 
+			
 			#	UPDATE MODELS 
 			if i/train_every % transfer_models_every == 0:
 				self.transfer_models(transfer=True,verbose=verbose)
@@ -261,30 +279,26 @@ class Trainer:
 			i += train_every
 
 			if self.gui:
-				
 				self.instance.training_epoch_finished = True
-		#	block_reduce lists 
+
 		#plot up to 500
+		return self.cleanup()
 
 		
-
-
-		blocked_scores		= reduce_arr(self.all_scores,x_scale)
-		blocked_lived 		= reduce_arr(self.all_lived,x_scale)
-
-
-		
-		graph_name = f"{self.name}_[{str(self.loss_fn).split('.')[-1][:-2]},{str(self.optimizer_fn).split('.')[-1][:-2]}@{self.kwargs['lr']}] x [{iters*train_every},{train_every}] mem size {pool_size} taking [{sample_size},{batch_size}]"
+	def cleanup(self):
+		blocked_scores		= reduce_arr(self.all_scores,self.x_scale)
+		blocked_lived 		= reduce_arr(self.all_lived,self.x_scale)
+		graph_name = f"{self.name}_[{str(self.loss_fn).split('.')[-1][:-2]},{str(self.optimizer_fn).split('.')[-1][:-2]}@{self.kwargs['lr']}]]]"
 
 		if self.save_fig:
 			plot_game(blocked_scores,blocked_lived,graph_name)
 
 		if self.gui:
-			self.output.insert(tk.END,f"Completed Training\n\tHighScore:{best_score}\n\tSteps:{sum(self.all_lived[-1000:])/1000}")
-		return blocked_scores,blocked_lived,best_score,graph_name
+			self.output.insert(tk.END,f"Completed Training\n\tHighScore:{self.best_score}\n\tSteps:{sum(self.all_lived[-1000:])/1000}")
+		return blocked_scores,blocked_lived,self.best_score,graph_name
 
 
-	def train_on_experiences_better(self,big_set,epochs=1,batch_size=8,early_stopping=True,verbose=False):
+	def train_on_experiences(self,big_set,epochs=1,batch_size=8,early_stopping=True,verbose=False):
 		
 		#Telemetry 
 		if verbose:
@@ -309,6 +323,9 @@ class Trainer:
 
 			# Iterate through batches
 			for batch_i in range(num_batches):
+
+				i_start 					= batch_i*batch_size
+				i_end   					= i_start + batch_size
 				
 				#	Telemetry
 				percent = batch_i / num_batches
@@ -317,56 +334,43 @@ class Trainer:
 						print("=",end='',flush=True)
 						printed+=1
 				
-				#Init final values for actual reward values 
-				final_target_values = torch.zeros(size=(batch_size,4),device=self.device,requires_grad=False)
 
-				#Run all of batch through the network 
-				batch_set 				= big_set[batch_i*batch_size:batch_i*batch_size+batch_size]
-				#exp_set 				= torch.stack([exp['s`'][0] for exp in batch_set])
-				exp_set 				= torch.stack([exp['s`'][0] for exp in batch_set]).type(torch.float)
+				#BELLMAN UPDATE 
+				self.learning_model.optimizer.zero_grad()
+
+				#Gather batch experiences
+				batch_set 							= big_set[i_start:i_end]
+
+				init_states 						= torch.stack([exp['s'][0]  for exp in batch_set]).type(torch.float)
+				action 								= [exp['a'] for exp in batch_set]
+				next_states							= torch.stack([exp['s`'][0] for exp in batch_set]).type(torch.float)
+				rewards 							= [exp['r']  for exp in batch_set]
+				done								= [exp['done'] for exp in batch_set]
+				
+				#Calc final targets 
+				initial_target_predictions 			= self.learning_model.forward(init_states)
+				final_target_values 				= initial_target_predictions.clone().detach()
+				
+				#Get max from s`
 				with torch.no_grad():
-					target_expected_values 	= torch.max(self.target_model.forward(exp_set),dim=1)[0]
-				#input(f"initial vals\n{final_target_values}")
+					stepped_target_predictions 		= self.target_model.forward(next_states)
+					best_predictions 				= torch.max(stepped_target_predictions,dim=1)[0]
 
-				#One run of this for loop will be one batch run
-				#Update the weights of the experience
-				for item_i in range(batch_size):
-
-					if self.cancelled:
-						return
-
-					#Pre calc some reused values
-					exp 				= batch_set[item_i]
-
-					#print(f"EXP is {exp['s']}")
-					#print(f"chosen action was {exp['a']}")
-					#print(f"resulted in next state {exp['s`']}")
-					#print(f"done val: {exp['done']}")
-					#Calculate Bellman 
-					final_target_values[item_i,exp["a"]] 	= exp["r"] + (exp['done'] * self.gamma * target_expected_values[item_i])
-					#print(f"final value is {final_target_values[item_i,exp['a']]}")
-					#input()
-
-				#input(f"updated trgVals\n{final_target_values}")
-
-				#	BATCH GRADIENT DESCENT
-				i_start 					= batch_i*batch_size
-				i_end   					= i_start + batch_size
+				#Update init values 
+				for i,val in enumerate(best_predictions):
+					chosen_action						= action[i]
+					final_target_values[i,chosen_action]	= rewards[i] + (done[i] * self.gamma * val)
 
 				#	Calculate Loss
-				self.learning_model.optimizer.zero_grad()
-				#inputs 						= torch.stack([exp["s"][0] for exp in big_set[i_start:i_end]])
-				inputs 						= torch.stack([exp["s"][0] for exp in big_set[i_start:i_end]]).type(torch.float)
-				t1 = time.time()
-				this_batch 					= self.learning_model.forward(inputs)
-				#input(f"This batch\n{this_batch}")
-				batch_loss 					= self.learning_model.loss(final_target_values,this_batch)
+				t1 							= time.time()
+				batch_loss 					= self.learning_model.loss(initial_target_predictions,final_target_values)
 				total_loss 					+= batch_loss.item()
 
 				#Back Propogate
 				batch_loss.backward()
 				self.learning_model.optimizer.step()
 				t_gpu += time.time() - t1
+			
 			#	Telemetry
 			if verbose :
 				print(f"]\ttime: {(time.time()-t0):.2f}s\tt_gpu:{(t_gpu):.2f}\tloss: {(total_loss/num_batches):.6f}")
@@ -389,6 +393,8 @@ class Trainer:
 				self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
 			elif self.m_type == "CNN":
 				self.target_model = networks.IMG_NET(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device)
+				self.target_model = networks.IMG_NET(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+
 
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
 			self.target_model.to(self.device)

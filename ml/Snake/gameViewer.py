@@ -22,6 +22,7 @@ from threading import Thread
 import numpy 
 import time 
 from torch.nn import Conv2d
+import utilities
 
 class GameBoard:
 
@@ -109,12 +110,15 @@ class TrainerApp:
                             "lo"            : None,
                             "op"            : None,
                             "tr"            : None,
+                            "drop"          : None,
                             "gam"           : None,
                             "gpu"           : BooleanVar(),
+                            "dspl"          : BooleanVar(),
                             "rew"           : None,
-                            "rpick"         : None
+                            "rpick"         : None,
         }
-        self.settings['gpu'].set(False)
+        self.settings['gpu'].set(True)
+        self.settings['dspl'].set(False)
 
         self.setting_frames = {
 
@@ -135,8 +139,10 @@ class TrainerApp:
                         "lo"    : Frame(self.control_frame,padx=1,pady=1),
                         "op"    : Frame(self.control_frame,padx=1,pady=1),
                         "tr"    : Frame(self.control_frame,padx=1,pady=1),
+                        "drop"  : Frame(self.control_frame,padx=1,pady=1),
                         "gam"   : Frame(self.control_frame,padx=1,pady=1),
                         "gpu"   : Frame(self.control_frame,padx=1,pady=1),
+                        "dspl"  : Frame(self.control_frame,padx=1,pady=1),
                         "rew"   : Frame(self.control_frame,padx=1,pady=1),
                         "rpick" : Frame(self.control_frame,padx=1,pady=1)
         }
@@ -182,10 +188,14 @@ class TrainerApp:
                                                     text="Optimizer"),
                                 "tr"        :   Label( self.setting_frames["tr"],
                                                     text="Transfer Rate"),
+                                "drop"      :   Label( self.setting_frames["drop"],
+                                                    text="Droput Rate"),
                                 "gam"        :   Label( self.setting_frames["gam"],
                                                     text="Gamma γ"),
                                 "gpu"       :   Label( self.setting_frames['gpu'],
                                                     text="GPU Acceleration"),
+                                "dspl"      :   Label( self.setting_frames['dspl'],
+                                                    text="Display Frames"),
                                 "rew"       :   Label( self.setting_frames['rew'],
                                                     text="Reward"),
                                 "rpick"     :   Label( self.setting_frames['rpick'],
@@ -220,8 +230,10 @@ class TrainerApp:
                                 "lo"        :   Combobox(self.setting_frames["lo"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "op"        :   Combobox(self.setting_frames["op"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "tr"        :   Entry(self.setting_frames["tr"],width=entry_w),
+                                "drop"      :   Entry(self.setting_frames["drop"],width=entry_w),
                                 "gam"       :   Entry(self.setting_frames['gam'],width=entry_w),
                                 "gpu"       :   Checkbutton(self.setting_frames["gpu"],variable=self.settings['gpu'],onvalue=True,offvalue=False),
+                                "dspl"      :   Checkbutton(self.setting_frames["dspl"],variable=self.settings['dspl'],onvalue=True,offvalue=False),
                                 "rew"       :   Entry(self.setting_frames['rew'],width=entry_w*3),
                                 "rpick"     :   Entry(self.setting_frames['rpick'],width=entry_w*3)
         }
@@ -365,15 +377,15 @@ class TrainerApp:
     def set_vars(self):
 
         for s_key in self.settings:
-            if s_key == "arch":
+            if s_key == 'arch':
                 self.settings[s_key] = copy.deepcopy(ARCHITECTURES[self.fields[s_key].get()])
-            elif s_key == "lo":
+            elif s_key == 'lo':
                 self.settings[s_key] = LOSSES[self.fields[s_key].get()]
 
-            elif s_key == "op":
+            elif s_key == 'op':
                 self.settings[s_key] = OPTIMIZERS[self.fields[s_key].get()]
             
-            elif s_key == "gpu":
+            elif s_key in ['gpu','dspl']:
                 #print(f"value of gpu is {self.settings['gpu'].get()}")
                 pass
             elif s_key in ['kw','rew']:
@@ -394,12 +406,12 @@ class TrainerApp:
                                 int(self.settings["gameY"]),
                                 visible         = False,
                                 loading         = False,
-                                min_thresh      = int(self.settings["mt"]),
-                                loss_fn         = self.settings["lo"],
+                                min_thresh      = int(self.settings['mt']),
+                                loss_fn         = self.settings['lo'],
                                 optimizer_fn    = self.settings['op'],
-                                kwargs          = dict(self.settings['kw'],**{"lr":self.settings['lr']}),
+                                kwargs          = dict(self.settings['kw'],**{'lr':self.settings['lr']}),
                                 architecture    = self.settings['arch']['arch'],
-                                gpu_acceleration= self.settings["gpu"].get(),
+                                gpu_acceleration= self.settings['gpu'].get(),
                                 m_type          = self.settings['arch']['type'],
                                 progress_var    = self.progress_var,
                                 output          = self.telemetry_box,
@@ -411,7 +423,8 @@ class TrainerApp:
                                 best_game       = self.best_game,
                                 game_tracker    = self.game_tracker,
                                 gamma           = self.settings['gam'],
-                                instance      = self,
+                                instance        = self,
+                                dropout_p       = self.settings['drop'],
                                 gui=True
                                 ) 
         
@@ -447,29 +460,17 @@ class TrainerApp:
             print(f"error joining thread")
             print(AE)
             
-    
     def place_steps(self):
         self.step_canvas.update()
         self.step_telemetry.update()
         self.score_telemetry.update()
 
-
-        avg = int(len(self.cur_game_steps)/128) 
-        avg = 1 if avg < 1 else avg
-        steps = copy.deepcopy(self.cur_game_steps)
-        while True:
-            try:
-                steps = numpy.average(numpy.array(steps).reshape(-1,avg),axis=1)
-                break
-            except ValueError:
-                steps = steps + [steps[-1]]
-
-        x = range(0,len(steps))
-        y = steps
+        steps       = copy.deepcopy(self.cur_game_steps)
+        steps       = utilities.reduce_arr(steps,200)
 
 
         plt.rcParams["figure.figsize"] = (self.step_canvas.winfo_width()/self.window.winfo_fpixels('1i'),self.step_canvas.winfo_height()/self.window.winfo_fpixels('1i'))
-        plt.plot(x,y,color='goldenrod')
+        plt.plot(steps,color='goldenrod')
 
         plt.savefig("steps.png")
         plt.clf()
@@ -482,23 +483,14 @@ class TrainerApp:
         self.score_canvas.update()
         self.step_telemetry.update()
         self.score_telemetry.update()
-        avg = int(len(self.cur_game_scores) / 128) 
-        avg = 1 if avg < 1 else avg
-        #scores = copy.deepcopy(self.cur_game_scores)
-        scores = self.cur_game_scores
-        while True:
-            try:
-                scores = numpy.average(numpy.array(scores).reshape(-1,avg),axis=1)
-                break
-            except ValueError:
-                scores = scores + [scores[-1]]
 
-        x = range(0,len(scores))
-        y = scores
+        scores      = copy.deepcopy(self.cur_game_scores)
+        scores      = utilities.reduce_arr(scores,200)
+
         
  
         plt.rcParams["figure.figsize"] = (self.score_canvas.winfo_width()/self.window.winfo_fpixels('1i'),self.score_canvas.winfo_height()/self.window.winfo_fpixels('1i'))
-        plt.plot(x,y,color='cyan')
+        plt.plot(scores,color='cyan')
 
         plt.savefig("scores.png")
         plt.clf()
@@ -633,6 +625,7 @@ class TrainerApp:
             self.place_steps()
             self.place_scores()
             self.training_epoch_finished = False
+
         self.lock                   = False 
         self.window.after(100,self.update)
 
