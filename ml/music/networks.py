@@ -267,8 +267,10 @@ class AudioDiscriminator2(nn.Module):
                     model[str(4*i+1)]       = nn.BatchNorm1d(channels[i+1])
                     model[str(4*i+1)]       = nn.LeakyReLU(.2,False)
                     model[str(4*i+2)]       = nn.Flatten()
-                    model[str(4*i+3)]       = nn.Linear(final_layer,1)
-                    model[str(4*i+4)]       = nn.Sigmoid()
+                    model[str(4*i+3)]       = nn.Linear(final_layer,final_layer)
+                    model[str(4*i+4)]       = nn.ReLU()
+                    model[str(4*i+5)]       = nn.Linear(final_layer,1)
+                    model[str(4*i+6)]       = nn.Sigmoid()
                     
                 else:
                     model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1,paddings[i],bias=True)

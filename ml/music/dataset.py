@@ -7,8 +7,8 @@ from binascii import hexlify
 from pydub.exceptions import CouldntDecodeError
 import ctypes
 import numpy 
-from networks import AudioGenerator,AudioDiscriminator
-import torch 
+#from networks import AudioGenerator,AudioDiscriminator
+#import torch 
 import binascii
 import hashlib
 import time 
@@ -126,6 +126,10 @@ def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel",peak_no
     n_samples       = int(subchk2_size/(num_channels* (bits_per_sample/8)))
 
 
+    #UPDATE 
+    n_samples       = int(len(data) / 8)
+    #input(f"\nactually {n_samples}")
+    #input(data[-20:])
     max_val         = pow(2,(bits_per_sample)-1)
 
     ch1     = [0]   *   n_samples       # Pre-allocate arrays for decoded file
@@ -134,8 +138,9 @@ def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel",peak_no
 
     #Decode file by reading hex, converting from 2's complement, 
     #and adding to proper channel 
+
     for i,sample in enumerate(range(n_samples)):
-        try:
+        # try:
             sample_start    = int(i * hex_per_sample)
             sample_end      = int(sample_start +  hex_per_sample)
 
@@ -152,12 +157,12 @@ def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel",peak_no
             ch1[i] = c1/max_val
             ch2[i] = c2/max_val
 
-        except ValueError as ve:
+        # except ValueError as ve:
 
-            if ((n_samples - sample) / n_samples) < .001:
-                pass
-            else:
-                print(f" {ve}\n-\tBAD")
+        #     if ((n_samples - sample) / n_samples) < .001:
+        #         pass
+        #     else:
+        #         print(f" {ve}\n-\tBAD")
 
     #Ensure output is correct length
     count = 0 
@@ -187,7 +192,7 @@ def read_wav(filename,outname,sf,prescale_outputsize,mode="dual-channel",peak_no
                 arr = normalize_peak(arr)
             except ValueError:
                 return 
-    elif mode == 'dual-chanel':
+    elif mode == 'dual-channel':
         arr = numpy.array([ch1,ch2],dtype=float)
     else:
         print(f"bad mode specified: {mode}")
@@ -284,7 +289,7 @@ def chunk_all(chunk_length:int,category:str,outpath:str,only="",normalize=False)
     print(f"added {MINUTES} to dataset")
 
 #Convert all wav files to numpy
-def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker=0,numworkers=0,mode="dual-chanel",peak_norm=False):
+def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker=0,numworkers=0,mode="dual-channel",peak_norm=False,verbose=False):
 
     #Get workers ready
     split = math.ceil(16 / numworkers) 
@@ -308,6 +313,7 @@ def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker
     
     #Create arrays
     for i,filename in enumerate(filenames):
+        t1 = time.time()
         if not filename[0] in worker_split:
             continue
         output_full_path    = os.path.join(audio_output_path,f"{filename}.npy").replace(".wav","")
@@ -318,15 +324,20 @@ def read_all(category:str,sf=1,start=-1,end=-1,prescale_outputsize=529200,worker
         if os.path.exists(output_full_path):
             print(f" -already existed!")
             continue 
-        try:
-            read_wav(input_full_path,output_full_path,sf=sf,prescale_outputsize=prescale_outputsize,mode=mode,peak_norm=peak_norm)
-        except ValueError:
-            print(f" got bad value reading")
-            pass
+        #try:
+        read_wav(input_full_path,output_full_path,sf=sf,prescale_outputsize=prescale_outputsize,mode=mode,peak_norm=peak_norm)
+        # except ValueError as e:
+        #     print(f" got bad value reading")
+        #     input(e)
+        #     pass
         #
         # Remove file after it has been processed - DONT 
         #os.remove(input_full_path)
-        print(f" - success")
+        if verbose:
+            end = f" t={(time.time()-t1):.2f}s\n"
+        else:
+            end = "\n"
+        print(f" - success",end=end)
     return 
 
 #Convert to a 2s comlement 
@@ -398,12 +409,24 @@ def downscale(arr_in:numpy.array,sf:int,mode="dual-channel"):
 def upscale(arr_in,sf):
     return numpy.repeat(arr_in,sf,axis=1)
 
+def reduce_arr(arr,newlen):
+
+    #Find GCF of len(arr) and len(newlen)
+    gcf         = math.gcd(len(arr),newlen)
+    mult_fact   = int(newlen / gcf) 
+    div_fact    = int(len(arr) / gcf) 
+
+    new_arr     = numpy.repeat(arr,mult_fact)
 
 
-if __name__ == "__main__":
+    return [sum(list(new_arr[n*div_fact:(n+1)*div_fact]))/div_fact for n in range(newlen)]
+
+
+
+if __name__ == "__main__" and False:
     mode = sys.argv[1]
 
-    category    = "LOFI_sf5_t20_c1_peak1"
+    category    = "LOFI_clean"
     ####################################################################################    
     #                                      DOWNLOAD                                    # 
     ####################################################################################    
@@ -431,7 +454,7 @@ if __name__ == "__main__":
         if not len(sys.argv) > 3:
             print("need worker and numworkers")
         while True:
-            read_all(category,sf=5,prescale_outputsize=int(5292000/6),worker=int(sys.argv[2]),numworkers=int(sys.argv[3]),mode="single-channel",peak_norm=True)
+            read_all(category,sf=35,prescale_outputsize=int(5292000/6),worker=int(sys.argv[2]),numworkers=int(sys.argv[3]),mode="single-channel",peak_norm=True,verbose=True)
             print("\n"*10)
             print("waiting for job")
             time.sleep(30)
@@ -457,3 +480,19 @@ if __name__ == "__main__":
 
 
 
+if __name__ == "__main__" and True:
+    load_root           = f"{DATASET_PATH}/LOFI_sf5_t20_peak1_thrsh.95"
+    stor_root           = f"{DATASET_PATH}/LOFI_sf35_t20_peak1_thrsh.95"
+    if not os.path.exists(stor_root):
+        os.mkdir(stor_root)
+    fnames              = [f"{load_root}/{f}" for f in os.listdir(load_root)]
+
+    newlen              = int(len(numpy.load(fnames[0])) / 7)
+    for i,fname in enumerate(fnames):
+        numpy_arr           = numpy.load(fname)
+        numpy_arr_reduced   = reduce_arr(numpy_arr,newlen)
+        numpy.save(f"{fname.replace(load_root,stor_root)}",numpy_arr_reduced)
+        
+        if i % 100 == 0:
+            print(i)
+    

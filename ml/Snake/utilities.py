@@ -49,7 +49,6 @@ def init_utils(board_size,img_w,img_h,vect_type,device=torch.device('cuda')):
     FOOD_SQ[1]                      = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['food'][1])
     FOOD_SQ[2]                      = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['food'][2])
 
-      
 def build_snake_img(snake_list,food_loc,board_size,img_w=1280,img_h=720):
 
     vect_init_type              = torch.float16

@@ -1,66 +1,32 @@
 import tkinter 
-from tkinter import Button, Frame, Label
+from tkinter import Button, Frame, Label, Entry
 import tkinter.filedialog
 import tkinter.scrolledtext 
 from tkinter.ttk import Combobox, Progressbar, Checkbutton
 import cleandata
 import torch 
-from sandboxG import buildBestMod1,buildBest
+from sandboxG import buildBestMod1,buildBest,build_upsamp
 import torch 
 #GENERATOR VALUES 
-_G_CONFIG_VALUES        = {
-    "init_fn":          None,
+GEN_BUILD_POPUP_FRAMES  =  {
+    "arch"              : None,
+    "load file"         : None,
+    "ncz"               : None,
+    "leak"              : None,
+    "enable_cuda"       : None,
+    "verbose"           : None
 }
+G_LOAD_DIR              = ""
 
-_G_INIT_KWARGS          = {
-    "ncz":              None,
-    "Leak":             None,
-    "Kernel_ver":       None,
-    "Factor_ver":       None,
-    "Enable CUDA":      None,
-    "Out_ch":           None,
-    "Verbose":          None
-}
-
-_G_OPTIM_VALUES         = {
-    "init_fn":          None,
-}
-
-_G_OPTIM_KWARGS         = {
-    "params":           None,
+#TRAIN VALUES 
+_T_INIT_KWARGS          = {
+    "iters":            None,
     "lr":               None,
-    "wd":               None,
-    "momentum":         None 
+    "sf":               None,
+    "sf_rate":          None,
+    "Optim":            None,
+    "Optim Kwargs":     None
 }
-
-
-#DISCRIMINATOR VALUES 
-_D_CONFIG_VALUES        = {
-    "init_fn":          None,
-} 
-
-_D_INIT_KWARGS          = {
-    "ncz":              None,
-    "leak":             None,
-    "kernel_ver":       None,
-    "factor_ver":       None,
-    "device":           None,
-    "ver":              None,
-    "out_ch":           None,
-    "verbose":          None
-}
-
-_D_OPTIM_VALUES         = {
-    "init_fn":          None,
-}
-
-_D_OPTIM_KWARGS         = {
-    "params":           None,
-    "lr":               None,
-    "wd":               None,
-    "momentum":         None 
-}
-
 
 #COLORS 
 Model_Background        = "#0b1517"
@@ -75,22 +41,45 @@ CONSOLE_FONT            = ("Terminal",15)
 
 #VARS 
 DEF_DIR                 = "C:/gitrepos/projects/ml/music/models/"
-BOOL_VARS               = {"Verbose":None,"Enable CUDA":None}
+BOOL_VARS               = {}
+
 #Selections 
-Gen_inits               = {
-        "buildBest":        buildBest,
-        "buildBestMod1":    buildBestMod1}
+GEN_ARCHS               = {
+        "Best":         buildBest,
+        "BestMod1":     buildBestMod1,
+        "Upsample":     build_upsamp}
+
+OPTIM_LIST              = {
+        "Adam":             torch.optim.Adam,
+        "AdamW":            torch.optim.Adam,
+        "AdaDelta":         torch.optim.Adadelta,
+        "AdaGrad":          torch.optim.Adagrad,
+        "SGD":              torch.optim.SGD,
+}
+
+LOSS_LIST               = {
+        "Huber":            torch.nn.HuberLoss,
+        "MSE":              torch.nn.MSELoss,
+        "L1":               torch.nn.L1Loss
+}
 
 #Save olds 
 G_CONF_VALS             = {    
     "ncz":              512,
-    "Leak":             .02,
-    "Kernel_ver":       0,
-    "Factor_ver":       0,
-    "Enable CUDA":      None,
-    "Out_ch":           1,
-    "Verbose":          None,
-    "init_fn":          None}
+    "leak":             .02,
+    "enable_cuda":      None,
+    "verbose":          None,
+    "arch":             None,
+    "load file":        None}
+
+_T_CONF_VALS            = {
+    "iters":            None,
+    "lr":               None,
+    "sf":               None,
+    "sf_rate":          None,
+    "Optim":            None,
+    "Optim Kwargs":     None
+}
 
 def create_g_panel(app_ref):
     root:tkinter.Frame
@@ -104,31 +93,20 @@ def create_g_panel(app_ref):
     root.columnconfigure(0,weight=1)
     root.configure(background=ConfButton_Background)
 
+
     #Configure 
     config          = Frame(root,padx=2,pady=1)
     config.configure(background=ConfButton_Background)
     config.rowconfigure(0)
     config.columnconfigure(0,weight=2)
     config.columnconfigure(1,weight=1)
-    config_label    = Label(config,text="Config G")
+    config_label    = Label(config,text="Configure Gen")
     config_button   = Button(config,text="Conf.",command=lambda: setup_generator(app_ref),padx=1,pady=1)
     config_label.grid(row=0,column=0,sticky=tkinter.EW)
     config_button.grid(row=0,column=1,sticky=tkinter.EW)
     
     config.grid(row=0,column=0,sticky=tkinter.EW)
 
-    #G init file 
-    gfile          = Frame(root,padx=2,pady=1)
-    gfile.configure(background=ConfButton_Background)
-    gfile.rowconfigure(0)
-    gfile.columnconfigure(0,weight=2)
-    gfile.columnconfigure(1,weight=1)
-    gfile_label    = Label(gfile,text="G Init File")
-    gfile_button   = Button(gfile,text="Chose",command=lambda: tkinter.filedialog.askopenfile(initialdir=DEF_DIR))
-    gfile_label.grid(row=0,column=0,sticky=tkinter.EW)
-    gfile_button.grid(row=0,column=1,sticky=tkinter.EW)
-    
-    gfile.grid(row=1,column=0,sticky=tkinter.EW)
 
     #Build 
     build           = Frame(root,padx=2,pady=1)
@@ -141,7 +119,21 @@ def create_g_panel(app_ref):
     build_label.grid(row=0,column=0,sticky=tkinter.EW)
     build_button.grid(row=0,column=1,sticky=tkinter.EW)
     
-    build.grid(row=2,column=0,sticky=tkinter.EW)
+    build.grid(row=1,column=0,sticky=tkinter.EW)
+
+
+    #Train Params 
+    train               = Frame(root,padx=2,pady=1)
+    train.configure(background=ConfButton_Background)
+    train.rowconfigure(0)
+    train.columnconfigure(0,weight=2)
+    train.columnconfigure(1,weight=1)
+    train_label         = Label(train,text="Train Params")
+    train_button        = Button(train,text="Build",command=lambda: train_param_setup(app_ref))
+    train_label.grid(row=0,column=0,sticky=tkinter.EW)
+    train_button.grid(row=0,column=1,sticky=tkinter.EW)
+    
+    train.grid(row=2,column=0,sticky=tkinter.EW)
 
 def create_d_panel(app_ref):
     pass 
@@ -251,35 +243,6 @@ def grab_entry_item(frame_ref,val_type):
     else:
         return 
 
-def build_generator(app_ref,state_dict_file=None):
-
-    kwargs:dict 
-    init_fn:function 
-
-    kwargs      = {k.lower(): _G_INIT_KWARGS[k] for k in _G_INIT_KWARGS}
-    kwargs["device"] = torch.device('cuda') if kwargs["enable cuda"] else torch.device("cpu")
-    del kwargs["enable cuda"]
-
-    print(f"going with vals:")
-    import pprint 
-    pprint.pp(kwargs)
-    init_fn     = _G_CONFIG_VALUES['init_fn']
-
-    #Check init_fn
-    if not init_fn:
-        app_ref.print("No init_fn for Generator supplied!")
-        return
-    #Attempt instantiation 
-    generator:torch.nn.Module
-    generator   = init_fn(**kwargs)
-
-    if state_dict_file:
-        state   = torch.load(state_dict_file)
-        generator.load_state_dict(state)
-
-    app_ref.G   = generator
-    app_ref.print(f"Created Generator Model - {(sum([p.numel()*p.element_size() for p in generator.parameters()])/1000000):.2f}MB")
-
 def build_discriminator(state_dict_file=None):
     Disciminator    = cleandata._D
 
@@ -288,6 +251,58 @@ def build_discriminator(state_dict_file=None):
         Disciminator.load_state_dict(state)
 
     return Disciminator.to(_D_INIT_KWARGS["device"])
+
+def train_param_setup(app_ref):
+    label_w     = 20 
+    popup_geo   = "300x400"
+
+    popup       = tkinter.Tk()
+    popup.geometry(popup_geo)
+
+    for i in range(len(_T_INIT_KWARGS)+1):
+        popup.rowconfigure(i,weight=1)
+
+    popup.columnconfigure(0,weight=1)
+    popup.configure(background="#545C6A")
+
+    frames              = {key : tkinter.Frame(popup,width=100,pady=1) for key in _T_INIT_KWARGS}
+    values  = {}
+
+    for i,frame in enumerate(frames):
+        print(frame)
+        frames[frame].columnconfigure(0,weight=5)
+        frames[frame].columnconfigure(1,weight=3)
+        frames[frame].rowconfigure(0,weight=1)
+
+        label   = tkinter.Label(frames[frame],text=frame,width=label_w)
+        label.grid(row=0,column=0)
+
+
+        entry   = tkinter.Entry(frames[frame])
+        if not _T_CONF_VALS[frame] is None:
+            entry.delete(0,tkinter.END)
+            entry.insert(0,_T_CONF_VALS[frame])
+        
+        if frame == "Optim":
+            entry           = Combobox(frames[frame],textvariable=tkinter.StringVar(),state="readonly")
+            entry['values'] = list(Gen_inits.keys())
+            entry.current(0)
+            if _T_CONF_VALS:
+                entry.current(_T_CONF_VALS[frame])
+        elif frame in ["Enable CUDA","Verbose"]:
+            BOOL_VARS[frame]    = tkinter.BooleanVar()
+            entry               = Checkbutton(frames[frame],variable=BOOL_VARS[frame],onvalue=True,offvalue=False)
+
+        
+            
+        entry.grid(row=0,column=1)            
+            
+        values[frame]   = entry 
+        frames[frame].grid(row=i,column=0,padx=0,pady=1,sticky=tkinter.EW)
+    submit_frame    = tkinter.Button(popup,text="Submit",command=lambda : return_vals(popup,values,app_ref))
+    submit_frame.grid(row=i+1,column=0)
+    popup.grid()
+    popup.mainloop()
 
 def return_vals(window:tkinter.Tk,valuelist,app_ref):
     global  G_CONF_VALS,_G_CONFIG_VALUES
@@ -324,59 +339,115 @@ def return_vals(window:tkinter.Tk,valuelist,app_ref):
     app_ref.temp_vals = vals 
     app_ref.print("Set Generator initialization values")
 
+def get_fname():
+    global G_LOAD_DIR
+    G_LOAD_DIR      = tkinter.filedialog.askopenfile(initialdir=DEF_DIR)
+
 def setup_generator(app_ref):
-    global G_CONF_VALS, BOOL_VARS
-    label_w     = 20 
-    popup_geo   = "300x400"
-
-    popup       = tkinter.Tk()
+    global G_CONF_VALS, BOOL_VARS, _G_INIT_KWARGS
+    label_w                     = 20 
+    popup_geo                   = "350x450"
+    popup                       = tkinter.Tk()
     popup.geometry(popup_geo)
-    for i in range(len(_G_INIT_KWARGS)+1):
-        popup.rowconfigure(i,weight=1)
-
     popup.columnconfigure(0,weight=1)
     popup.configure(background="#545C6A")
-
-    frames  = {key : tkinter.Frame(popup,width=100,pady=1) for key in _G_INIT_KWARGS}
-    frames["init_fn"] = tkinter.Frame(popup,width=100,pady=1)
-
-    values  = {}
-
-    for i,frame in enumerate(frames):
-        print(frame)
-        frames[frame].columnconfigure(0,weight=5)
-        frames[frame].columnconfigure(1,weight=3)
-        frames[frame].rowconfigure(0,weight=1)
-
-        label   = tkinter.Label(frames[frame],text=frame,width=label_w)
-        label.grid(row=0,column=0)
-
-
-        entry   = tkinter.Entry(frames[frame])
-        if not G_CONF_VALS[frame] is None:
-            entry.delete(0,tkinter.END)
-            entry.insert(0,G_CONF_VALS[frame])
+    
+    frames                      = {} 
+    #Build a frame for each of the items in gen_build_popup_frames
+    for i,var in enumerate(GEN_BUILD_POPUP_FRAMES):  
+        popup.rowconfigure(i,weight=1)
         
-        if frame == "init_fn":
-            entry           = Combobox(frames[frame],textvariable=tkinter.StringVar(),state="readonly")
-            entry['values'] = list(Gen_inits.keys())
-            entry.current(0)
-            if G_CONF_VALS:
-                entry.current(G_CONF_VALS[frame])
-        elif frame in ["Enable CUDA","Verbose"]:
-            BOOL_VARS[frame]    = tkinter.BooleanVar()
-            entry           = Checkbutton(frames[frame],variable=BOOL_VARS[frame],onvalue=True,offvalue=False)
+        frames[var]             = Frame(popup)
+        frames[var].columnconfigure(0,weight=5)           # 2 columns, 1 row each
+        frames[var].columnconfigure(1,weight=3)
+        frames[var].rowconfigure(0,weight=1)  
 
+        label                   = Label(frames[var],text=var,width=label_w)
+        label.grid(row=i,column=0,sticky=tkinter.W)
         
-            
-        entry.grid(row=0,column=1)            
-            
-        values[frame]   = entry 
-        frames[frame].grid(row=i,column=0,padx=0,pady=1,sticky=tkinter.EW)
-    submit_frame    = tkinter.Button(popup,text="Submit",command=lambda : return_vals(popup,values,app_ref))
-    submit_frame.grid(row=i+1,column=0)
+
+        if var in ["arch"]:
+            entry                   = Combobox(frames[var],textvariable=tkinter.StringVar(),state="readonly")
+            entry['values']         = list(GEN_ARCHS.keys())
+            if G_CONF_VALS['arch']: 
+                entry.current(G_CONF_VALS['arch'])
+            else: 
+                entry.current(0)
+
+        elif var in ["verbose","enable_cuda"]:
+            BOOL_VARS[var]          = tkinter.BooleanVar()
+            entry                   = Checkbutton(frames[var],variable=BOOL_VARS[var],onvalue=True,offvalue=False)
+        elif var in ['load file']:
+            frames[var].columnconfigure(2,weight=1)          
+            entry                   = Entry(frames[var],width=label_w)   
+            fopen                   = Button(frames[var],text="file",command=lambda: GEN_BUILD_POPUP_FRAMES['load file'].insert(0,tkinter.filedialog.askopenfile(initialdir=DEF_DIR).name))            
+            fopen.grid(row=i,column=2)
+        else:
+            entry                   = Entry(frames[var],width=label_w)
+            if G_CONF_VALS[var]:    entry.insert(0,G_CONF_VALS[var])
+
+        entry.grid(row=i,column=1)    
+        GEN_BUILD_POPUP_FRAMES[var] = entry
+        frames[var].grid(row=i,column=0,padx=0,pady=1,sticky=tkinter.EW)
+
+    #Build Generator on button press
+    build_frame    = tkinter.Button(popup,text="Build Gen",command=lambda : build_generator(app_ref))
+    build_frame.grid(row=i+1,column=0)
     popup.grid()
     popup.mainloop()
+
+def build_generator(app_ref):
+
+    kwargs:dict 
+    init_fn:function    
+
+    kwargs              = {}
+
+    for var in GEN_BUILD_POPUP_FRAMES:
+
+        print(f"found vars: {var}")
+        if "Entry" in str(type(GEN_BUILD_POPUP_FRAMES[var])) and not "load file" == var:
+            print(f"{var} is type {type(GEN_BUILD_POPUP_FRAMES[var])}")
+
+            try:
+                val             = float(GEN_BUILD_POPUP_FRAMES[var].get())
+            except ValueError:
+                print(f"conversion failed, {car} is set to 0")
+                val             = 0
+
+        
+        elif "Checkbutton" in str(type(GEN_BUILD_POPUP_FRAMES[var])):
+            val             = BOOL_VARS[var].get()
+        
+        else:
+            continue
+        
+        kwargs[var]         = val 
+
+    kwargs["device"]    = torch.device('cuda') if kwargs["enable_cuda"] else torch.device("cpu")
+    del kwargs["enable_cuda"]
+
+    print(f"going with vals:")
+    import pprint 
+    pprint.pp(kwargs)
+    arch_constructor    = GEN_ARCHS[GEN_BUILD_POPUP_FRAMES['arch'].get()]
+
+    #Check init_fn
+    if not arch_constructor:
+        app_ref.print("No init_fn for Generator supplied!")
+        return
+    
+
+    #Attempt instantiation 
+    generator:torch.nn.Module
+    generator   = arch_constructor(**kwargs)
+
+    if GEN_BUILD_POPUP_FRAMES['load file']:
+        state   = torch.load(GEN_BUILD_POPUP_FRAMES['load file'].get())
+        generator.load_state_dict(state)
+
+    app_ref.G   = generator
+    app_ref.print(f"Created Generator Model - {(sum([p.numel()*p.element_size() for p in generator.parameters()])/1000000):.2f}MB")
 
 if __name__ == "__main__":
     setup_generator(None)

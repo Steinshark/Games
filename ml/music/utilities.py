@@ -114,6 +114,14 @@ def print_epoch_header(epoch_num,epoch_tot,header_width=100):
 def model_size(model:torch.nn.Module):
     return f"{ (sum([p.numel()*p.element_size() for p in model.parameters()])/(1024*1024)):.2f}MB"
 
+def view_weights(model:torch.nn.Module):
+    layers      = []
+    prev_size   = 0
+    for layer in list(model.children()):
+        params      = layer.parameters()
+
+        
+
 if __name__ == "__main__":
     import numpy 
     a = numpy.load(r"C:\data\music\dataset\LOFI_sf5_t60\0f03823a5c_0.npy") 

@@ -12,14 +12,14 @@ import time
 _DEV        = torch.device('cuda')
 _KERNELS    = [3,5,7,11,9,7,5,3]
 _PADDINGS   = [int(k/2) for k in _KERNELS]
-_OUTSIZE    = (1,int(529200/3))
-_D          = AudioDiscriminator2(  channels=[_OUTSIZE[0],64,128,128,256,256,512,512,1],
-                                    kernels=_KERNELS,mp_kernels=list([5,7,7,5,4,4,3,3,3]),
+_OUTSIZE    = (1,int(529200/21))
+
+_D          = AudioDiscriminator2(  channels=[_OUTSIZE[0],32,64,128,256,256,512,1],
+                                    kernels=[3,5,7,11,9,7,5],mp_kernels=list([5,7,5,4,4,3,3,3]),
                                     paddings=_PADDINGS,
                                     device=torch.device('cuda'),
                                     final_layer=5,
                                     verbose=False,)
-
 class classDataSet(Dataset):
     def __init__(self,fnames_good,fnames_bad):
         

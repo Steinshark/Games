@@ -103,6 +103,7 @@ class TrainerApp:
                             "bs"            : None,
                             "lr"            : None,
                             "kw"            : None,
+                            "ll"            : None,
                             "ep"            : None,
                             "mt"            : None,
                             "mx"            : None,
@@ -131,6 +132,7 @@ class TrainerApp:
                         "bs"    : Frame(self.control_frame,padx=1,pady=1),
                         "lr"    : Frame(self.control_frame,padx=1,pady=1),
                         "kw"    : Frame(self.control_frame,padx=1,pady=1),
+                        "ll"    : Frame(self.control_frame,padx=1,pady=1),
                         "ep"    : Frame(self.control_frame,padx=1,pady=1),
                         "mt"    : Frame(self.control_frame,padx=1,pady=1),
                         "mx"    : Frame(self.control_frame,padx=1,pady=1),
@@ -172,6 +174,8 @@ class TrainerApp:
                                                     text="Learning Rate"),
                                 "kw"        :   Label( self.setting_frames['kw'],
                                                     text="optimizer kwargs"),
+                                "ll"        :   Label( self.setting_frames['ll'],
+                                                    text="lr progression"),
                                 "ep"        :   Label( self.setting_frames["ep"],
                                                     text="Epochs"),
                                 "mt"        :   Label( self.setting_frames["mt"],
@@ -221,7 +225,8 @@ class TrainerApp:
                                 "ss"        :   Entry(self.setting_frames["ss"],width=entry_w),
                                 "bs"        :   Entry(self.setting_frames["bs"],width=entry_w),
                                 "lr"        :   Entry(self.setting_frames["lr"],width=entry_w),
-                                "kw"        :   Entry(self.setting_frames["kw"],width=entry_w),
+                                "kw"        :   Entry(self.setting_frames["kw"],width=entry_w+30),
+                                "ll"        :   Entry(self.setting_frames["ll"],width=entry_w+30),
                                 "ep"        :   Entry(self.setting_frames["ep"],width=entry_w),
                                 "mt"        :   Entry(self.setting_frames["mt"],width=entry_w),
                                 "mx"        :   Entry(self.setting_frames["mx"],width=entry_w),
@@ -388,7 +393,7 @@ class TrainerApp:
             elif s_key in ['gpu','dspl']:
                 #print(f"value of gpu is {self.settings['gpu'].get()}")
                 pass
-            elif s_key in ['kw','rew']:
+            elif s_key in ['kw','rew','ll']:
                 self.settings[s_key] = eval(self.fields[s_key].get())
             else:
                 self.settings[s_key] = float(eval(self.fields[s_key].get()))
@@ -425,6 +430,7 @@ class TrainerApp:
                                 gamma           = self.settings['gam'],
                                 instance        = self,
                                 dropout_p       = self.settings['drop'],
+                                lr_threshs      = self.settings['ll'],
                                 gui=True
                                 ) 
         
@@ -453,9 +459,13 @@ class TrainerApp:
         self.var_score.set("0") 
         self.cancel_var = True 
         self.progress_var.set(0)
-        self.broke_training     = False 
+        self.broke_training         = False 
+        self.trainer.best_score     = 0 
+        self.best_score             = 0 
+        self.best_game              = [] 
         try:
             self.telemetry_box.insert(tk.END,"Cancelling Training\n")
+            self.trainer            = None 
         except AssertionError as AE:
             print(f"error joining thread")
             print(AE)

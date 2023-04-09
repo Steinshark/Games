@@ -46,6 +46,7 @@ class Trainer:
 					instance=None,
 					channels=3,
 					display_img=False,
+					lr_threshs=None,
 					dropout_p=.1):
 
 
@@ -83,7 +84,7 @@ class Trainer:
 		self.best_score			= 0
 		self.best_game			= best_game
 		self.instance 	 		= instance 
-		self.base_threshs		= [(-1,.0001),(1024+256,.00001),(1024+512+256,3e-6),(2048,1e-6),(4096,5e-7),(4096+2048,2.5e-7),(8192,1e-7),(8192*2,1e-8)]
+		self.base_threshs		= [(-1,.0001),(1024+256,.00001),(1024+512+256,3e-6),(2048,1e-6),(4096,5e-7),(4096+2048,2.5e-7),(8192,1e-7),(8192*2,1e-8)] if not lr_threshs else lr_threshs
 		self.display_img		= display_img
 
 		#Set training vars 
@@ -270,6 +271,7 @@ class Trainer:
 				self.train_on_experiences(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=verbose)
 
 				if self.gui and self.instance.cancel_var:
+					self.output.insert(tk.END,f"CANCELLING\n")
 					return 
 			
 			#	UPDATE MODELS 
@@ -303,7 +305,7 @@ class Trainer:
 		#Telemetry 
 		if verbose:
 			print(f"TRAINING:")
-			print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'early-stop'.ljust(12)}: {early_stopping}\n")
+			print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'lr'.ljust(12)}: {self.learning_model.optimizer.param_groups[0]['lr']:.8f}\n")
 
 		for epoch_i in range(epochs):
 			if self.gui and self.instance.cancel_var:
@@ -387,6 +389,12 @@ class Trainer:
 			#Check for dir 
 			if not os.path.isdir(self.PATH):
 				os.mkdir(self.PATH)
+
+			# prev_state_dict 			= self.learning_model.state_dict()
+			# self.target_model 			= networks.IMG_NET(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+			# self.target_model.load_state_dict(self.learning_model.state_dict())
+			# return 
+		
 			torch.save(self.learning_model.state_dict(),os.path.join(self.PATH,f"{self.fname}_lm_state_dict"))
 			#Load the learning model as the target model
 			if self.m_type == "FCN":

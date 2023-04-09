@@ -20,7 +20,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(240,135),min_thresh=.03):
+	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(400,225),min_thresh=.03):
 
 
 		#Set global Vars
