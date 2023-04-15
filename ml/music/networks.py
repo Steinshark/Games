@@ -289,63 +289,412 @@ class AudioDiscriminator2(nn.Module):
 
 
 class AudioDiscriminator3(nn.Module):
-    def __init__(self,channels=[2,8,4,4,4,2,2,1,1],kernels=[22050,5000,10,5],mp_kernels=[1,1,1,1],paddings=[],final_layer=0,device=torch.device("cpu"),verbose=False):
+    def __init__(self,activation_fn=nn.ReLU,dropout_p=.5,activation_kwargs={"inplace":True},device=torch.device("cuda"),verbose=False):
         super(AudioDiscriminator3, self).__init__()
 
-        if not len(channels) == len(kernels)+1:
-            print(f"bad channel size {len(channels)} must be {len(kernels)+1}")
-            exit(-1)
 
         model = OrderedDict()
-        for i,config in enumerate(zip(channels,kernels,mp_kernels,paddings)):
-            f,k,s,p = config 
+
+        activation_fn                   = activation_fn
+        activation_kwargs               = activation_kwargs
+        dropout_p                       = dropout_p
 
 
-            if not (i == (len(channels)-2)):
-                model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1 if i == 0 else 3,paddings[i],bias=False)
-                model[str(4*i+1)]       = nn.BatchNorm1d(channels[i+1])
-                model[str(4*i+2)]       = nn.LeakyReLU(.2,False)
-                model[str(4*i+3)]       = nn.MaxPool1d(mp_kernels[i+1])
+        #LAYER 1    -> 25200
+        i                               = 0
+        kernel                          = 7
+        n_ch_prev                       = 1
+        n_ch                            = 64
+        mp_reduction                    = 3 
 
-            else:
-                if final_layer > 1:
-                    model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1,paddings[i],bias=True)
-                    model[str(4*i+1)]       = nn.LeakyReLU(.2,False)
-                    model[str(4*i+2)]       = nn.Flatten()
-                    model[str(4*i+3)]       = nn.Linear(final_layer,1)
-                    model[str(4*i+4)]       = nn.Sigmoid()
-                    
-                else:
-                    model[str(4*i)]         = nn.Conv1d(channels[i],channels[i+1],kernels[i],1,paddings[i],bias=True)
-                    model[str(4*i+1)]       = nn.Flatten()
-                    model[str(4*i+2)]       = nn.Sigmoid()
-                    
+        model[str(i+0)]                   = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                   = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                   = activation_fn(**activation_kwargs)
+        model[str(i+3)]                   = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 2    -> 8400
+        i                               = 4
+        kernel                          = 5
+        n_ch_prev                       = n_ch
+        n_ch                            = 128
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 3    -> 2800
+        i                               = 8
+        kernel                          = 15
+        n_ch_prev                       = n_ch
+        n_ch                            = 256
+        mp_reduction                    = 5 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 4    -> 560
+        i                               = 12
+        kernel                          = 31
+        n_ch_prev                       = n_ch
+        n_ch                            = 512
+        mp_reduction                    = 7 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 5    -> 80
+        i                               = 16
+        kernel                          = 31
+        n_ch_prev                       = n_ch
+        n_ch                            = 512
+        mp_reduction                    = 5 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 6    -> 8192
+        i                               = 20
+        model[str(i)]                   = nn.Flatten()
+        model[str(i+1)]                 = nn.Linear(8192,2048)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.Dropout(p=dropout_p)
+
+
+        #LAYER 7    -> 2048
+        i                               = 24
+        model[str(i)]                   = nn.Linear(2048,1024)
+        model[str(i+1)]                 = activation_fn(**activation_kwargs) 
+        model[str(i+2)]                 = nn.Dropout(p=dropout_p)
+
+
+        #LAYER 8    -> 1024
+        i                               = 27
+        model[str(i)]                   = nn.Linear(1024,1)
+        model[str(i+1)]                 = nn.Sigmoid()
+
+               
 
         self.model = nn.Sequential(model)
+
         if verbose:
             print(self.model)
         self.model.to(device)
-        self.channels = channels
 
     def forward(self, input):
         return self.model(input)
 
+
+class AudioDiscriminator4(nn.Module):
+    def __init__(self,activation_fn=nn.ReLU,dropout_p=.5,activation_kwargs={"inplace":True},device=torch.device("cuda"),verbose=False):
+        super(AudioDiscriminator4, self).__init__()
+
+
+        model = OrderedDict()
+
+        activation_fn                   = activation_fn
+        activation_kwargs               = activation_kwargs
+        dropout_p                       = dropout_p
+
+
+        #LAYER 1    -> 25200
+        i                               = 0
+        kernel                          = 7
+        n_ch_prev                       = 1
+        n_ch                            = 64
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                   = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                   = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                   = activation_fn(**activation_kwargs)
+        model[str(i+3)]                   = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 2    -> 8400
+        i                               = 4
+        kernel                          = 7
+        n_ch_prev                       = n_ch
+        n_ch                            = 128
+        mp_reduction                    = 2 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 3    -> 2800
+        i                               = 8
+        kernel                          = 11
+        n_ch_prev                       = n_ch
+        n_ch                            = 256
+        mp_reduction                    = 2 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 4    -> 560
+        i                               = 12
+        kernel                          = 15
+        n_ch_prev                       = n_ch
+        n_ch                            = 512
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 5    -> 80
+        i                               = 16
+        kernel                          = 21
+        n_ch_prev                       = n_ch
+        n_ch                            = 512
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 6    -> 80
+        i                               = 20
+        kernel                          = 21
+        n_ch_prev                       = n_ch
+        n_ch                            = 512
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 7    -> 80
+        i                               = 24
+        kernel                          = 21
+        n_ch_prev                       = n_ch
+        n_ch                            = 1024
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 1,  int(kernel/2),   bias=False)
+        model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+
+        #LAYER 8    -> 8192
+        i                               = 28
+        model[str(i)]                   = nn.Flatten()
+        model[str(i+1)]                 = nn.Linear(18432,2048)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.Dropout(p=dropout_p)
+
+
+        #LAYER 9    -> 2048
+        i                               = 32
+        model[str(i)]                   = nn.Linear(2048,1024)
+        model[str(i+1)]                 = activation_fn(**activation_kwargs) 
+        model[str(i+2)]                 = nn.Dropout(p=dropout_p)
+
+
+        #LAYER 10    -> 1024
+        i                               = 35
+        model[str(i)]                   = nn.Linear(1024,1)
+        model[str(i+1)]                 = nn.Sigmoid()
+
+               
+
+        self.model = nn.Sequential(model).to(device)
+
+        if verbose:
+            print(self.model)
+        self.model.to(device)
+
+    def forward(self, input):
+        return self.model(input)
+
+
+class AudioDiscriminator5(nn.Module):
+
+    def __init__(self,device=torch.device('cuda')):
+
+        super(AudioDiscriminator5,self).__init__()
+
+        
+
+        self.L_conv_layers          = nn.Sequential(
+                    nn.Conv1d(1,32,127,1,int(127/2),bias=False),
+                    nn.BatchNorm1d(32,device=device),
+                    nn.ReLU(),
+                                        
+                    nn.Conv1d(32,64,127,1,int(127/2),bias=False),
+                    nn.BatchNorm1d(64,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(64,128,63,1,int(63/2),bias=False),
+                    nn.BatchNorm1d(128,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(128,256,31,1,int(31/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,31,1,int(31/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,15,1,int(15/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,15,1,int(15/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,15,1,int(15/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,15,1,int(15/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,15,1,int(15/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Flatten()
+        ).to(device)
+
+        self.S_conv_layers          = nn.Sequential(
+                    nn.Conv1d(1,32,5,1,int(5/2),bias=False),
+                    nn.BatchNorm1d(32,device=device),
+                    nn.ReLU(),
+                                        
+                    nn.Conv1d(32,64,5,1,int(5/2),bias=False),
+                    nn.BatchNorm1d(64,device=device),
+                    nn.ReLU(),
+
+                    nn.Conv1d(64,128,5,1,int(5/2),bias=False),
+                    nn.BatchNorm1d(128,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(128,128,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(128,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(128,128,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(128,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(128,256,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,256,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(256,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(256,512,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(512,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Conv1d(512,512,7,1,int(7/2),bias=False),
+                    nn.BatchNorm1d(512,device=device),
+                    nn.ReLU(),
+                    nn.MaxPool1d(2),
+
+                    nn.Flatten()
+        ).to(device)
+
+        self.FF_layers              = nn.Sequential(
+                    torch.nn.Linear(26112,8192,device=device),
+                    torch.nn.Dropout(.5),
+                    torch.nn.ReLU(),
+
+                    torch.nn.Linear(8192,1024,device=device),
+                    torch.nn.Dropout(.5),
+                    torch.nn.ReLU(),
+
+                    torch.nn.Linear(1024,128,device=device),
+                    torch.nn.Dropout(.5),
+                    torch.nn.ReLU(),
+
+                    torch.nn.Linear(128,1,device=device),
+                    torch.nn.Sigmoid()
+        ).to(device)
+   
+        self.model                  = nn.ModuleList([self.L_conv_layers,self.S_conv_layers,self.FF_layers])
+
+        
+    def forward(self,x):
+        
+        #Large and small feature detection
+        L_ff            = self.L_conv_layers(x)
+        
+        S_ff            = self.S_conv_layers(x)
+        
+
+        concat_ff       = torch.cat((L_ff,S_ff),dim=1)
+        
+        concat_ff       = self.FF_layers(concat_ff)
+
+        return concat_ff
+
+    def __sizeof__(self):
+        L_size     = sum([p.numel()*p.element_size() for p in self.L_conv_layers])
+        S_size     = sum([p.numel()*p.element_size() for p in self.S_conv_layers])
+        FF_size    = sum([p.numel()*p.element_size() for p in self.FF_layers])
+
+        return L_size+S_size+FF_size
+
+
 if __name__ == "__main__":
-    nc          = 5
-    config      = {"kernels":[8192, 8192, 64, 4, 4, 4, 4], "strides": [3, 3, 3, 3, 3, 3, 2], "paddings": [0, 0, 0, 0, 0, 0, 0], "out_pad":[0, 0, 0, 0, 0, 0, 0], "in_size":1, "num_channels":2}
-    kernels_ct  = config['kernels']
-    strides_ct  = config['strides']
-    padding_ct  = config['paddings']
-    out_pad_ct  = config['out_pad']
+    d               = AudioDiscriminator5()
+    inputvect   = torch.randn(size=(1,1,17640),dtype=torch.float,device=torch.device('cuda'))
 
-    channels   = [nc] + [2]*len(padding_ct)
-    channels[1] = 8 
-    channels[2] = 4
-    g = AudioGenerator(channels=channels,kernels=kernels_ct,strides=strides_ct,paddings=padding_ct,out_pads=out_pad_ct,device=torch.device('cuda'))
-    print(g)
-    import torch 
-
-    inputvect   = torch.randn(size=(1,nc,1),dtype=torch.float,device=torch.device('cuda'))
-    out         = g.forward(inputvect)[0]
-
-    print(out.shape)
+    
+    input(f"{d.forward(inputvect).shape}\n\n{d.__sizeof__()/1000000:.2f}MB")

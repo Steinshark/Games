@@ -2,24 +2,26 @@ from matplotlib import pyplot as plt
 import os 
 import numpy 
 import random 
-from networks import AudioDiscriminator2,AudioDiscriminator3
+from networks import AudioDiscriminator2,AudioDiscriminator3,AudioDiscriminator4
 from torch.utils.data import DataLoader,Dataset
 import torch 
 from utilities import weights_initD
 import json 
 import time 
-
+from torchaudio import backend
+from torchaudio.backend.sox_io_backend import load
+from torchaudio import transforms
+from matplotlib import pyplot as plt 
+import librosa 
+import math 
+import torchaudio
 _DEV        = torch.device('cuda')
 _KERNELS    = [3,5,7,11,9,7,5,3]
 _PADDINGS   = [int(k/2) for k in _KERNELS]
 _OUTSIZE    = (1,int(529200/21))
 
-_D          = AudioDiscriminator2(  channels=[_OUTSIZE[0],32,64,128,256,256,512,1],
-                                    kernels=[3,5,7,11,9,7,5],mp_kernels=list([5,7,5,4,4,3,3,3]),
-                                    paddings=_PADDINGS,
-                                    device=torch.device('cuda'),
-                                    final_layer=5,
-                                    verbose=False,)
+_D          = AudioDiscriminator4()
+
 class classDataSet(Dataset):
     def __init__(self,fnames_good,fnames_bad):
         
@@ -53,7 +55,7 @@ class classDataSet(Dataset):
         return len(self.data['x'])
 
 
-def parse_files():
+def parse_files(root="C:/data/music/chunked/LOFI_sf5_t20_c1_peak1"):
 
     if os.path.exists("data.txt"):
         data = open("data.txt").read()
@@ -67,7 +69,6 @@ def parse_files():
         bad_files = []
 
     #create bad and good bins  
-    root = "C:/data/music/dataset/LOFI_sf5_t20_c1_redo2"
     files = [os.path.join(root,f) for f in os.listdir(root)]
     random.shuffle(files)
 
@@ -78,7 +79,12 @@ def parse_files():
     for file in files:
         if file in good_files or file in bad_files:
             print("skip")
-        arr = numpy.load(file)[0][::-1]
+        
+        #arr = numpy.load(file)[0][::-1]
+        arr  = torchaudio.functional.resample(torchaudio.load(file)[0][0],44100,20).numpy()
+        arr = arr / max(arr)
+
+
         plt.plot(arr,color='red')
         plt.title(f"{file.split('/')[-1]}")
         plt.draw()
@@ -99,7 +105,7 @@ def parse_files():
             continue
         elif verdict == 'l':
             from dataset import upscale,reconstruct
-            arr = upscale(numpy.array([arr[::-1],arr[::-1]]),5)
+            arr = upscale(numpy.array([arr[::-1],arr[::-1]]),50)
             reconstruct(arr,"SNUP.wav")
             verdict = input("verdict: ")
 
@@ -365,7 +371,29 @@ def divide_dataset(load_path,store_path,threshold=.95):
                 print(f"Checked {i}/{size} - saved {saved}")
 
 
+def reduce_arr(arr,newlen):
 
+    #Find GCF of len(arr) and len(newlen)
+    gcf         = math.gcd(len(arr),newlen)
+    mult_fact   = int(newlen / gcf) 
+    div_fact    = int(len(arr) / gcf) 
+
+    new_arr     = numpy.repeat(arr,mult_fact)
+
+
+    return [sum(list(new_arr[n*div_fact:(n+1)*div_fact]))/div_fact for n in range(newlen)]
+
+
+def get_spectrogram(path,n_fft=400):
+    print(f"loading")
+    waveform, sample_rate   = load(path,normalize=False)
+    waveform                = waveform[0] 
+    print(waveform.shape)
+    waveform                = waveform
+    print(f"loaded")
+
+    #plt.plot(reduce_arr(waveform,10000))
+    #plt.show()
 
 
 
@@ -380,5 +408,8 @@ if __name__ == "__main__":
     
     elif sys.argv[1] == '-d':
         divide_dataset("C:/data/music/dataset/LOFI_sf5_t20_c1_peak1","C:/data/music/dataset/LOFI_sf5_t20_peak1_thrsh.9")
+    
+    elif sys.argv[1] == "-spec":
+        get_spectrogram("C:/data/music/chunked/LOFI_sf5_t20_c1_peak1/0a25ba07a1_9.wav")
 
         

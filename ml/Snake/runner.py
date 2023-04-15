@@ -11,7 +11,7 @@ import json
 
 #SETTINGS 
 iters           = 1024*8
-train_every     = 4
+train_every     = 8
 pool_size       = 1024 
 sample_size     = 256 
 bs              = 32
@@ -27,14 +27,14 @@ ga              = .9
 data            = {}
 t0              = time.time()
 
-repeats         = 3
+repeats         = 1
 if __name__ == "__main__":
     for die in [-1,-.9,-.8,-.7,-.5]:
         for eat in [2.5,1.5,1]:
             key     = f"die={die},eat={eat}"
             t1                              = time.time()
             for _ in range(repeats):
-                t                               = Trainer(10,10,visible=False,loading=False,loss_fn=torch.nn.MSELoss,gpu_acceleration=True,gamma=ga,kwargs=kwargs,min_thresh=minimum_thresh,display_img=False)
+                t                               = Trainer(10,10,visible=False,loading=False,loss_fn=torch.nn.MSELoss,gpu_acceleration=True,gamma=ga,kwargs=kwargs,min_thresh=minimum_thresh,display_img=False,dropout_p=.5)
                 reward          = {"die":die,"eat":eat,"step":0}
 
                 scores,lived,high,gname = t.train_concurrent(           iters=iters,

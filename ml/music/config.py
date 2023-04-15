@@ -407,12 +407,12 @@ def build_generator(app_ref):
 
         print(f"found vars: {var}")
         if "Entry" in str(type(GEN_BUILD_POPUP_FRAMES[var])) and not "load file" == var:
-            print(f"{var} is type {type(GEN_BUILD_POPUP_FRAMES[var])}")
-
             try:
                 val             = float(GEN_BUILD_POPUP_FRAMES[var].get())
+                if var == "ncz":
+                    val             = int(val)
             except ValueError:
-                print(f"conversion failed, {car} is set to 0")
+                print(f"conversion failed, {var} is set to 0")
                 val             = 0
 
         
@@ -424,13 +424,13 @@ def build_generator(app_ref):
         
         kwargs[var]         = val 
 
-    kwargs["device"]    = torch.device('cuda') if kwargs["enable_cuda"] else torch.device("cpu")
+    kwargs["device"]        = torch.device('cuda') if kwargs["enable_cuda"] else torch.device("cpu")
     del kwargs["enable_cuda"]
 
     print(f"going with vals:")
     import pprint 
     pprint.pp(kwargs)
-    arch_constructor    = GEN_ARCHS[GEN_BUILD_POPUP_FRAMES['arch'].get()]
+    arch_constructor        = GEN_ARCHS[GEN_BUILD_POPUP_FRAMES['arch'].get()]
 
     #Check init_fn
     if not arch_constructor:
@@ -440,13 +440,14 @@ def build_generator(app_ref):
 
     #Attempt instantiation 
     generator:torch.nn.Module
-    generator   = arch_constructor(**kwargs)
+    generator               = arch_constructor(**kwargs)
 
-    if GEN_BUILD_POPUP_FRAMES['load file']:
-        state   = torch.load(GEN_BUILD_POPUP_FRAMES['load file'].get())
+    if not GEN_BUILD_POPUP_FRAMES['load file'].get() == '':
+        print(f"found file '{GEN_BUILD_POPUP_FRAMES['load file'].get()}'")
+        state                   = torch.load(GEN_BUILD_POPUP_FRAMES['load file'].get())
         generator.load_state_dict(state)
 
-    app_ref.G   = generator
+    app_ref.Generator       = generator
     app_ref.print(f"Created Generator Model - {(sum([p.numel()*p.element_size() for p in generator.parameters()])/1000000):.2f}MB")
 
 if __name__ == "__main__":
