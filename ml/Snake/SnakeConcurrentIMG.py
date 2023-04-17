@@ -20,7 +20,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,learning_model:nn.Module,simul_games=32,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(400,225),min_thresh=.03):
+	def __init__(self,w,h,target_model:nn.Module,simul_games=32,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(160,90),min_thresh=.03):
 
 
 		#Set global Vars
@@ -42,8 +42,8 @@ class Snake:
 
 		#	Hopefully is a CNN 
 		# 	must be a torch.nn Module
-		self.learning_model 	= learning_model
-		self.learning_model.to(device)
+		self.target_model 		= target_model
+		self.target_model.to(device)
 
 
 		#	This list holds information on each game, as well as their experience sets.
@@ -215,7 +215,7 @@ class Snake:
 		if mode == 'All':
 			with torch.no_grad():
 				with torch.autocast('cuda'):
-					model_out = self.learning_model.forward(self.game_vectors.type(torch.float))
+					model_out = self.target_model.forward(self.game_vectors.type(torch.float))
 					#Find the direction for each game with highest EV 
 					next_dirs = torch.argmax(model_out,dim=1).tolist()
 
@@ -226,7 +226,7 @@ class Snake:
 			with torch.no_grad():
 				with torch.autocast('cuda'):
 					for snake_i in self.active_games:
-						model_out 	= self.learning_model.forward(self.game_vectors.narrow(0,snake_i,1).type(torch.float))
+						model_out 	= self.target_model.forward(self.game_vectors.narrow(0,snake_i,1).type(torch.float))
 						next_dir 	= torch.argmax(model_out)
 						self.direction_vectors[snake_i] = next_dir.item()
 

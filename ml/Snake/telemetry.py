@@ -71,14 +71,14 @@ OPTIMIZERS  = { "Adam"      : torch.optim.Adam,
 
 DEFAULTS    = { "gameX"     : 10,
                 "gameY"     : 10,
-                "iters"     : 1024*16,
-                "te"        : 8,
+                "iters"     : 1024*32,
+                "te"        : 16,
                 "ps"        : 1024*2,
-                "ss"        : 512,
+                "ss"        : 1024,
                 "bs"        : 64,
                 "lr"        : .0001,
-                "kw"        : "{'weight_decay':.00001}",
-                "ll"        : "[(-1,.0001),(512,1e-5),(1024,1e-5),(2048,1e-6),(4096,1e-7)]",
+                "kw"        : "{'weight_decay':2e-6}",
+                "ll"        : "[(-1,2e-5)]",
                 "ep"        : 1,
                 "mt"        : .03,
                 "mx"        : 100,
@@ -88,10 +88,10 @@ DEFAULTS    = { "gameX"     : 10,
                 "op"        : "",
                 "tr"        : 10,
                 "drop"      : .2,
-                "gam"       : .95,
+                "gam"       : .9,
                 "gpu"       : True,
-                "rew"       : "{'die':-.75,'eat':1,'step':0}",
-                "rpick"     : .5
+                "rew"       : "{'die':-.75,'eat':1.4,'step':0}",
+                "rpick"     : .25
                 }
 
 

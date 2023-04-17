@@ -167,9 +167,10 @@ class ConvNet(nn.Module):
 		
 		self.loss = loss_fn()
 
-class IMG_NET(nn.Module):
 
-	def __init__(self,input_shape=(3,540,960),nf=16,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.85,.999)},dropout_p=.1,neg_slope=.02,device=torch.device('cuda')):
+class IMG_NET_OG(nn.Module):
+
+	def __init__(self,input_shape=(3,540,960),nf=32,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.9,.999)},dropout_p=.25,neg_slope=.2,device=torch.device('cuda')):
 		super(IMG_NET,self).__init__()
 		self.dropout		= dropout_p
 		self.model 			= nn.Sequential(
@@ -180,77 +181,12 @@ class IMG_NET(nn.Module):
 			# nn.BatchNorm2d(32),
 			# nn.MaxPool2d(2),		
 			#480x270
-			nn.Conv2d(3,nf,3,1,2,bias=False),
+			nn.Conv2d(3,nf,5,1,2,bias=False),
 			nn.BatchNorm2d(nf),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
 			nn.MaxPool2d(2),	
 			#240x135
-			nn.Conv2d(nf,nf*2,3,1,1,bias=False),
-			nn.BatchNorm2d(nf*2),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
-			#120x75
-			nn.Conv2d(nf*2,nf*4,3,1,1,bias=False),
-			nn.BatchNorm2d(nf*4),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
-			#60x37
-			nn.Conv2d(nf*4,nf*8,3,1,1,bias=False),
-			nn.BatchNorm2d(nf*8),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
-			#30x17
-			nn.Conv2d(nf*8,nf*8,3,1,1,bias=False),
-			nn.BatchNorm2d(nf*8),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
-			#15x8
-			nn.Conv2d(nf*8,nf*8,5,1,2,bias=False),
-			nn.BatchNorm2d(nf*8),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
-			
-			nn.Flatten(1),
-
-			nn.Linear(2304,1024),
-			nn.Dropout(p=dropout_p),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-
-			nn.Linear(1024,512),
-			nn.Dropout(p=dropout_p),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-
-			nn.Linear(512,128),
-			nn.Dropout(p=dropout_p),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.Linear(128,4)
-		).to(device)
-
-		self.loss 			= loss_fn()
-		self.optimizer		= optimizer_fn(self.model.parameters(),**kwargs)
-
-	def forward(self,x):
-		return self.model(x)
-	
-class IMG_NET(nn.Module):
-
-	def __init__(self,input_shape=(3,540,960),nf=32,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.85,.999)},dropout_p=.1,neg_slope=.02,device=torch.device('cuda')):
-		super(IMG_NET,self).__init__()
-		self.dropout		= dropout_p
-		self.model 			= nn.Sequential(
-
-			# #960x540
-			# nn.Conv2d(input_shape[1],32,5,1,2,bias=False),
-			# nn.LeakyReLU(negative_slope=.02),
-			# nn.BatchNorm2d(32),
-			# nn.MaxPool2d(2),		
-			#480x270
-			nn.Conv2d(3,nf,3,1,2,bias=False),
-			nn.BatchNorm2d(nf),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),	
-			#240x135
-			nn.Conv2d(nf,nf*2,3,1,1,bias=False),
+			nn.Conv2d(nf,nf*2,5,1,1,bias=False),
 			nn.BatchNorm2d(nf*2),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
 			nn.MaxPool2d(2),
@@ -264,30 +200,129 @@ class IMG_NET(nn.Module):
 			nn.BatchNorm2d(nf*8),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
 			nn.MaxPool2d(2),
-			#30x17
-			nn.Conv2d(nf*8,nf*8,5,1,1,bias=False),
-			nn.BatchNorm2d(nf*8),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
-			#15x8
-			nn.Conv2d(nf*8,nf*8,7,1,2,bias=False),
-			nn.BatchNorm2d(nf*8),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
-			
+				
 			nn.Flatten(1),
 
-			nn.Linear(1024,1024),
+			nn.Linear(41472,2048),
 			nn.Dropout(p=dropout_p),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
 
-			nn.Linear(1024,512),
-			nn.Dropout(p=dropout_p),
+			nn.Linear(2048,512),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
 
 			nn.Linear(512,128),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+
+			nn.Linear(128,4)
+		).to(device)
+
+		self.loss 			= loss_fn()
+		self.optimizer		= optimizer_fn(self.model.parameters(),**kwargs)
+
+	def forward(self,x):
+		return self.model(x)
+
+class IMG_NET(nn.Module):
+
+	def __init__(self,input_shape=(3,540,960),nf=32,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.9,.999)},dropout_p=.25,neg_slope=.2,device=torch.device('cuda')):
+		super(IMG_NET,self).__init__()
+		self.dropout		= dropout_p
+		self.model 			= nn.Sequential(
+
+			#480x270
+			nn.Conv2d(3,nf,5,1,2,bias=False),
+			nn.BatchNorm2d(nf),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			#240x135
+			nn.Conv2d(nf,nf*2,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*2),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+			#120x75
+			nn.Conv2d(nf*2,nf*4,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*4),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+			#60x37
+			nn.Conv2d(nf*4,nf*4,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*4),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+
+			nn.Conv2d(nf*4,nf*4,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*4),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+				
+			nn.Flatten(1),
+
+			nn.Linear(3072,2048),
 			nn.Dropout(p=dropout_p),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+
+			nn.Linear(2048,512),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+
+			nn.Linear(512,128),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+
+			nn.Linear(128,4)
+		).to(device)
+
+		self.loss 			= loss_fn()
+		self.optimizer		= optimizer_fn(self.model.parameters(),**kwargs)
+
+	def forward(self,x):
+		return self.model(x)
+
+class IMG_NET3(nn.Module):
+
+	def __init__(self,input_shape=(3,540,960),nf=32,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.9,.999)},dropout_p=.25,neg_slope=.2,device=torch.device('cuda')):
+		super(IMG_NET2,self).__init__()
+		self.dropout		= dropout_p
+		self.model 			= nn.Sequential(
+
+			#480x270
+			nn.Conv2d(3,nf,5,1,2,bias=False),
+			nn.BatchNorm2d(nf),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			#240x135
+			nn.Conv2d(nf,nf*2,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*2),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			#120x75
+			nn.Conv2d(nf*2,nf*4,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*4),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+			#60x37
+			nn.Conv2d(nf*4,nf*8,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*8),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+			#30x
+			nn.Conv2d(nf*4,nf*8,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*8),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+
+			nn.Conv2d(nf*4,nf*8,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*8),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.MaxPool2d(2),
+				
+			nn.Flatten(1),
+
+			nn.Linear(41472,2048),
+			nn.Dropout(p=dropout_p),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+
+			nn.Linear(2048,512),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+
+			nn.Linear(512,128),
+			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+
 			nn.Linear(128,4)
 		).to(device)
 

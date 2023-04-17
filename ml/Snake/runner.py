@@ -11,10 +11,10 @@ import json
 
 #SETTINGS 
 iters           = 1024*8
-train_every     = 8
-pool_size       = 1024 
-sample_size     = 256 
-bs              = 32
+train_every     = 16
+pool_size       = 2048 
+sample_size     = 512 
+bs              = 24
 dr              = .2
 minimum_thresh  = .03 
 max_steps       = 100 
@@ -22,7 +22,7 @@ gamma           = [.75,.9,.98]
 rand_pick       = [0,.5]
 kwargs          = {'weight_decay':.000001,'lr':.00001}
 tr              = 10
-ga              = .9
+ga              = .95
 #DATA 
 data            = {}
 t0              = time.time()
@@ -34,7 +34,7 @@ if __name__ == "__main__":
             key     = f"die={die},eat={eat}"
             t1                              = time.time()
             for _ in range(repeats):
-                t                               = Trainer(10,10,visible=False,loading=False,loss_fn=torch.nn.MSELoss,gpu_acceleration=True,gamma=ga,kwargs=kwargs,min_thresh=minimum_thresh,display_img=False,dropout_p=.5)
+                t                               = Trainer(10,10,visible=False,loading=False,loss_fn=torch.nn.MSELoss,gpu_acceleration=True,gamma=ga,kwargs=kwargs,min_thresh=minimum_thresh,display_img=False,dropout_p=.25)
                 reward          = {"die":die,"eat":eat,"step":0}
 
                 scores,lived,high,gname = t.train_concurrent(           iters=iters,
@@ -47,7 +47,7 @@ if __name__ == "__main__":
                                                                         rewards=reward,
                                                                         max_steps=max_steps,
                                                                         drop_rate=dr,
-                                                                        verbose=False,
+                                                                        verbose=True,
                                                                         x_scale=100,
                                                                         timeout=10*60)
                 if not key in data:

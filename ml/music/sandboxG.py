@@ -394,7 +394,7 @@ def buildBestMod1(ncz=512,leak=.2,kernel_ver=1,factor_ver=0,device=torch.device(
 
 def buildBestMod2(ncz=512,leak=.04,kernel_ver=1,factor_ver=0,device=torch.device('cuda'),out_ch=2,verbose=False):
     factors     = [[2,2,2,3,3,5,7,7],[7,7,5,3,3,2,2,2]][factor_ver]
-    ch          = [2048,    1024,   512,    512,    512,    256,    128]
+    ch          = [1024,    1024,   1024,    512,    512,    256,    128]
 
 
     Gen         = Sequential(   ConvTranspose1d(ncz,ch[0],factors[0],factors[0]),

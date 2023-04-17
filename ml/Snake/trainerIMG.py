@@ -84,7 +84,7 @@ class Trainer:
 		self.best_score			= 0
 		self.best_game			= best_game
 		self.instance 	 		= instance 
-		self.base_threshs		= [(-1,.0001),(1024+256,.00001),(1024+512+256,3e-6),(2048,1e-6),(4096,5e-7),(4096+2048,2.5e-7),(8192,1e-7),(8192*2,1e-8)] if not lr_threshs else lr_threshs
+		self.base_threshs		= [(-1,.00003),(1024+256,.00001),(1024+512+256,3e-6),(2048,1e-6),(4096,5e-7),(4096+2048,2.5e-7),(8192,1e-7),(8192*2,1e-8)] if not lr_threshs else lr_threshs
 		self.display_img		= display_img
 
 		#Set training vars 
@@ -188,7 +188,7 @@ class Trainer:
 				
 		
 			#	GET EXPERIENCES
-			metrics, experiences, new_games  = SnakeConcurrentIMG.Snake(self.w,self.h,self.learning_model,simul_games=train_every,device=self.device,rewards=rewards,max_steps=max_steps,min_thresh=self.min_thresh).play_out_games(epsilon=e,display_img=display_img)
+			metrics, experiences, new_games  = SnakeConcurrentIMG.Snake(self.w,self.h,self.target_model,simul_games=train_every,device=self.device,rewards=rewards,max_steps=max_steps,min_thresh=self.min_thresh).play_out_games(epsilon=e,display_img=display_img)
 
 			#	UPDATE MEMORY POOL 
 			#	replace every element of overflow with the next 
@@ -400,7 +400,6 @@ class Trainer:
 			if self.m_type == "FCN":
 				self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
 			elif self.m_type == "CNN":
-				self.target_model = networks.IMG_NET(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device)
 				self.target_model = networks.IMG_NET(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
 
 

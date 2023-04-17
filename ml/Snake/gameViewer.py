@@ -400,9 +400,12 @@ class TrainerApp:
 
     def run_training(self):
         self.set_vars()
-        # import pprint
-        # pprint.pp(self.settings)
 
+        #Reset the vars
+        self.best_score             = 0 
+        self.best_game              = [] 
+
+        #Start
         self.longest_run        = []
         self.cur_game_steps     = [] 
         self.cur_game_scores    = []
