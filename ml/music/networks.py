@@ -398,9 +398,10 @@ class AudioDiscriminator3(nn.Module):
 
 
 class AudioDiscriminator4(nn.Module):
-    def __init__(self,activation_fn=nn.ReLU,dropout_p=.5,activation_kwargs={"inplace":True},device=torch.device("cuda"),verbose=False):
+    def __init__(self,activation_fn=nn.ReLU,dropout_p=.5,activation_kwargs={"inplace":True},device=torch.device("cuda"),verbose=False,final_layer="sigmoid"):
         super(AudioDiscriminator4, self).__init__()
 
+        self.final_layer                = final_layer
 
         model = OrderedDict()
 
@@ -518,7 +519,10 @@ class AudioDiscriminator4(nn.Module):
         #LAYER 10    -> 1024
         i                               = 35
         model[str(i)]                   = nn.Linear(1024,1)
-        model[str(i+1)]                 = nn.Sigmoid()
+        if self.final_layer == "sigmoid":
+            model[str(i+1)]                 = nn.Sigmoid()
+        else:
+            pass
 
                
 

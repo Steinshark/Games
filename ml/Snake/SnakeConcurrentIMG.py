@@ -12,7 +12,7 @@ from networks import ConvolutionalNetwork, IMG_NET
 import copy
 from matplotlib import pyplot as plt 
 import utilities
-import torchvision.utils as vutils
+#import torchvision.utils as vutils
 #This class interfaces only with NP 
 class Snake:
 
@@ -161,7 +161,7 @@ class Snake:
 			if len(self.active_games) == 0:
 				#Display frames
 				if display_img and self.game_collection[0]['highscore'] > 0:
-					ex 			= vutils.make_grid(frame_sc.detach().cpu(),padding=1,normalize=True)
+					#ex 			= vutils.make_grid(frame_sc.detach().cpu(),padding=1,normalize=True)
 					fig,axs 	= plt.subplots(nrows=1,ncols=1)
 					axs.axis 	= 'off'
 					axs.imshow(numpy.transpose(ex,(1,2,0)))

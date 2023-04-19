@@ -13,6 +13,9 @@ from telemetry import plot_game
 import copy
 from utilities import reduce_arr
 
+
+MODEL_FN 			= networks.IMG_NET3
+
 class Trainer:
 
 	def __init__(	self,
@@ -109,11 +112,11 @@ class Trainer:
 			self.encoding_type = "one_hot"
 		elif m_type == "CNN":
 			self.input_shape = (1,channels,game_w,game_h)
-			self.target_model 	= networks.IMG_NET(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+			self.target_model 	= MODEL_FN(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
 			
 			if self.gui:
 				self.output.insert(tk.END,f"Generated training model\n\t{sum([p.numel() for p in self.target_model.model.parameters()])} params")
-			self.learning_model = networks.IMG_NET(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+			self.learning_model = MODEL_FN(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
 			self.encoding_type = "6_channel"
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
@@ -391,7 +394,7 @@ class Trainer:
 				os.mkdir(self.PATH)
 
 			# prev_state_dict 			= self.learning_model.state_dict()
-			# self.target_model 			= networks.IMG_NET(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+			# self.target_model 			= MODEL_FN(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
 			# self.target_model.load_state_dict(self.learning_model.state_dict())
 			# return 
 		
@@ -400,7 +403,7 @@ class Trainer:
 			if self.m_type == "FCN":
 				self.target_model 	= networks.FullyConnectedNetwork(self.input_dim,4,loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,lr=self.lr,wd=self.wd,architecture=self.architecture)
 			elif self.m_type == "CNN":
-				self.target_model = networks.IMG_NET(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+				self.target_model = MODEL_FN(loss_fn=self.loss_fn,optimizer_fn=self.optimizer_fn,kwargs=self.kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
 
 
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))

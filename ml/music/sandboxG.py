@@ -396,43 +396,46 @@ def buildBestMod2(ncz=512,leak=.04,kernel_ver=1,factor_ver=0,device=torch.device
     factors     = [[2,2,2,3,3,5,7,7],[7,7,5,3,3,2,2,2]][factor_ver]
     ch          = [1024,    1024,   1024,    512,    512,    256,    128]
 
+    activation_fn               = LeakyReLU
+    activation_kwargs           = {"negative_slope":leak,"inplace":True}
+
 
     Gen         = Sequential(   ConvTranspose1d(ncz,ch[0],factors[0],factors[0]),
                                 BatchNorm1d(ch[0]),
-                                Tanh())
+                                activation_fn(**activation_kwargs))
 
     Gen.append(                 Conv1d(ch[0],ch[0],3,1,1,bias=False))
     Gen.append(                 BatchNorm1d(ch[0]))
-    Gen.append(                 Tanh()) 
+    Gen.append(                 activation_fn(**activation_kwargs)) 
 
     Gen.append(                 Conv1d(ch[0],ch[0],5,1,int(5/2),bias=False))
     Gen.append(                 BatchNorm1d(ch[0]))
-    Gen.append(                 Tanh()) 
+    Gen.append(                 activation_fn(**activation_kwargs)) 
     
     for i,c in enumerate(ch):
         
         if i+1 == len(ch):
             n_ch                = 128
-            n_ch                = 64
+            n_ch                = 128
             Gen.append(         ConvTranspose1d(c,n_ch,factors[i+1],factors[i+1]))
-            #Gen.append(         BatchNorm1d(n_ch))
-            Gen.append(         Tanh()) 
+            Gen.append(         BatchNorm1d(n_ch))
+            Gen.append(         activation_fn(**activation_kwargs)) 
 
-            ker_size            = 63 
+            ker_size            = 31 
             n_ch_prev           = n_ch
             n_ch                = 64
             Gen.append(         Conv1d(n_ch_prev,n_ch,ker_size,1,int(ker_size/2),bias=True))
-            #Gen.append(         BatchNorm1d(n_ch))
-            Gen.append(         Tanh()) 
+            Gen.append(         BatchNorm1d(n_ch))
+            Gen.append(         activation_fn(**activation_kwargs)) 
 
-            # ker_size            = 15 
-            # n_ch_prev           = n_ch
-            # n_ch                = 64
-            # Gen.append(         Conv1d(n_ch_prev,n_ch,ker_size,1,int(ker_size/2),bias=True))
-            # #Gen.append(         BatchNorm1d(n_ch))
-            # Gen.append(         Tanh()) 
+            ker_size            = 31 
+            n_ch_prev           = n_ch
+            n_ch                = 64
+            Gen.append(         Conv1d(n_ch_prev,n_ch,ker_size,1,int(ker_size/2),bias=True))
+            Gen.append(         BatchNorm1d(n_ch))
+            Gen.append(         activation_fn(**activation_kwargs)) 
 
-            ker_size            = 127 
+            ker_size            = 63 
             n_ch_prev           = n_ch
             n_ch                = 64
             Gen.append(         Conv1d(n_ch_prev,1,ker_size,1,int(ker_size/2),bias=True))
@@ -442,40 +445,40 @@ def buildBestMod2(ncz=512,leak=.04,kernel_ver=1,factor_ver=0,device=torch.device
         else:
             Gen.append(         ConvTranspose1d(c,ch[i+1],factors[i+1],factors[i+1]))
             Gen.append(         BatchNorm1d(ch[i+1])) 
-            Gen.append(         Tanh()) 
+            Gen.append(         activation_fn(**activation_kwargs)) 
 
             if i < 3:
 
                 ker_size                    = 3
                 Gen.append(                 Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
                 Gen.append(                 BatchNorm1d(ch[i+1]))
-                Gen.append(                 Tanh()) 
+                Gen.append(                 activation_fn(**activation_kwargs)) 
 
-                ker_size                    = 7
-                Gen.append(                 Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
-                Gen.append(                 BatchNorm1d(ch[i+1]))
-                Gen.append(                 Tanh()) 
+                # ker_size                    = 7
+                # Gen.append(                 Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
+                # Gen.append(                 BatchNorm1d(ch[i+1]))
+                # Gen.append(                 Tanh()) 
 
                 ker_size                    = 9
                 Gen.append(                 Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
                 Gen.append(                 BatchNorm1d(ch[i+1]))
-                Gen.append(                 Tanh()) 
+                Gen.append(                 activation_fn(**activation_kwargs)) 
 
             else:
                 ker_size            = 7
                 Gen.append(         Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
                 Gen.append(         BatchNorm1d(ch[i+1]))
-                Gen.append(         Tanh())
+                Gen.append(         activation_fn(**activation_kwargs))
 
-                ker_size            = 31
+                ker_size            = 15
                 Gen.append(         Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
                 Gen.append(         BatchNorm1d(ch[i+1]))
-                Gen.append(         Tanh())
+                Gen.append(         activation_fn(**activation_kwargs))
 
-                ker_size            = 63
-                Gen.append(         Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
-                Gen.append(         BatchNorm1d(ch[i+1]))
-                Gen.append(         Tanh())
+                # ker_size            = 31
+                # Gen.append(         Conv1d(ch[i+1],ch[i+1],ker_size,1,int(ker_size/2),bias=False))
+                # Gen.append(         BatchNorm1d(ch[i+1]))
+                # Gen.append(         Tanh())
 
             
 
