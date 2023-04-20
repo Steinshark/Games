@@ -8,11 +8,11 @@ from torch.nn import Conv2d,Linear,Flatten,ReLU
 import random
 import numpy 
 import time 
-from networks import ConvolutionalNetwork, IMG_NET
+from networks import ConvolutionalNetwork, IMG_NET, IMG_NET3
 import copy
 from matplotlib import pyplot as plt 
 import utilities
-#import torchvision.utils as vutils
+import torchvision.utils as vutils
 #This class interfaces only with NP 
 class Snake:
 
@@ -94,7 +94,7 @@ class Snake:
 
 	#	GAME PLAYER 
 	#	Calling this method will play out all games until completion
-	def play_out_games(self,epsilon=.2,debugging=False,display_img=False):
+	def play_out_games(self,epsilon=.2,debugging=False,display_img=True):
 
 		#	Track all imgs 
 		if display_img:
@@ -161,7 +161,7 @@ class Snake:
 			if len(self.active_games) == 0:
 				#Display frames
 				if display_img and self.game_collection[0]['highscore'] > 0:
-					#ex 			= vutils.make_grid(frame_sc.detach().cpu(),padding=1,normalize=True)
+					ex 			= vutils.make_grid(frame_sc.detach().cpu(),padding=1,normalize=True)
 					fig,axs 	= plt.subplots(nrows=1,ncols=1)
 					axs.axis 	= 'off'
 					axs.imshow(numpy.transpose(ex,(1,2,0)))
@@ -169,6 +169,9 @@ class Snake:
 					img.set_size_inches(30,16)
 					img.savefig("EPOCH SAVE AFTER SCORE",dpi=100)	
 					plt.cla()			
+					self.saved_img = True
+				else:
+					self.saved_img = False
 				return self.cleanup()
 			else:
 				self.cur_step+=1
@@ -272,7 +275,7 @@ class Snake:
 				continue
 			
 			#	START EXP CREATION 	
-			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':1}
+			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':None,'done':1}
 			
 			#	MOVE SNAKE  
 			#	Since the snake has survived, dim the previous snake and add over the new one  
@@ -364,6 +367,10 @@ if __name__ == "__main__":
 	w = 10
 	h = 10
 	model 	= IMG_NET(input_shape=(3,480,270))
-	s 		= Snake(w,h,model,simul_games=2,device=torch.device("cuda"))
-
-	s.play_out_games()
+	s 		= Snake(w,h,model,simul_games=64,device=torch.device("cuda"))
+	s.saved_img = False 
+	s.play_out_games(display_img=True)
+	while s.saved_img == False:
+		s 		= Snake(w,h,model,simul_games=64,device=torch.device("cuda"))
+		s.saved_img = False 
+		s.play_out_games(display_img=True)

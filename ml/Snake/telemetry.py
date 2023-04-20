@@ -96,6 +96,31 @@ DEFAULTS    = { "gameX"     : 14,
 
 
 
+POTENTIAL   = { "gameX"     : 14,
+                "gameY"     : 14,
+                "iters"     : 1024*32,
+                "te"        : 8,
+                "ps"        : 1024*8,
+                "ss"        : 1024,
+                "bs"        : 32,
+                "lr"        : .0001,
+                "kw"        : "{'weight_decay':.5e-5}",
+                "ll"        : "[(-1,3e-3),(256,5e-5)]",
+                "ep"        : 1,
+                "mt"        : .03,
+                "mx"        : 125,
+                "sf"        : 1,
+                "arch"      : "",
+                "lo"        : "",
+                "op"        : "",
+                "tr"        : 12,
+                "drop"      : .25,
+                "gam"       : .9,
+                "gpu"       : True,
+                "rew"       : "{'die':-.75,'eat':1.3,'step':0}",
+                "rpick"     : .45
+                }
+
 
 # in_v    = torch.randn(size=(1,2,20,20),dtype=torch.float)
 

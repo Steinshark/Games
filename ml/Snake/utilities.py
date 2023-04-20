@@ -8,12 +8,13 @@ import torchvision.utils as vutils
 TIME_MULT   = 0 
 VECT_TYPE   = torch.float16
 SNAKE_SQ    = torch.ones(size=(1,1))
+HEAD_SQ    = torch.ones(size=(1,1))
 FOOD_SQ     = torch.ones(size=(1,1))
 TOP_L       = (0,0)
 BOT_R       = (0,0)
 SQUARE_SF   = 0 
 DEV         = torch.device('cuda')
-COLORS      = {"snake":(0/255,255/255,0/255),"food":(255/255,0/255,0/255)}
+COLORS      = {"snake":(0/255,255/255,0/255),"food":(255/255,0/255,0/255),'head':(0/255,255/255,255/255)}
 
 
 
@@ -21,7 +22,7 @@ def tensor_to_img(tensor):
     return tensor.detach().cpu().numpy().transpose(1,2,0).astype(numpy.float32)
 
 def init_utils(board_size,img_w,img_h,vect_type,device=torch.device('cuda')):
-    global TOP_L,BOT_R,FOOD_SQ,SNAKE_SQ,VECT_TYPE,SQUARE_SF,DEV
+    global TOP_L,BOT_R,FOOD_SQ,SNAKE_SQ,HEAD_SQ,VECT_TYPE,SQUARE_SF,DEV
 
     w                           = board_size[0]
     h                           = board_size[1]
@@ -44,6 +45,11 @@ def init_utils(board_size,img_w,img_h,vect_type,device=torch.device('cuda')):
     SNAKE_SQ[1]                     = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['snake'][1])
     SNAKE_SQ[2]                     = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['snake'][2])
 
+    HEAD_SQ                         = torch.zeros(size=(3,SQUARE_SF,SQUARE_SF))
+    HEAD_SQ[0]                     = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['head'][0])                 
+    HEAD_SQ[1]                     = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['head'][1])
+    HEAD_SQ[2]                     = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['head'][2])
+
     FOOD_SQ                         = torch.zeros(size=(3,SQUARE_SF,SQUARE_SF))
     FOOD_SQ[0]                      = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['food'][0])                 
     FOOD_SQ[1]                      = torch.full(size=(SQUARE_SF,SQUARE_SF),fill_value=COLORS['food'][1])
@@ -58,9 +64,13 @@ def build_snake_img(snake_list,food_loc,board_size,img_w=1280,img_h=720):
 
     frame_repr_tensor           = torch.zeros(size=(3,img_h,img_w),dtype=vect_init_type)
 
-    #Find limiting scale  
+    #Snake head
+    sq = snake_list[0]
+    sq_topl_x                       = int(TOP_L[0] + sq[0]*SQUARE_SF) 
+    sq_topl_y                       = int(TOP_L[1] + sq[1]*SQUARE_SF) 
+    frame_repr_tensor[:,sq_topl_y:sq_topl_y+SQUARE_SF,sq_topl_x:sq_topl_x+SQUARE_SF]        = HEAD_SQ
 
-    for sq in snake_list:
+    for sq in snake_list[1:]:
         sq_topl_x                       = int(TOP_L[0] + sq[0]*SQUARE_SF) 
         sq_topl_y                       = int(TOP_L[1] + sq[1]*SQUARE_SF) 
         
@@ -74,7 +84,7 @@ def build_snake_img(snake_list,food_loc,board_size,img_w=1280,img_h=720):
 
     frame_repr_tensor[:,sq_topl_y:sq_topl_y+SQUARE_SF,sq_topl_x:sq_topl_x+SQUARE_SF]            = FOOD_SQ
 
-    frame_repr_tensor[:,    0:img_h,    0:TOP_L[0]]                                                   = torch.ones(size=(3,img_h,img_w-BOT_R[0]))
+    frame_repr_tensor[:,    0:img_h,    0:TOP_L[0]]                                             = torch.ones(size=(3,img_h,img_w-BOT_R[0]))
     frame_repr_tensor[:,    0:img_h,    BOT_R[0]:img_w]                                         = torch.ones(size=(3,img_h,img_w-BOT_R[0]))
     
     return frame_repr_tensor.to(DEV)
@@ -92,10 +102,17 @@ def step_snake_img(game_vector:torch.Tensor,snake_list,food_loc,board_size,img_w
     game_vector = MIN(game_vector)
     
     t0 = time.time()
-    for sq in snake_list:
+    #Snake head
+    sq = snake_list[0]
+    sq_topl_x                       = int(TOP_L[0] + sq[0]*SQUARE_SF) 
+    sq_topl_y                       = int(TOP_L[1] + sq[1]*SQUARE_SF) 
+    game_vector[:,sq_topl_y:sq_topl_y+SQUARE_SF,sq_topl_x:sq_topl_x+SQUARE_SF]      = HEAD_SQ
+    #Snake body
+    for sq in snake_list[1:]:
         sq_topl_x                       = int(TOP_L[0] + sq[0]*SQUARE_SF) 
         sq_topl_y                       = int(TOP_L[1] + sq[1]*SQUARE_SF) 
         game_vector[:,sq_topl_y:sq_topl_y+SQUARE_SF,sq_topl_x:sq_topl_x+SQUARE_SF]      = SNAKE_SQ
+    #Food
     TIME_MULT += time.time()-t0
     sq_topl_x                    = int(TOP_L[0] + food_loc[0]*SQUARE_SF) 
     sq_topl_y                    = int(TOP_L[1] + food_loc[1]*SQUARE_SF) 

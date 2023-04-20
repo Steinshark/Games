@@ -151,7 +151,7 @@ class Trainer:
 		self.x_scale 	= x_scale
 		memory_pool 	= []
 		window_i 		= 0
-		display_img		= False
+		display_img		= self.display_img
 		self.pending_graph	= False
 
 
@@ -191,7 +191,7 @@ class Trainer:
 				
 		
 			#	GET EXPERIENCES
-			metrics, experiences, new_games  = SnakeConcurrentIMG.Snake(self.w,self.h,self.target_model,simul_games=train_every,device=self.device,rewards=rewards,max_steps=max_steps,min_thresh=self.min_thresh).play_out_games(epsilon=e,display_img=display_img)
+			metrics, experiences, new_games  = SnakeConcurrentIMG.Snake(self.w,self.h,self.target_model,simul_games=train_every,device=self.device,rewards=rewards,max_steps=max_steps,min_thresh=self.min_thresh).play_out_games(epsilon=e,display_img=self.display_img)
 
 			#	UPDATE MEMORY POOL 
 			#	replace every element of overflow with the next 
@@ -316,7 +316,7 @@ class Trainer:
 			#	Telemetry Vars 
 			t0 			= time.time()
 			t_gpu 		= 0
-			num_equals 	= 45 
+			num_equals 	= 40 
 			printed 	= 0
 			total_loss	= 0
 			#	Telemetry
@@ -364,7 +364,7 @@ class Trainer:
 				#Update init values 
 				for i,val in enumerate(best_predictions):
 					chosen_action						= action[i]
-					final_target_values[i,chosen_action]	= rewards[i] + (done[i] * self.gamma * val)
+					final_target_values[i,chosen_action]= rewards[i] + (done[i] * self.gamma * val)
 
 				#	Calculate Loss
 				t1 							= time.time()
