@@ -1,6 +1,6 @@
 import torch 
 from collections import OrderedDict
-from networks import AudioDiscriminator, AudioDiscriminator2, AudioGenerator2, AudioDiscriminator3, AudioDiscriminator4, AudioDiscriminator5
+from networks import *
 from torch.utils.data import Dataset, DataLoader
 import numpy 
 import time 
@@ -107,7 +107,7 @@ class CleanAudioDataSet(Dataset):
 #Dataset that reads raw .wav into tensors
 class WavDataSet(Dataset):
 
-    def __init__(self,filelist,sf=50,verbose=False,peak_norm=False,cutoff=1e6,saving=False,downsamplerate=882):
+    def __init__(self,filelist,verbose=False,peak_norm=False,cutoff=1e6,saving=True,downsamplerate=2048):
 
         self.data       = []
         t0              = time.time()
@@ -122,7 +122,6 @@ class WavDataSet(Dataset):
             #Downsample freq to sample_rate / sf 
             if not sample_rate == downsamplerate: 
                 waveform                    = torchaudio.functional.resample(waveform,sample_rate,downsamplerate)
-                print(f"downsampling")
 
             #Normalize if set   
             if peak_norm:
@@ -138,19 +137,19 @@ class WavDataSet(Dataset):
             if i > cutoff:
                 break
             
-            if not waveform.shape[0] == 17640:
+            if not waveform.shape[0] == 16*downsamplerate:
                 print(f"bad tensor size {waveform.shape} - {file} ")
                 continue 
 
             if saving:
-                fname                       = os.path.join("C:/data/music/dataset/LOFI",os.path.basename(file))
+                fname                       = os.path.join("C:/data/music/dataset/LOFI_32s",os.path.basename(file))
                 if not os.path.exists(fname):
                     torchaudio.save(fname,waveform.repeat(2,1),downsamplerate)
 
             self.data.append([file,waveform.view(1,-1)])
 
     def __getitem__(self,i):
-        return self.data[i][1], 1
+        return self.data[i][1], self.data[i][0]
     
     def __len__(self):
         return len(self.data)
@@ -269,8 +268,11 @@ class Trainer:
         #self.create_models(D_config,G_config)
 
         #Load params
-        self.Generator.load_state_dict(     torch.load(G_params_fname))
-        self.Discriminator.load_state_dict( torch.load(D_params_fname))
+        try:
+            self.Generator.load_state_dict(     torch.load(G_params_fname))
+            self.Discriminator.load_state_dict( torch.load(D_params_fname))
+        except FileNotFoundError:
+            return
 
         if ep_start:
             self.epoch_num = ep_start
@@ -302,7 +304,7 @@ class Trainer:
         self.batch_size     = batch_size
 
         #Create sets
-        self.dataset        = WavDataSet(filenames,size,peak_norm=False,saving=False)
+        self.dataset        = WavDataSet(filenames,verbose=False,peak_norm=False,saving=True)
         self.dataloader     = DataLoader(self.dataset,batch_size=batch_size,shuffle=shuffle,num_workers=num_workers,pin_memory=True)
 
     #Set optimizers and error function for models
@@ -621,6 +623,7 @@ class Trainer:
         self.d_err_f_batch      += [0] * len(g_errs)
         self.g_err_batches      += g_errs 
 
+
     def gradient_penalty(self,critic, real, fake):
         epsilon = torch.rand(self.batch_size,1,1).to(self.device)
         interpolated_images = real*epsilon + fake*(1-epsilon)
@@ -665,7 +668,7 @@ class Trainer:
                 #Check if better was found 
                 if score > best_score:
                     best_score      = score 
-                    best_sample     = outputs.view(1,-1).cpu().detach().numpy()
+                    best_sample     = outputs.view(1,-1)
                 
                 all_scores.append(score)
         
@@ -690,14 +693,12 @@ class Trainer:
             plt.legend()
             plt.savefig(store_file)
             plt.cla()
+
         #Bring up to 2 channels 
-        if self.outsize[0] == 1:
-            outputs = numpy.array([best_sample[0],best_sample[0]]) 
+        waveform = best_sample.repeat(2,1).cpu()
         
         #Rescale up 
-        if sf > 1:
-            outputs = upscale(outputs,sf)
-        reconstruct(outputs,out_file_path)
+        torchaudio.save(out_file_path,waveform.repeat(2,1),2048)
         print(f"\t\tsample saved\n")
 
     #Train easier
@@ -724,8 +725,8 @@ class Trainer:
             if verbose:
                 print_epoch_header(e,epochs)
             
-            #failed = self.train(verbose=verbose,t_dload=time.time()-t0,proto_optimizers=False)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
-            failed = self.train_wasserstein(verbose=verbose,t_dload=time.time()-t0,proto_optimizers=False)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
+            failed = self.train(verbose=verbose,t_dload=time.time()-t0,proto_optimizers=False)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
+            #failed = self.train_wasserstein(verbose=verbose,t_dload=time.time()-t0,proto_optimizers=False)#,gen_train_iters=gen_train_iters,proto_optimizers=proto_optimizers)
 
             if (e+1) % sample_rate == 0:
                 self.save_run(series_path)
@@ -747,10 +748,12 @@ class Trainer:
                     self.D_optim.param_groups[0]['lr']      *= .98
                 print(f"\n\tHYPERPARAMS")
                 print(f"\t\tg_err slope:\t{slope:.6f}")
-                if slope > 0 and self.training_classes['g_class'][-1] < .3:
-                    self.G_optim.param_groups[0]['lr']	*= 1.07
+
+                if slope > 0 and self.training_classes['g_class'][-1] < .4 or self.training_classes["g_class"][-1] < .175:
+                    self.G_optim.param_groups[0]['lr']	*= 1.08
                     incr        = "↑" 
-                elif len(self.training_classes['g_class']) > 2 and self.training_classes['g_class'][-2] < self.training_classes['g_class'][-1]:
+
+                elif len(self.training_classes['g_class']) > 2 and self.training_classes['g_class'][-2] < self.training_classes['g_class'][-1]  or abs(self.training_classes['g_class'][-1] - .5) < .01:
                     self.G_optim.param_groups[0]['lr']	*= .94
                     incr        = "↓"
                 else:
@@ -762,7 +765,7 @@ class Trainer:
     def save_run(self,series_path,sample_set=100):
         
         #Create samples && plots 
-        self.sample(os.path.join(series_path,'samples',f'run{self.epoch_num}.wav'),sf=self.sf,store_file=os.path.join(series_path,'distros',f'run{self.epoch_num}'),sample_set=sample_set)
+        self.sample(os.path.join(series_path,'samples',f'run{self.epoch_num}.wav'),store_file=os.path.join(series_path,'distros',f'run{self.epoch_num}'),sample_set=sample_set)
 
         #Create errors and classifications 
         plt.cla()
@@ -805,30 +808,46 @@ class Trainer:
 
     #Start with pretrained Generator
     def train_gen_on_real(self,filenames,bs,series_path=""):
+        
+        self.d_err_r_batch = []
+        self.d_err_f_batch = []
+        self.g_err_batches = []
 
+        self.random_matches = {}
+
+        optim_g = torch.optim.Adam(self.Generator.parameters(),lr=.00002,weight_decay=.000002,betas=(.5,.99))
         self.set_learners(optim_d,optim_g,torch.nn.BCELoss())
         train_set           = random.sample(filenames,load)
-        self.build_dataset(train_set,load,32,True,4)
+        self.build_dataset(train_set,load,bs,True,4)
 
-        self.G_optim:torch.optim.SGD
-        lr                  = .0001
-        self.G_optim.param_groups[0]['lr']  = lr 
-        self.G_optim.param_groups[0]['wd']  = lr / 10 
 
         loss_fn             = torch.nn.MSELoss()
 
         self.epoch_num      = 0
         self.save_run(series_path)
 
-        for e in range(500):
-            for i, batch in enumerate(self.dataloader):
+
+
+        for e in range(50):
+            for b, batch in enumerate(self.dataloader):
+
                 for p in self.Generator.parameters():
                     p.grad              = None 
 
                 data                = batch[0].to(torch.device('cuda'))
+                names               = batch[1]
+
+                rand_in             = torch.zeros(size=(bs,ncz,1),dtype=torch.float,device=self.device)
+
+                for i,name in enumerate(names):
+                    if name in self.random_matches:
+                        rand_in[i]                  = self.random_matches[name].clone()
+                    else:
+                        self.random_matches[name]   = torch.randn(size=(1,ncz,1),dtype=torch.float,device=self.device)
+                        rand_in[i]                  = self.random_matches[name]
+                
                 bs                  = len(data)
 
-                rand_in             = torch.randn(size=(bs,ncz,1),dtype=torch.float,device=self.device)
                 gen_outs            = self.Generator.forward(rand_in)
 
                 
@@ -836,10 +855,12 @@ class Trainer:
                 loss_val            = loss.mean().float()
                 loss.backward()
                 self.G_optim.step()
-                if i % 8 == 0:
-                    print(f"\t{i}/{len(self.dataloader)}\tloss was {loss_val:.5f}")
+                if b % 64 == 0:
+                    print(f"\t{b}/{len(self.dataloader)}\tloss was {loss_val:.5f}")
             self.epoch_num += 1
-            #self.save_run(series_path,sample_set=1)
+            self.save_run(series_path)
+
+        self.save_model_states(os.path.join(series_path,'models'),D_name=f"D_SAVE",G_name=f"G_SAVE")
 
 
 #Training Section
@@ -847,18 +868,18 @@ if __name__ == "__main__":
 
     ep          = 100
     dev         = torch.device('cuda')
-    load        = eval(sys.argv[sys.argv.index("ld")+1]) if "ld" in sys.argv else 4096
-    outsize     = (1,int(17640))
+    load        = eval(sys.argv[sys.argv.index("ld")+1]) if "ld" in sys.argv else 16384
+    outsize     = (1,int(32*1024))
 
     if not os.path.exists("model_runs"):
         os.mkdir(f"model_runs")
 
 
-    root    = "C:/data/music/dataset/LOFI"
+    root    = "C:/data/music/dataset/LOFI_32s"
     files   = [os.path.join(root,f) for f in os.listdir(root)]
 
     configs = {
-                "bigbatch2"   : {"init":sandboxG.buildBestMod2,"lrs": (.000002,.000002), "ncz":128,"kernel":0,"factor":0,"leak":.04,"momentum":.9,"bs":16,"wd":1e-5},
+                "bigbatch2"   : {"init":sandboxG.build_upsamp,"lrs": (.0001,.0002), "ncz":64,"kernel":0,"factor":0,"leak":.04,"momentum":.9,"bs":64,"wd":1e-5},
                }
 
     for config in configs:  
@@ -895,7 +916,7 @@ if __name__ == "__main__":
 
         #Create Generator and Discriminator
         G                       = configs[config]["init"](ncz=ncz,out_ch=1,leak=leak,kernel_ver=kernel,factor_ver=factor) 
-        D                       = AudioDiscriminator4(final_layer="Linear")
+        D                       = AudioDiscriminator7()
         
         G.apply(weights_initD)
         D.apply(weights_initD)
@@ -903,28 +924,28 @@ if __name__ == "__main__":
         t.Discriminator         = D 
         t.Generator             = G
         t.lambda_gp             = lambda_gp
-        t.lr_adjust             = False
+        t.lr_adjust             = True
 
         #Check output sizes are kosher 
         inpv2                   = torch.randn(size=(1,ncz,1),device=torch.device("cuda"),dtype=torch.float)
         print(f"MODELS: {name}")
         if loading:
             root                    = os.path.join(series_path,"models")
-            max_run                 = max([int(f.split("_run")[-1]) for f in os.listdir(os.path.join(series_path,"models"))])
             print(f"loading from epoch {root}")
-            t.load_models(os.path.join(root,f"D_run{max_run}"),os.path.join(root,f"G_run{max_run}"),ep_start=max_run)
+            t.load_models(os.path.join(root,f"D_SAVE"),os.path.join(root,f"G_SAVE"))
             print("loaded models")
+            t.epoch_num             = 0
         else:
             t.epoch_num             = 0
-        print(f"G stats:\tout  - {   G.forward(inpv2).shape }\n        \tsize - {(sum([p.nelement()*p.element_size() for p in G.parameters()])/1000000):.2f}MB")
-        print(f"D stats:\tout  - {D( G.forward(inpv2)).shape}\n        \tsize - {(sum([p.nelement()*p.element_size() for p in D.parameters()])/1000000):.2f}MB\n        \tval  - {D(G.forward(inpv2)).detach().cpu().item():.3f}")
+        print(f"G stats:\tout  - {   G.forward(inpv2).shape }\n        \tsize - {(sum([p.nelement()*p.element_size() for p in G.parameters()])/1000000):.2f}MB\n        \tparams: - {(sum([p.numel() for p in G.parameters()])/1000000):.2f}M")
+        print(f"D stats:\tout  - {D( G.forward(inpv2)).shape}\n        \tsize - {(sum([p.nelement()*p.element_size() for p in D.parameters()])/1000000):.2f}MB\n        \tparams: - {(sum([p.numel() for p in D.parameters()])/1000000):.2f}M\n        \tval  - {D(G.forward(inpv2)).detach().cpu().item():.3f}")
 
         #Create optims 
         #optim_d = torch.optim.AdamW(D.parameters(),lrs[0],betas=(betas[0],.999))
         #optim_g = torch.optim.AdamW(G.parameters(),lrs[1],betas=(betas[1],.999))
     
-        optim_d = torch.optim.Adam(D.parameters(),lrs[0],weight_decay=1e-7,betas=(.5,.999))#,momentum=momentum)
-        optim_g = torch.optim.Adam(G.parameters(),lrs[1],weight_decay=1e-7,betas=(.5,.999))#,momentum=momentum)
+        optim_d = torch.optim.Adam(D.parameters(),lrs[0],weight_decay=5e-6,betas=(.5,.999))#,momentum=momentum)
+        optim_g = torch.optim.Adam(G.parameters(),lrs[1],weight_decay=5e-6,betas=(.5,.999))#,momentum=momentum)
 
         #optim_d                 = torch.optim.SGD(D.parameters(),lrs[0],weight_decay=wd,momentum=momentum,nesterov=True)
         #optim_g                 = torch.optim.SGD(G.parameters(),lrs[1],weight_decay=wd,momentum=momentum,nesterov=True)
@@ -936,3 +957,5 @@ if __name__ == "__main__":
         
         t.c_exec(load,ep,bs,optim_d,optim_g,ncz,outsize,files,series_path,50,verbose=True,sample_rate=1)
         print(f"done")
+
+        #t.train_gen_on_real(filenames=files,bs=16,series_path=series_path)

@@ -423,10 +423,10 @@ def reduce_arr(arr,newlen):
 
 
 
-if __name__ == "__main__" and False:
+if __name__ == "__main__" and True:
     mode = sys.argv[1]
 
-    category    = "LOFI_clean"
+    category    = "LOFI_32s"
     ####################################################################################    
     #                                      DOWNLOAD                                    # 
     ####################################################################################    
@@ -442,7 +442,7 @@ if __name__ == "__main__" and False:
         if not len(sys.argv) > 2:
             input("even,odd, or both?")
         while True:
-            chunk_all(20,category="lofi",outpath=category,only=sys.argv[2],normalize=True)
+            chunk_all(16,category="lofi",outpath=category,only=sys.argv[2],normalize=True)
             print("\n"*100)
             print("waiting for job")
             time.sleep(30)
@@ -480,7 +480,7 @@ if __name__ == "__main__" and False:
 
 
 
-if __name__ == "__main__" and True:
+if __name__ == "__main__" and False:
     load_root           = f"{DATASET_PATH}/LOFI_sf5_t20_peak1_thrsh.95"
     stor_root           = f"{DATASET_PATH}/LOFI_sf35_t20_peak1_thrsh.95"
     if not os.path.exists(stor_root):

@@ -145,6 +145,7 @@ class Snake:
 			if display_img:
 				if self.game_collection[0]['status'] == 'active' and self.cur_step < 64:
 					frame_sc[self.cur_step]	=self.game_vectors[0]
+					
 			if random.random() < epsilon:
 				self.explore()
 			else:
