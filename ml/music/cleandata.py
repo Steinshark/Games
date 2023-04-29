@@ -55,7 +55,7 @@ class classDataSet(Dataset):
         return len(self.data['x'])
 
 
-def parse_files(root="C:/data/music/chunked/LOFI_sf5_t20_c1_peak1"):
+def parse_files(root="C:/data/music/dataset/LOFI_32s"):
 
     if os.path.exists("data.txt"):
         data = open("data.txt").read()
@@ -81,7 +81,12 @@ def parse_files(root="C:/data/music/chunked/LOFI_sf5_t20_c1_peak1"):
             print("skip")
         
         #arr = numpy.load(file)[0][::-1]
-        arr  = torchaudio.functional.resample(torchaudio.load(file)[0][0],44100,20).numpy()
+        arr  = torchaudio.load(file)[0][0]
+        resample = False 
+        if resample:
+            arr = torchaudio.functional.resample(arr,2048,2048).numpy()
+        else:
+            arr = arr.numpy()
         arr = arr / max(arr)
 
 

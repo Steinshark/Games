@@ -304,7 +304,7 @@ class Trainer:
         self.batch_size     = batch_size
 
         #Create sets
-        self.dataset        = WavDataSet(filenames,verbose=False,peak_norm=False,saving=True)
+        self.dataset        = WavDataSet(filenames,verbose=False,peak_norm=False,saving=False)
         self.dataloader     = DataLoader(self.dataset,batch_size=batch_size,shuffle=shuffle,num_workers=num_workers,pin_memory=True)
 
     #Set optimizers and error function for models
@@ -349,6 +349,10 @@ class Trainer:
         d_err_r_b   = [] 
         d_err_f_b   = [] 
         g_err       = [] 
+
+        d_class_r   = [] 
+        d_class_g   = [] 
+
         
 
         #Run all batches
@@ -364,91 +368,119 @@ class Trainer:
                     printed+=1
 
 
+            if len(self.training_classes['d_class']) and self.training_classes['d_class'][-1] > .8:
+                #Fudge stats
+                if d_err_r_b:
+                    d_err_r_b.append(d_class_r[-1])
+                else:
+                    d_err_r_b.append(self.d_err_r_batch[-1])
+                if d_err_f_b:
+                    d_err_f_b.append(d_class_r[-1])
+                else:
+                    d_err_f_b.append(self.d_err_f_batch[-1])
 
-            #####################################################################
-            #                           TRAIN REAL                              #
-            #####################################################################
+                if g_err:
+                    g_err.append(g_err[-1])
+                else:
+                    g_err.append(self.g_err_batches[-1])
+
+
+
+                #Generate samples
+                t_0 = time.time()
+                if self.mode == "single-channel":
+                    random_inputs           = torch.randn(size=(x_len,1,self.ncz),dtype=torch.float,device=self.device)    
+                elif self.mode == "multi-channel":
+                    random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
             
-            #Zero First
-            # OLD IMPLEMENTATION: self.Discriminator.zero_grad()
-            for param in self.Discriminator.parameters():
-                param.grad = None
+                generator_outputs       = self.Generator(random_inputs)
+            else:
+                #####################################################################
+                #                           TRAIN REAL                              #
+                #####################################################################
+                
+                #Zero First
+                # OLD IMPLEMENTATION: self.Discriminator.zero_grad()
+                for param in self.Discriminator.parameters():
+                    param.grad = None
 
-            #Prep real values
-            t0                  = time.time()
-            x_set               = data[0].to(self.device)
-            x_len               = len(x_set)
-            y_set               = torch.ones(size=(x_len,),dtype=torch.float,device=self.device)
-            data_l              = time.time() - t0
+                #Prep real values
+                t0                  = time.time()
+                x_set               = data[0].to(self.device)
+                x_len               = len(x_set)
+                y_set               = torch.ones(size=(x_len,),dtype=torch.float,device=self.device)
+                data_l              = time.time() - t0
+                
+
+                #Classify real set
+                t_0 = time.time()
+                real_class          = self.Discriminator.forward(x_set).view(-1)
+                classification_d    = real_class.mean().item()
+                d_real              += classification_d
+                d_class_r.append(classification_d)
+
+                t_d[-1]             += time.time()-t_0
+
+                #Calc error
+                t0                  = time.time()
+                d_error_real        = self.error_fn(real_class,y_set)
+                d_err_r_b.append(d_error_real.mean().cpu().detach().float())
+                d_error_real.backward()
+                t_op_d[-1]          += time.time() - t0
+                
+                #####################################################################
+                #                           TRAIN FAKE                              #
+                #####################################################################
+                
+                #Generate samples
+                t_0 = time.time()
+                if self.mode == "single-channel":
+                    random_inputs           = torch.randn(size=(x_len,1,self.ncz),dtype=torch.float,device=self.device)    
+                elif self.mode == "multi-channel":
+                    random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
             
+                generator_outputs       = self.Generator(random_inputs)
+                t_g[-1] += time.time()-t_0
 
-            #Classify real set
-            t_0 = time.time()
-            real_class          = self.Discriminator.forward(x_set).view(-1)
-            d_real              += real_class.mean().item()
+                #Ask Discriminator to classify fake samples 
+                t_0 = time.time()
+                fake_labels             = torch.zeros(size=(x_len,),dtype=torch.float,device=self.device)
+                fake_class              = self.Discriminator.forward(generator_outputs.detach()).view(-1)
+                classification_d        = fake_class.mean().item()
+                d_fake                  += classification_d
+                d_class_g.append(classification_d)
 
-            t_d[-1]             += time.time()-t_0
+                t_d[-1] += time.time()-t_0
 
-            #Calc error
-            t0                  = time.time()
-            d_error_real        = self.error_fn(real_class,y_set)
-            d_err_r_b.append(d_error_real.mean().cpu().detach().float())
-            d_error_real.backward()
-            t_op_d[-1]          += time.time() - t0
+                #Calc error
+                t_0 = time.time()
+                d_error_fake            = self.error_fn(fake_class,fake_labels)
+                d_err_f_b.append(d_error_fake.mean().cpu().float().detach()) 
+                d_error_fake.backward()
+
+            # #####################################################################
+            # #                           TRAIN RAND                              #
+            # #####################################################################
             
-            #####################################################################
-            #                           TRAIN FAKE                              #
-            #####################################################################
-            
-            #Generate samples
-            t_0 = time.time()
-            if self.mode == "single-channel":
-                random_inputs           = torch.randn(size=(x_len,1,self.ncz),dtype=torch.float,device=self.device)    
-            elif self.mode == "multi-channel":
-                random_inputs           = torch.randn(size=(x_len,self.ncz,1),dtype=torch.float,device=self.device)
-           
-            generator_outputs       = self.Generator(random_inputs)
-            t_g[-1] += time.time()-t_0
+            # #Generate randoms
+            # bad_inputs              = torch.rand(size=(x_len,1,self.outsize[1]),dtype=torch.float,device=self.device)
 
-            #Ask Discriminator to classify fake samples 
-            t_0 = time.time()
-            fake_labels             = torch.zeros(size=(x_len,),dtype=torch.float,device=self.device)
-            fake_class              = self.Discriminator.forward(generator_outputs.detach()).view(-1)
-            d_fake                  += fake_class.mean().item()
+            # #Ask Discriminator to classify fake samples 
+            # t_0 = time.time()
+            # rand_labels             = torch.zeros(size=(x_len,),dtype=torch.float,device=self.device)
+            # rand_class              = self.Discriminator.forward(bad_inputs).view(-1)
+            # d_fake                  += rand_class.mean().item()
 
-            t_d[-1] += time.time()-t_0
+            # t_d[-1] += time.time()-t_0
 
-            #Calc error
-            t_0 = time.time()
-            d_error_fake            = self.error_fn(fake_class,fake_labels)
-            d_err_f_b.append(d_error_fake.mean().cpu().float().detach()) 
-            d_error_fake.backward()
+            # #Calc error
+            # t_0 = time.time()
+            # d_error_rand            = self.error_fn(rand_class,rand_labels)
 
-            #####################################################################
-            #                           TRAIN RAND                              #
-            #####################################################################
-            
-            #Generate randoms
-            bad_inputs              = torch.rand(size=(x_len,1,self.outsize[1]),dtype=torch.float,device=self.device)
-
-            #Ask Discriminator to classify fake samples 
-            t_0 = time.time()
-            rand_labels             = torch.zeros(size=(x_len,),dtype=torch.float,device=self.device)
-            rand_class              = self.Discriminator.forward(bad_inputs).view(-1)
-
-            
-            d_fake                  += rand_class.mean().item()
-
-            t_d[-1] += time.time()-t_0
-
-            #Calc error
-            t_0 = time.time()
-            d_error_rand            = self.error_fn(rand_class,rand_labels)
-
-            #Back Propogate
-            d_error_rand.backward()
-            self.D_optim.step()           
-            t_op_d[-1] += time.time()-t_0
+            # #Back Propogate
+            # d_error_rand.backward()
+            # self.D_optim.step()           
+            # t_op_d[-1] += time.time()-t_0
 
             #####################################################################
             #                           TRAIN GENR                              #
@@ -461,6 +493,7 @@ class Trainer:
             #Classify the fakes again after Discriminator got updated 
             t_0 = time.time()
             fake_class2                 = self.Discriminator.forward(generator_outputs).view(-1)
+            g_class                     = fake_class2.mean().item()
             t_d[-1] += time.time()-t_0
             
             #Find the error between the fake batch and real set  
@@ -480,17 +513,21 @@ class Trainer:
                 random_vect             = torch.randn(size=(1,self.outsize[0],self.outsize[1]),dtype=torch.float,device=self.device)
                 with torch.no_grad():
                     d_random            = self.Discriminator.forward(random_vect).cpu().detach().item()
+            
+
 
         if verbose:
             percent = (i+1) / n_batches
             while (printed / num_equals) < percent:
                 print("-",end='',flush=True)
                 printed+=1
+        
+
 
         #TELEMETRY
         print(f"]")
         print("\n")
-        out_1 = f"G forw={sum(t_d):.3f}s    G forw={sum(t_g):.3f}s    D back={sum(t_op_d):.3f}s    G back={sum(t_op_g):.3f}s    tot = {(time.time()-t_init):.2f}s"
+        out_1 = f"D forw={sum(t_d):.3f}s    G forw={sum(t_g):.3f}s    D back={sum(t_op_d):.3f}s    G back={sum(t_op_g):.3f}s    tot = {(time.time()-t_init):.2f}s"
         print(" "*(width-len(out_1)),end='')
         print(out_1,flush=True)
         out_2 = f"t_dload={(t_dload):.2f}s    D(real)={(d_real/n_batches):.3f}    D(gen1)={(d_fake/n_batches):.4f}    D(rand)={d_random:.3f}"
@@ -702,7 +739,7 @@ class Trainer:
         print(f"\t\tsample saved\n")
 
     #Train easier
-    def c_exec(self,load,epochs,bs,optim_d,optim_g,ncz,outsize,filenames,series_path,sf,verbose=False,sample_rate=1):
+    def c_exec(self,load,epochs,bs,optim_d,optim_g,ncz,outsize,filenames,series_path,sf,verbose=False,sample_rate=1,rebuild_dataset=False):
         self.outsize        = outsize
         self.ncz            = ncz
         self.sf             = sf
@@ -718,6 +755,7 @@ class Trainer:
 
         train_set   = random.sample(filenames,min(load,len(filenames)))
         self.build_dataset(train_set,load,bs,True,4)
+
         for e in range(self.epoch_num,epochs):
             self.epoch_num      = e 
             t0 = time.time()
@@ -734,7 +772,7 @@ class Trainer:
                 return 
             self.save_model_states("models","D_model","G_model")
 
-            if len(filenames) > load:
+            if len(filenames) > load and rebuild_dataset:
                 train_set   = random.sample(filenames,min(load,len(filenames)))
                 self.build_dataset(train_set,load,bs,True,4)
             
@@ -753,7 +791,7 @@ class Trainer:
                     self.G_optim.param_groups[0]['lr']	*= 1.08
                     incr        = "↑" 
 
-                elif len(self.training_classes['g_class']) > 2 and self.training_classes['g_class'][-2] < self.training_classes['g_class'][-1]  or abs(self.training_classes['g_class'][-1] - .5) < .01:
+                elif len(self.training_classes['g_class']) > 2 and self.training_classes['g_class'][-2] < self.training_classes['g_class'][-1]  or self.training_classes['g_class'][-1] > .49:
                     self.G_optim.param_groups[0]['lr']	*= .94
                     incr        = "↓"
                 else:
@@ -879,7 +917,7 @@ if __name__ == "__main__":
     files   = [os.path.join(root,f) for f in os.listdir(root)]
 
     configs = {
-                "bigbatch2"   : {"init":sandboxG.build_upsamp,"lrs": (.0001,.0002), "ncz":64,"kernel":0,"factor":0,"leak":.04,"momentum":.9,"bs":64,"wd":1e-5},
+                "bigbatch2"   : {"init":sandboxG.build_upsamp,"lrs": (4e-5,6e-5), "ncz":100,"kernel":0,"factor":0,"leak":.04,"momentum":.9,"bs":50,"wd":1e-5},
                }
 
     for config in configs:  
@@ -944,8 +982,8 @@ if __name__ == "__main__":
         #optim_d = torch.optim.AdamW(D.parameters(),lrs[0],betas=(betas[0],.999))
         #optim_g = torch.optim.AdamW(G.parameters(),lrs[1],betas=(betas[1],.999))
     
-        optim_d = torch.optim.Adam(D.parameters(),lrs[0],weight_decay=5e-6,betas=(.5,.999))#,momentum=momentum)
-        optim_g = torch.optim.Adam(G.parameters(),lrs[1],weight_decay=5e-6,betas=(.5,.999))#,momentum=momentum)
+        optim_d = torch.optim.Adam(D.parameters(),lrs[0],weight_decay=lrs[0]/10,betas=(.5,.999))#,momentum=momentum)
+        optim_g = torch.optim.Adam(G.parameters(),lrs[1],weight_decay=lrs[1]/10,betas=(.5,.999))#,momentum=momentum)
 
         #optim_d                 = torch.optim.SGD(D.parameters(),lrs[0],weight_decay=wd,momentum=momentum,nesterov=True)
         #optim_g                 = torch.optim.SGD(G.parameters(),lrs[1],weight_decay=wd,momentum=momentum,nesterov=True)

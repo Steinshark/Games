@@ -49,93 +49,6 @@ def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,ch_ver=1,device=torch.dev
             Gen.append(         LeakyReLU(leak,True))
     return Gen.to(device)
 
-def build_short_gen(ncz=512,leak=.2,momentum=.95,device=torch.device('cuda'),out_ch=2):
-    factors     = [49,9,8,5,5,2]
-
-    ch          = [ncz,2000,2000,1000,100]
-
-    ker         = [3,7,15,65,101,501]
-
-
-    final_ch1    = 100
-    final_ch2    = 64 
-    final_kern1  = 17
-    #final_kern2  = 11
-
-    pad         = [int(k/2) for k in ker] 
-    Gen     = Sequential(   ConvTranspose1d(ncz,ch[0],factors[0],factors[0]),
-                            BatchNorm1d(ch[0],momentum=momentum),
-                            LeakyReLU(leak,True))
-
-    #Gen.append(         Conv1d(ch[0],ch[0],3,1,1))
-    #Gen.append(         BatchNorm1d(ch[0]))
-    #Gen.append(         LeakyReLU(leak,True)) 
-    
-    for i,c in enumerate(ch):
-        if i+1 == len(ch):
-            Gen.append(         ConvTranspose1d(c,final_ch1,factors[i+1],factors[i+1]))
-            Gen.append(         BatchNorm1d(final_ch1,momentum=momentum))
-            Gen.append(         LeakyReLU(leak,True))
-
-            #Gen.append(         Conv1d(final_ch1,final_ch2,final_kern1,1,int(final_kern1/2)))
-            #Gen.append(         BatchNorm1d(final_ch2,momentum=.5))
-            #Gen.append(         LeakyReLU(leak,True))
-
-            Gen.append(         Conv1d(final_ch1,out_ch,final_kern1,1,int(final_kern1/2)))
-            Gen.append(         Tanh())
-
-        else:
-            Gen.append(         ConvTranspose1d(c,ch[i+1],factors[i+1],factors[i+1]))
-            Gen.append(         BatchNorm1d(ch[i+1],momentum=momentum)) 
-            Gen.append(         LeakyReLU(leak,True)) 
-
-            #Gen.append(         Conv1d(ch[i+1],ch[i+1],ker[i],1,pad[i],bias=False))
-            #Gen.append(         BatchNorm1d(ch[i+1]))
-            #Gen.append(         LeakyReLU(leak,True)) 
-    
-    return Gen.to(device)
-
-def build_sig(ncz=512,out_ch=1,device=torch.device('cuda')):
-    factors     = [9,7,7,5,5,4,2,2]
-    #channels    = [4096,4096,1024,1024,512,512,1282,128,128,64,64] 
-    channels    = [128,256,256,256,256,128,64,32] 
-    
-    Gen     = Sequential(   ConvTranspose1d(ncz,channels[0],factors[0],factors[0]),
-                            BatchNorm1d(channels[0]),
-                            ReLU())
-
-    kernel_1        = 513 
-    kernel_2        = 7
-    kernel_3        = 3
-    ch_1            = 64
-    ch_2            = 20
-    for i,ch in enumerate(channels):
-
-        if not i+2 == len(channels):
-            Gen.append(         ConvTranspose1d(ch,channels[i+1],factors[i+1],factors[i+1]))
-            Gen.append(         BatchNorm1d(channels[i+1]))
-            Gen.append(         ReLU())
-             
-        else:
-            Gen.append(         ConvTranspose1d(ch,channels[i+1],factors[i+1],factors[i+1]))
-            Gen.append(         BatchNorm1d(channels[i+1]))
-            Gen.append(         Sigmoid())
-
-            Gen.append(         Conv1d(channels[i+1],ch_1,kernel_size=kernel_1,stride=1,padding=int(kernel_1/2),bias=False))
-            Gen.append(         BatchNorm1d(ch_1))
-            Gen.append(         Sigmoid())
-
-            Gen.append(         Conv1d(ch_1,ch_2,kernel_size=kernel_2,stride=1,padding=int(kernel_2/2),bias=False))
-            Gen.append(         BatchNorm1d(ch_2))
-            Gen.append(         Sigmoid())
-
-            Gen.append(         Conv1d(ch_2,out_ch,kernel_size=kernel_3,stride=1,padding=int(kernel_3/2),bias=True))
-
-            Gen.append(         Tanh())
-            break
-    
-    return Gen.to(device)
-
 def build_upsamp(ncz=512,out_ch=1,kernel_ver=0,factor_ver=0,leak=.2,device=torch.device('cuda'),verbose=False):
 
  
@@ -161,20 +74,63 @@ def build_upsamp(ncz=512,out_ch=1,kernel_ver=0,factor_ver=0,leak=.2,device=torch
                             ReLU(inplace=True),
 
                             ConvTranspose1d(128,64,kernel_size=4,stride=4),              # 4096 
-                            Conv1d(64,64,kernel_size=31,stride=1,padding=15,bias=False),
+                            Conv1d(64,64,kernel_size=65,stride=1,padding=31,bias=False),
                             BatchNorm1d(64),
                             ReLU(inplace=True),
 
                             ConvTranspose1d(64,64,kernel_size=4,stride=4),              # 16384
-                            Conv1d(64,64,kernel_size=31,stride=1,padding=15,bias=False),
+                            Conv1d(64,64,kernel_size=127,stride=1,padding=65,bias=False),
                             ReLU(inplace=True), 
 
                             ConvTranspose1d(64,32,kernel_size=2,stride=2),               # 32768
                             Tanh(),
-                            Conv1d(32,16,kernel_size=31,stride=1,padding=15,bias=True),
+                            Conv1d(32,16,kernel_size=255,stride=1,padding=127,bias=True),
                             Tanh(),
-                            Conv1d(16,1,kernel_size=7,stride=1,padding=3,bias=True),
+                            Conv1d(16,32,kernel_size=63,stride=1,padding=31,bias=True),
                             Tanh(),
+                            Conv1d(32,48,kernel_size=31,stride=1,padding=15,bias=True),
+                            Tanh(),
+                            Conv1d(48,64,kernel_size=7,stride=1,padding=3,bias=True),
+                            Tanh(),
+                            Conv1d(64,1,kernel_size=7,stride=1,padding=3,bias=True),
+                            Tanh(),
+
+                            )
+
+       
+    return Gen.to(device)
+
+def build_low_hi(ncz=512,out_ch=1,kernel_ver=0,factor_ver=0,leak=.2,device=torch.device('cuda'),verbose=False):
+    
+    Gen     = Sequential(   ConvTranspose1d(ncz,1024,kernel_size=4,stride=1),               # 4 
+                            Conv1d(1024,1024,kernel_size=31,stride=1,padding=15,bias=False),
+                            ReLU(inplace=True),    
+
+                            ConvTranspose1d(1024,1024,kernel_size=4,stride=4),              # 16 
+                            Conv1d(1024,1024,kernel_size=31,stride=1,padding=15,bias=False),
+                            ReLU(inplace=True),  
+
+                            ConvTranspose1d(1024,1024,kernel_size=4,stride=4),              # 64 
+                            Conv1d(1024,512,kernel_size=31,stride=1,padding=15,bias=False),
+                            ReLU(inplace=True),  
+
+                            ConvTranspose1d(512,256,kernel_size=4,stride=4),              # 256    
+                            Conv1d(256,256,kernel_size=31,stride=1,padding=15,bias=False),
+                            ReLU(inplace=True), 
+
+                            ConvTranspose1d(256,128,kernel_size=4,stride=4),              # 1024 
+                            #Conv1d(128,128,kernel_size=31,stride=1,padding=15,bias=False),
+                            #BatchNorm1d(128),
+                            ReLU(inplace=True),
+
+                            ConvTranspose1d(128,64,kernel_size=4,stride=4),              # 4096 
+                            #Conv1d(64,64,kernel_size=31,stride=1,padding=15,bias=False),
+                            #BatchNorm1d(64),
+                            ReLU(inplace=True),
+
+                            ConvTranspose1d(64,64,kernel_size=4,stride=4),              # 16384
+                            Conv1d(64,64,kernel_size=31,stride=2,padding=15,bias=False),
+                            
                             )
 
        

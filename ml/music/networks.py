@@ -876,19 +876,19 @@ class AudioDiscriminator7(nn.Module):
 
         #LAYER 1    -> 25200
         i                               = 0
-        kernel                          = 7
+        kernel                          = 63
         n_ch_prev                       = 1
         n_ch                            = 64
         mp_reduction                    = 3 
 
-        model[str(i+0)]                   = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 4,  int(kernel/2),   bias=False)
+        model[str(i+0)]                   = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 2,  int(kernel/2),   bias=False)
         model[str(i+1)]                   = nn.BatchNorm1d(n_ch)
         model[str(i+2)]                   = activation_fn(**activation_kwargs)
 
 
         #LAYER 2    -> 8400
         i                               = 4
-        kernel                          = 7
+        kernel                          = 31
         n_ch_prev                       = n_ch
         n_ch                            = 128
         mp_reduction                    = 2 
@@ -900,7 +900,7 @@ class AudioDiscriminator7(nn.Module):
 
         #LAYER 3    -> 2800
         i                               = 8
-        kernel                          = 11
+        kernel                          = 15
         n_ch_prev                       = n_ch
         n_ch                            = 256
         mp_reduction                    = 2 
@@ -912,7 +912,7 @@ class AudioDiscriminator7(nn.Module):
 
         #LAYER 4    -> 560
         i                               = 12
-        kernel                          = 15
+        kernel                          = 11
         n_ch_prev                       = n_ch
         n_ch                            = 512
         mp_reduction                    = 3 
@@ -924,7 +924,7 @@ class AudioDiscriminator7(nn.Module):
 
         #LAYER 5    -> 80
         i                               = 16
-        kernel                          = 21
+        kernel                          = 11
         n_ch_prev                       = n_ch
         n_ch                            = 512
         mp_reduction                    = 3 
@@ -936,7 +936,7 @@ class AudioDiscriminator7(nn.Module):
 
         #LAYER 6    -> 80
         i                               = 20
-        kernel                          = 21
+        kernel                          = 11
         n_ch_prev                       = n_ch
         n_ch                            = 512
         mp_reduction                    = 3 
@@ -962,7 +962,7 @@ class AudioDiscriminator7(nn.Module):
         #LAYER 8    -> 8192
         i                               = 24
         model[str(i)]                   = nn.Flatten()
-        model[str(i+1)]                 = nn.Linear(4096,1024)
+        model[str(i+1)]                 = nn.Linear(8192,1024)
         model[str(i+2)]                 = activation_fn(**activation_kwargs)
         model[str(i+3)]                 = nn.Dropout(p=.5)
 
