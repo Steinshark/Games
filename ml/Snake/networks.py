@@ -224,7 +224,7 @@ class IMG_NET_OG(nn.Module):
 
 class IMG_NET(nn.Module):
 
-	def __init__(self,input_shape=(3,540,960),nf=32,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.9,.999)},dropout_p=.25,neg_slope=.05,device=torch.device('cuda')):
+	def __init__(self,input_shape=(3,540,960),nf=16,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.9,.999)},dropout_p=.25,neg_slope=.05,device=torch.device('cuda')):
 		super(IMG_NET,self).__init__()
 		self.dropout		= dropout_p
 		self.model 			= nn.Sequential(
@@ -256,11 +256,11 @@ class IMG_NET(nn.Module):
 				
 			nn.Flatten(1),
 
-			nn.Linear(3072,2048),
+			nn.Linear(3072,1024),
 			nn.Dropout(p=dropout_p),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
 
-			nn.Linear(2048,512),
+			nn.Linear(1024,512),
 			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
 
 			nn.Linear(512,128),
@@ -277,51 +277,60 @@ class IMG_NET(nn.Module):
 
 class IMG_NET3(nn.Module):
 
-	def __init__(self,input_shape=(3,540,960),nf=32,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.9,.999)},dropout_p=.25,neg_slope=.2,device=torch.device('cuda')):
+	def __init__(self,input_shape=(3,540,960),nf=16,loss_fn=torch.nn.MSELoss,optimizer_fn=torch.optim.Adam,kwargs={"lr":.0001,"betas":(.9,.999)},dropout_p=.25,neg_slope=.2,device=torch.device('cuda')):
 		super(IMG_NET3,self).__init__()
 		self.dropout		= dropout_p
 		self.model 			= nn.Sequential(
 
 			#480x270
-			nn.Conv2d(3,nf,5,1,2,bias=False),
+			nn.Conv2d(3,nf,3,1,1,bias=False),
 			nn.BatchNorm2d(nf),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.ReLU(),
+
 			#240x135
-			nn.Conv2d(nf,nf*2,5,1,1,bias=False),
+			nn.Conv2d(nf,nf*2,3,1,1,bias=False),
 			nn.BatchNorm2d(nf*2),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.ReLU(),
+
 			#120x75
-			nn.Conv2d(nf*2,nf*4,5,1,1,bias=False),
-			nn.BatchNorm2d(nf*4),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-			nn.MaxPool2d(2),
+			nn.Conv2d(nf*2,nf*2,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*2),
+			nn.ReLU(),
+			#nn.MaxPool2d(2),
+
 			#60x37
-			nn.Conv2d(nf*4,nf*4,5,1,1,bias=False),
-			nn.BatchNorm2d(nf*4),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.Conv2d(nf*2,nf*2,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*2),
+			nn.ReLU(),
 			nn.MaxPool2d(2),
 			#30x
-			nn.Conv2d(nf*4,nf*8,5,1,1,bias=False),
-			nn.BatchNorm2d(nf*8),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.Conv2d(nf*2,nf*4,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*4),
+			nn.ReLU(),
 			nn.MaxPool2d(2),
 
-			nn.Conv2d(nf*8,nf*16,5,1,1,bias=False),
-			nn.BatchNorm2d(nf*16),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.Conv2d(nf*4,nf*4,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*4),
+			nn.ReLU(),
 			nn.MaxPool2d(2),
+
+			nn.Conv2d(nf*4,nf*4,5,1,1,bias=False),
+			nn.BatchNorm2d(nf*4),
+			nn.ReLU(),
+			nn.MaxPool2d(2),
+			
+
+			
 				
 			nn.Flatten(1),
 
-			nn.Linear(12288,2048),
+			nn.Linear(1536,512),
 			nn.Dropout(p=dropout_p),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
-
-			nn.Linear(2048,512),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.ReLU(),
 
 			nn.Linear(512,128),
-			nn.LeakyReLU(negative_slope=neg_slope),#negative_slope=.02),
+			nn.Dropout(p=dropout_p),
+			nn.ReLU(),
 
 			nn.Linear(128,4)
 		).to(device)
@@ -332,14 +341,20 @@ class IMG_NET3(nn.Module):
 	def forward(self,x):
 		return self.model(x)
 	
-def init_weights(m,conv_av=0.0,conv_var=0.02,bn_av=1.0,bn_var=.02):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, conv_av, conv_var)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, bn_av, bn_var)
-        nn.init.constant_(m.bias.data, 0)
+def init_weights(m,conv_av=1.0,conv_var=0.002,bn_av=1.0,bn_var=.002,ln_av=1.0,ln_var=.001):
+	classname = m.__class__.__name__
+	if classname.find('Conv') != -1:
+		nn.init.normal_(m.weight.data, conv_av, conv_var)
 
+	elif classname.find('BatchNorm') != -1:
+		nn.init.normal_(m.weight.data, bn_av, bn_var)
+		nn.init.constant_(m.bias.data, 0)
+
+	elif classname.find("Linear") != -1:
+		#nn.init.normal_(m.weight.data, ln_av,ln_var)
+		#nn.init.normal_(m.bias.data, 0,ln_var)
+		pass
+		
 if __name__ == "__main__":
 	inv 	= torch.randn(size=(3,3,540,960),dtype=torch.float,device=torch.device('cuda'))
 

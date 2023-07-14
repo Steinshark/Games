@@ -20,7 +20,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,target_model:nn.Module,simul_games=32,device=torch.device('cuda'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(160,90),min_thresh=.03):
+	def __init__(self,w,h,target_model:nn.Module,simul_games=32,device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(160,90),min_thresh=.03):
 
 
 		#Set global Vars
@@ -60,7 +60,7 @@ class Snake:
 
 
 		#Encode games as a 3-channel m x n imgage 
-		self.game_vectors	    = torch.zeros(size=(simul_games,3,img_repr_size[1],img_repr_size[0]),device=device,dtype=torch.float16)
+		self.game_vectors	    = torch.zeros(size=(simul_games,3,img_repr_size[1],img_repr_size[0]),device=device,dtype=torch.float32)
 
 		#	The game directions are tracked in this list. 
 		# 	Each tuple encodes the step taken in (x,y).
@@ -105,7 +105,7 @@ class Snake:
 		self.graph_pending 	= False 
 
 		#	Setup utils to make the snake frames 
-		utilities.init_utils((self.grid_w,self.grid_h),self.img_repr_size[0],self.img_repr_size[1],torch.float16)
+		utilities.init_utils((self.grid_w,self.grid_h),self.img_repr_size[0],self.img_repr_size[1],torch.float32)
 		#	Spawn the snake in a random location each time
 		# 	Create the initial state_imgs for snakes 
 		for snake_i in range(self.simul_games):

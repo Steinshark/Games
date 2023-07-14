@@ -99,7 +99,7 @@ class Trainer:
 		self.softmax 			= True
 		self.dropout_p			= dropout_p
 		#Enable cuda acceleration if specified 
-		self.device 			= torch.device('cuda') if gpu_acceleration else torch.device('cpu')
+		self.device 			= torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 
@@ -121,11 +121,12 @@ class Trainer:
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
 
-		networks.init_weights(self.learning_model)
-		networks.init_weights(self.target_model)
+		
+		#self.learning_model.apply(networks.init_weights)
+		#self.target_model.apply(networks.init_weights)
 
-		#Set optimizer for conv filters 
-		torch.backends.cudnn.benchmark = True
+		##Set optimizer for conv filters 
+		#torch.backends.cudnn.benchmark = True
 
 
 	def train_concurrent(	self,
@@ -162,6 +163,11 @@ class Trainer:
 
 		#	Train 
 		i = 0 
+		self.target_model	= self.target_model.eval()
+		self.target_model	= torch.jit.script(self.target_model,torch.randn(1,3,160,90))
+		self.target_model	= torch.jit.freeze(self.target_model)
+		#	Configure modl 
+
 		while i < iters and not self.cancelled:
 			
 			#Check no timeout 
@@ -262,9 +268,9 @@ class Trainer:
 							training_set.append(memory_pool[cur_i])
 							training_ind.append(cur_i)
 
-				qual 		= 100*sum([int(t['r'] >= 1) + int(t['r'] <= -1) for t in training_set]) / len(training_set)
+				qual 		= 100*sum([int(t['r'] >= 1) + int(t['r'] <= -.5) for t in training_set]) / len(training_set)
 				bad_set 	= random.sample(memory_pool,sample_size)
-				bad_qual 	= f"{100*sum([int(t['r'] >= 1) + int(t['r'] <= -1) for t in memory_pool]) / len(memory_pool):.2f}"
+				bad_qual 	= f"{100*sum([int(t['r'] >= 1) + int(t['r'] <= -.5) for t in memory_pool]) / len(memory_pool):.2f}"
 
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
 				
@@ -408,6 +414,10 @@ class Trainer:
 
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
 			self.target_model.to(self.device)
+
+			self.target_model	= self.target_model.eval()
+			self.target_model	= torch.jit.script(self.target_model,torch.randn(1,3,160,90))
+			self.target_model	= torch.jit.freeze(self.target_model)
 
 	@staticmethod
 	def update_epsilon(percent):

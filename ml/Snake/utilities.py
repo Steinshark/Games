@@ -6,14 +6,14 @@ import numpy
 from matplotlib import pyplot as plt 
 import torchvision.utils as vutils
 TIME_MULT   = 0 
-VECT_TYPE   = torch.float16
+VECT_TYPE   = torch.float32
 SNAKE_SQ    = torch.ones(size=(1,1))
 HEAD_SQ    = torch.ones(size=(1,1))
 FOOD_SQ     = torch.ones(size=(1,1))
 TOP_L       = (0,0)
 BOT_R       = (0,0)
 SQUARE_SF   = 0 
-DEV         = torch.device('cuda')
+DEV         = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 COLORS      = {"snake":(0/255,255/255,0/255),"food":(255/255,0/255,0/255),'head':(0/255,255/255,255/255)}
 
 
@@ -21,7 +21,7 @@ COLORS      = {"snake":(0/255,255/255,0/255),"food":(255/255,0/255,0/255),'head'
 def tensor_to_img(tensor):
     return tensor.detach().cpu().numpy().transpose(1,2,0).astype(numpy.float32)
 
-def init_utils(board_size,img_w,img_h,vect_type,device=torch.device('cuda')):
+def init_utils(board_size,img_w,img_h,vect_type,device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')):
     global TOP_L,BOT_R,FOOD_SQ,SNAKE_SQ,HEAD_SQ,VECT_TYPE,SQUARE_SF,DEV
 
     w                           = board_size[0]
@@ -57,7 +57,7 @@ def init_utils(board_size,img_w,img_h,vect_type,device=torch.device('cuda')):
 
 def build_snake_img(snake_list,food_loc,board_size,img_w=1280,img_h=720):
 
-    vect_init_type              = torch.float16
+    vect_init_type              = torch.float32
     #create base tensor in CxWxH 
     w                           = board_size[0]
     h                           = board_size[1]
@@ -90,7 +90,7 @@ def build_snake_img(snake_list,food_loc,board_size,img_w=1280,img_h=720):
     return frame_repr_tensor.to(DEV)
 
 
-def step_snake_img(game_vector:torch.Tensor,snake_list,food_loc,board_size,img_w=1280,img_h=720,dim_fact=.33,vect_init_type=torch.float16,min_thresh=.03,display_imgs=False):    
+def step_snake_img(game_vector:torch.Tensor,snake_list,food_loc,board_size,img_w=1280,img_h=720,dim_fact=.33,vect_init_type=torch.float32,min_thresh=.03,display_imgs=False):    
     global TIME_MULT,SNAKE_SQ,FOOD_SQ,TOP_L,BOT_R
     w                           = board_size[0]
     h                           = board_size[1]
