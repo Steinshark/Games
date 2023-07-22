@@ -61,7 +61,7 @@ def run_train(bs,n_ch,mom,lr,nest,p,var):
     #16,2,.9,
 
     print(f"SERIES {title}")
-    for epoch in range(32):
+    for epoch in range(64):
         train_losses    = []
         accr            = [] 
         for i,batch in enumerate(load_train):
@@ -101,12 +101,12 @@ def run_train(bs,n_ch,mom,lr,nest,p,var):
 
 series   = {}
 for bs in [16]:
-    for n_ch in [2]:
-        for mom in [.75,.9]:
-            for lr in [.001]:
+    for n_ch in [4]:
+        for mom in [.8]:
+            for lr in [.00025]:
                 for nest in [True,False]:
-                    for p in [.1,.25]:
-                            for var in [.1,.25,.5]:
+                    for p in [.2]:
+                            for var in [.15]:
                                 key,val         = run_train(bs,n_ch,mom,lr,nest,p,var)
                                 series[key]     = val 
 

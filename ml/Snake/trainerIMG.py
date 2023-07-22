@@ -14,7 +14,7 @@ import copy
 from utilities import reduce_arr
 
 
-MODEL_FN 			= networks.IMG_NET3
+MODEL_FN 			= networks.IMG_NET_SIMPLE
 
 class Trainer:
 
@@ -50,6 +50,7 @@ class Trainer:
 					channels=3,
 					display_img=False,
 					lr_threshs=None,
+					activation=None,
 					dropout_p=.1):
 
 
@@ -69,6 +70,7 @@ class Trainer:
 		self.loss_fn = loss_fn
 		self.optimizer_fn 		= optimizer_fn
 		self.architecture 		= architecture
+		self.activation 		= activation
 
 		#Set runtime vars 
 		self.cancelled 			= False
@@ -112,11 +114,11 @@ class Trainer:
 			self.encoding_type = "one_hot"
 		elif m_type == "CNN":
 			self.input_shape = (1,channels,game_w,game_h)
-			self.target_model 	= MODEL_FN(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+			self.target_model 	= MODEL_FN(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p,act_fn=self.activation)
 			
 			if self.gui:
 				self.output.insert(tk.END,f"Generated training model\n\t{sum([p.numel() for p in self.target_model.model.parameters()])} params")
-			self.learning_model = MODEL_FN(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p)
+			self.learning_model = MODEL_FN(loss_fn=loss_fn,optimizer_fn=optimizer_fn,kwargs=kwargs,input_shape=self.input_shape,device=self.device,dropout_p=self.dropout_p,act_fn=self.activation)
 			self.encoding_type = "6_channel"
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
@@ -152,14 +154,11 @@ class Trainer:
 		self.x_scale 	= x_scale
 		memory_pool 	= []
 		window_i 		= 0
-		display_img		= self.display_img
 		self.pending_graph	= False
 
 
 		threshs			= copy.deepcopy(self.base_threshs)
 		stop_thresh 	= False 
-		#	Keep track of models progress throughout the training 
-		best_score 		= 0 
 
 		#	Train 
 		i = 0 
@@ -181,13 +180,14 @@ class Trainer:
 			if not stop_thresh and i > threshs[0][0]:
 				new_lr 	= threshs[0][1]
 				self.learning_model.optimizer.param_groups[0]['lr']	= new_lr
+				self.learning_model.optimizer.param_groups[0]['weight_decay']	= new_lr/10
 				if not len(threshs) == 1:
 					threshs = threshs[1:] 
 				else:
 					stop_thresh	= True 
 				
 				if self.gui:
-					self.output.insert(tk.END,f"\tlr updated to: {new_lr}\n")
+					self.output.insert(tk.END,f"\tlr: {new_lr:.5f} - wd:{(new_lr/5):.6f}\n")
 					
 			#	UPDATE EPSILON
 			e 				= self.update_epsilon(i/(iters))	
@@ -234,7 +234,7 @@ class Trainer:
 
 			#	UPDATE VERBOSE 
 			if verbose:
-				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {self.best_score}\t] lived_avg: {(sum(self.all_lived[-100:])/100):.2f} score_avg: {(sum(self.all_scores[-100:])/100):.2f}")
+				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {self.best_score}\t] lived_avg: {(sum(self.all_lived[-100:])/len(self.all_lived[-100:])):.2f} score_avg: {(sum(self.all_scores[-100:])/len(self.all_scores[-100:])):.2f}")
 			
 			if self.gui:
 				self.instance.var_step.set(f"{(sum(self.all_lived[-100:])/100):.2f}")
@@ -260,7 +260,7 @@ class Trainer:
 							cur_i = random.randint(0,len(memory_pool)-1)
 
 						#Drop non-scoring experiences with odds: 'drop_rate'
-						is_non_scoring 				= abs(memory_pool[cur_i]['r']) < .1
+						is_non_scoring 				= memory_pool[cur_i]['r'] == rewards['step']
 						if is_non_scoring and random.random() < drop_rate:
 							continue
 								
@@ -268,9 +268,9 @@ class Trainer:
 							training_set.append(memory_pool[cur_i])
 							training_ind.append(cur_i)
 
-				qual 		= 100*sum([int(t['r'] >= 1) + int(t['r'] <= -.5) for t in training_set]) / len(training_set)
+				qual 		= 100*sum([int(t['r'] == rewards['die'] or t['r'] == rewards['eat']) for t in training_set]) / len(training_set)
 				bad_set 	= random.sample(memory_pool,sample_size)
-				bad_qual 	= f"{100*sum([int(t['r'] >= 1) + int(t['r'] <= -.5) for t in memory_pool]) / len(memory_pool):.2f}"
+				bad_qual 	= f"{100*sum([int(t['r'] == rewards['die'] or t['r'] == rewards['eat']) for t in training_set]) / len(memory_pool):.2f}"
 
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
 				
@@ -335,7 +335,7 @@ class Trainer:
 			# Iterate through batches
 			for batch_i in range(num_batches):
 
-				i_start 					= batch_i*batch_size
+				i_start 					= batch_i * batch_size
 				i_end   					= i_start + batch_size
 				
 				#	Telemetry
@@ -370,8 +370,13 @@ class Trainer:
 				#Update init values 
 				for i,val in enumerate(best_predictions):
 					chosen_action						= action[i]
+					
 					final_target_values[i,chosen_action]= rewards[i] + (done[i] * self.gamma * val)
-
+					if done[i] != 1 and False:
+						print(f"\nfor init val:{initial_target_predictions[i].detach().numpy()} + a:{chosen_action} - > update to {rewards[i]:.3f} + {self.gamma:.3f}*{val:.3f}*[done:{done[i]:.3f}] = {rewards[i] + (done[i] * self.gamma * val):.3f}")
+						print(f"training with {final_target_values[i].detach().numpy()}\n\n")
+						plt.imshow(init_states[i].detach().numpy().transpose(1,2,0))
+						plt.savefig("fig1")
 				#	Calculate Loss
 				t1 							= time.time()
 				batch_loss 					= self.learning_model.loss(initial_target_predictions,final_target_values)

@@ -13,6 +13,7 @@ import copy
 from matplotlib import pyplot as plt 
 import utilities
 import torchvision.utils as vutils
+import networks 
 #This class interfaces only with NP 
 class Snake:
 
@@ -20,7 +21,7 @@ class Snake:
 	#	CONSTRUCTOR 
 	#	This method initializes the snake games to be played until each are over 
 	#	i.e. it allows for all 16, 32, etc... games of a batch to be played at once.
-	def __init__(self,w,h,target_model:nn.Module,simul_games=32,device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,img_repr_size=(160,90),min_thresh=.1):
+	def __init__(self,w,h,target_model:nn.Module,simul_games=32,device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),rewards={"die":-1,'eat':1,"step":-.01},max_steps=200,history=3):
 
 
 		#Set global Vars
@@ -32,8 +33,7 @@ class Snake:
 		self.grid_h 			= h
 		self.simul_games 		= simul_games
 		self.cur_step			= 0
-		self.img_repr_size 		= img_repr_size
-		self.min_thresh			= min_thresh
+		self.history			= history
 
 		#	GPU or CPU computation are both possible 
 		#	Requires pytorch for NVIDIA GPU Computing Toolkit 11.7
@@ -59,8 +59,8 @@ class Snake:
 		self.active_games 		= list(range(simul_games))
 
 
-		#Encode games as a 3-channel m x n imgage 
-		self.game_vectors	    = torch.zeros(size=(simul_games,3,img_repr_size[1],img_repr_size[0]),device=device,dtype=torch.float32)
+		#Encode games as a history x w x h   
+		self.game_vectors	    = torch.zeros(size=(simul_games,history,2,w,h),device=device,dtype=torch.float32)
 
 		#	The game directions are tracked in this list. 
 		# 	Each tuple encodes the step taken in (x,y).
@@ -94,25 +94,23 @@ class Snake:
 
 	#	GAME PLAYER 
 	#	Calling this method will play out all games until completion
-	def play_out_games(self,epsilon=.2,debugging=False,display_img=True):
+	def play_out_games(self,epsilon=.2,debugging=False,display_img=False):
 
 		#	Track all imgs 
 		if display_img:
-			frame_sc		= torch.zeros(size=(64,3,self.img_repr_size[1],self.img_repr_size[0]))
+			frame_sc		= torch.zeros(size=(64,self.history,self.grid_w,self.grid_h))
 		
 		#	Maintain some global parameters 
 		self.cur_step 		= 0
 		self.graph_pending 	= False 
 
-		#	Setup utils to make the snake frames 
-		utilities.init_utils((self.grid_w,self.grid_h),self.img_repr_size[0],self.img_repr_size[1],torch.float32)
 		#	Spawn the snake in a random location each time
 		# 	Create the initial state_imgs for snakes 
 		for snake_i in range(self.simul_games):
 			game_start_x,game_start_y = random.randint(0,self.grid_w-1),random.randint(0,self.grid_h-1)
 			self.snake_tracker[snake_i] = [[game_start_x,game_start_y]]
 			t0 = time.time()
-			self.game_vectors[snake_i]			= utilities.build_snake_img(self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1])
+			self.game_vectors[snake_i]			= utilities.build_snake(self.snake_tracker[snake_i],self.food_vectors[snake_i],arr_w=self.grid_w,arr_h=self.grid_h,history=self.history)
 
 
 
@@ -145,11 +143,18 @@ class Snake:
 			if display_img:
 				if self.game_collection[0]['status'] == 'active' and self.cur_step < 64:
 					frame_sc[self.cur_step]	=self.game_vectors[0]
+
+			if debugging:
+				game_i 		= self.active_games[0]
+				print(f"game{game_i} -\nsnake:{self.snake_tracker[game_i]}\nfood:{self.food_vectors[game_i]}\n\n")
+				print(f"game{game_i}\n{self.game_vectors[game_i]}")
 					
 			if random.random() < epsilon:
 				self.explore()
 			else:
 				self.exploit()
+			
+			#print(f"dir:\t{self.movements[self.direction_vectors[game_i]]}")
 			
 			#	MAKE NEXT MOVES 
 			#	Involves querying head of each game, finding where it will end next,
@@ -157,6 +162,8 @@ class Snake:
 			
 			#	Step
 			self.step_snake()
+
+			#input(f"ended at\n\n{self.game_vectors[game_i]}")
 			 
 			# 	Check if we are done 
 			if len(self.active_games) == 0:
@@ -218,7 +225,6 @@ class Snake:
 		
 		if mode == 'All':
 			with torch.no_grad():
-				with torch.autocast('cuda'):
 					model_out = self.target_model.forward(self.game_vectors.type(torch.float))
 					#Find the direction for each game with highest EV 
 					next_dirs = torch.argmax(model_out,dim=1).tolist()
@@ -229,10 +235,11 @@ class Snake:
 		#TODO BAD IMPLEMENTATION DO ALL ALIVE AT ONCE 
 		elif mode == 'Alive':
 			with torch.no_grad():
-				with torch.autocast('cuda'):
 					for snake_i in self.active_games:
-						model_out 	= self.target_model.forward(self.game_vectors.narrow(0,snake_i,1).type(torch.float))
+						#input(f"passing in shape {self.game_vectors[snake_i].flatten(1,2).shape}")
+						model_out 	= self.target_model.forward(self.game_vectors[snake_i].flatten(0,1).type(torch.float).unsqueeze(0))
 						next_dir 	= torch.argmax(model_out)
+						#print(f"outputs are\t{model_out}\n\nmax was {next_dir.item()}")
 						self.direction_vectors[snake_i] = next_dir.item()
 
 	#	STEP SNAKE 
@@ -251,11 +258,11 @@ class Snake:
 			
 
 			#	Find next location of snake 
-			chosen_action = self.direction_vectors[snake_i]
-			dx,dy = self.movements[chosen_action]
-			next_x = self.snake_tracker[snake_i][0][0]+dx
-			next_y = self.snake_tracker[snake_i][0][1]+dy
-			next_head = [next_x,next_y]
+			chosen_action 	= self.direction_vectors[snake_i]
+			dx,dy 			= self.movements[chosen_action]
+			next_x 			= self.snake_tracker[snake_i][0][0]+dx
+			next_y 			= self.snake_tracker[snake_i][0][1]+dy
+			next_head 		= [next_x,next_y]
 			
 			#Check if this snake lost 
 			if next_x < 0 or next_y < 0 or next_x == self.grid_w or next_y == self.grid_h or next_head in self.snake_tracker[snake_i] or self.game_collection[snake_i]['eaten_since'] > self.move_threshold or self.check_opposite(snake_i):
@@ -267,7 +274,7 @@ class Snake:
 				self.game_collection[snake_i]["lived_for"] = self.cur_step
 
 				#Add final experience
-				experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors.narrow(0,snake_i,1).clone(),'done':0}
+				experience = {"s":self.game_vectors[snake_i].flatten(0,1).clone(),"a":chosen_action,"r":self.reward['die'],'s`':self.game_vectors[snake_i].flatten(0,1).clone(),'done':0}
 				
 				#Dont penalize fully for threshold
 				if self.game_collection[snake_i]['eaten_since'] > self.move_threshold:
@@ -277,7 +284,7 @@ class Snake:
 				continue
 			
 			#	START EXP CREATION 	
-			experience = {"s":self.game_vectors.narrow(0,snake_i,1).clone(),"a":chosen_action,"r":None,'s`':None,'done':1}
+			experience = {"s":self.game_vectors[snake_i].flatten(0,1).clone(),"a":chosen_action,"r":None,'s`':None,'done':1}
 			
 			#	MOVE SNAKE  
 			#	Since the snake has survived, dim the previous snake and add over the new one  
@@ -311,9 +318,9 @@ class Snake:
 			self.snake_tracker[snake_i] 			= [next_head] + self.snake_tracker[snake_i][:-1]
 
 			#Update game_state repr 
-			self.game_vectors[snake_i]				= utilities.step_snake_img(self.game_vectors[snake_i],self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1],min_thresh=self.min_thresh)
+			self.game_vectors[snake_i]				= utilities.step_snake(self.game_vectors[snake_i],self.snake_tracker[snake_i],self.food_vectors[snake_i],arr_w=self.grid_w,arr_h=self.grid_h)
 			#	Add s` to the experience 
-			experience['s`'] 						= self.game_vectors.narrow(0,snake_i,1).clone()
+			experience['s`'] 						= self.game_vectors[snake_i].flatten(0,1).clone()
 			self.experiences.append(experience)
 			
 
@@ -366,20 +373,15 @@ class Snake:
 		return abs(dir_1-dir_2) == 1 and not dir_1+dir_2 == 3
 	
 	def display_img(self,snake_i):
-		img_repr 	= utilities.step_snake_img(self.game_vectors[snake_i],self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1],min_thresh=self.min_thresh)
+		img_repr 	= utilities.step_snake(self.game_vectors[snake_i],self.snake_tracker[snake_i],self.food_vectors[snake_i],(self.grid_w,self.grid_h),img_w=self.img_repr_size[0],img_h=self.img_repr_size[1],min_thresh=self.min_thresh)
 		plt.imshow(img_repr.numpy(),interpolation="nearest")
 		plt.show()
 
 if __name__ == "__main__":
-	w = 20
-	h = 20
+	w = 4
+	h = 4
 	from networks import *
 	dev 	= torch.device('cpu')
-	model 	= IMG_NET_SIMPLE(input_shape=(3,240,135),device=dev)
-	s 		= Snake(w,h,model,simul_games=1,device=dev)
-	s.saved_img = False 
-	s.play_out_games(display_img=True)
-	while s.saved_img == False:
-		print(f"retry")
-		s 		= Snake(w,h,model,simul_games=1,device=dev)
-		s.play_out_games(display_img=True)
+	model 	= networks.ConvNet()
+	s 		= Snake(w,h,model,simul_games=1,device=dev,history=2)
+	s.play_out_games(debugging=False,display_img=False,epsilon=0)

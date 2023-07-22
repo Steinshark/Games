@@ -89,6 +89,16 @@ def build_snake_img(snake_list,food_loc,board_size,img_w=1280,img_h=720):
     
     return frame_repr_tensor.to(DEV)
 
+def build_snake(snake_list,food_loc,arr_w,arr_h,history):
+    repr        = numpy.zeros(shape=(history,2,arr_w,arr_h))
+
+    for seg in snake_list:
+        x,y                                     = seg[0],seg[1] 
+        repr[0][0][y][x]                        = 1
+    
+    repr[0][1][food_loc[1],food_loc[0]]     = 1 
+    
+    return torch.from_numpy(repr) 
 
 def step_snake_img(game_vector:torch.Tensor,snake_list,food_loc,board_size,img_w=1280,img_h=720,dim_fact=.33,vect_init_type=torch.float32,min_thresh=.03,display_imgs=False):    
     global TIME_MULT,SNAKE_SQ,FOOD_SQ,TOP_L,BOT_R
@@ -121,7 +131,21 @@ def step_snake_img(game_vector:torch.Tensor,snake_list,food_loc,board_size,img_w
 
 
     return game_vector
-        
+
+def step_snake(game_vector,snake_list,food_loc,arr_w,arr_h):
+
+    #reduce 1 dimension of history 
+    game_vector     = game_vector[:-1][0]
+    new_vector     = torch.zeros(size=(2,arr_w,arr_h))
+
+    for seg in snake_list:
+        x,y                     = seg[0],seg[1]
+        new_vector[0,y,x]   = 1
+
+    new_vector[1,food_loc[1],food_loc[0]]       = 1  
+
+    return torch.stack([new_vector,game_vector])
+    
 def reduce_arr(arr,newlen):
 
     #Find GCF of len(arr) and len(newlen)
