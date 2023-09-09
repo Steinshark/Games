@@ -22,9 +22,9 @@ if "linux" in sys.platform:
     CHUNK_PATH              = r"/media/steinshark/stor_sm/music/chunked"
     DATASET_PATH            = r"/media/steinshark/stor_lg/music/dataset"
 else:
-    DOWNLOAD_PATH           = r"C:/data/music/downloads"
-    CHUNK_PATH              = r"C:/data/music/chunked"
-    DATASET_PATH            = r"C:/data/music/dataset"
+    DOWNLOAD_PATH           = r"//FILESERVER/S Drive/Data/music/downloads"
+    CHUNK_PATH              = r"//FILESERVER/S Drive/Data/music/chunked"
+    DATASET_PATH            = r"//FILESERVER/S Drive/Data/music/dataset"
 
 MINUTES                 = 0 
 
@@ -70,7 +70,8 @@ def download_link(url:str,output_path:str,index=None,total=None):
         print(f"video  done {url[:50]}")
         return
     #Grab video 
-    yt_handle       = YouTube(url)
+    yt_handle       = YouTube(url, use_oauth=True, allow_oauth_cache=True)
+    print(f"yt handle is {yt_handle}")
 
     #Telemetry
     if not index is None:
@@ -79,9 +80,14 @@ def download_link(url:str,output_path:str,index=None,total=None):
         tel_msg         = f"downloading {url[:50]}"
     print(tel_msg,end='',flush=True)
     try:
-        filepath        = yt_handle.streams.filter(only_audio=True).first().download(output_path=output_path)
+        #filepath        = yt_handle.streams.filter(progressive=True,only_audio=True).first().download(output_path=output_path)
+        streams         = yt_handle.streams
+        print(f"looking for streams")
 
-        os.rename(filepath,out_path_full)
+        print(f"found streams\n{streams}")
+        filepath    = ""
+
+        #os.rename(filepath,out_path_full)
         print(f"\t- success")
     except IncompleteRead:
         print(f"\t -failed")

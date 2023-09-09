@@ -10,7 +10,6 @@ if "win" in os.name:
 import random
 from matplotlib import pyplot as plt 
 import random 
-import pygame
 #from trainer import Trainer
 from trainer import Trainer as trainer 
 from trainerIMG import Trainer as trainerIMG
@@ -20,37 +19,9 @@ import copy
 from threading import Thread
 import numpy 
 import time 
-from torch.nn import Conv2d
 import utilities
 
-class GameBoard:
 
-    def __init__(self,x,y,grid_x,grid_y,title):
-        #Prep pygame
-        pygame.init()
-        self.WINDOW = pygame.display.set_mode((x,y))
-        self.WINDOW.set_caption(title)
-
-        self.red    = (255,0,0)
-        self.green  = (1,255,40)
-        #Some calculations
-        self.grid_w = int(x / grid_x) 
-        self.grid_h = int(y / grid_y)
-
-        
-
-    def update_display(self,snake,food):
-        self.WINDOW.fill((0,0,0))
-
-        #Draw Snake
-        for segment in snake:
-            x,y = segment
-            upper_l = (x*self.grid_w,y*self.grid_h)
-            pygame.draw.rect(self.WINDOW,self.green,pygame.Rect(upper_l[0],upper_l[1],self.grid_w,self.grid_h))
-        #Draw Food
-        pygame.draw.rect(self.WINDOW,self.green,pygame.Rect(food[0]*self.grid_w,food[1]*self.grid_h,self.grid_w,self.grid_h))
-
-        pygame.display.flip()
 
 class TrainerApp:
 
@@ -403,7 +374,7 @@ class TrainerApp:
             
             elif s_key in ['gpu','dspl']:
                 #print(f"value of gpu is {self.settings['gpu'].get()}")
-                pass
+                self.settings[s_key]    = bool(self.fields[s_key].get())
             elif s_key in ['kw','rew','ll']:
                 self.settings[s_key] = eval(self.fields[s_key].get())
             else:

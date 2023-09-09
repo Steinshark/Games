@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import torch 
 from torch.nn import ReLU,MaxPool2d,Conv2d,Linear,Softmax,Flatten, BatchNorm2d, LeakyReLU
 from tkinter import BooleanVar
-from networks import ConvolutionalNetwork
+import networks 
 #Plot a list of scores and lives from a run of snake trainer
 
 def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],graph_name="NoName",f_name="iterations"):
@@ -49,15 +49,10 @@ def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],grap
 #                  "CNN_4"    : {"type":"CNN","arch":[[3,32,3],[32,64,3],[128,64],[64,4]]}}
 
 ARCHITECTURES = {   
-                    "sm"        : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4)]},
-                    "sm5"       : {"type":"CNN","arch":[Conv2d(2,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4)]},
-                    "med"       : {"type":"CNN","arch":[Conv2d(2,16,3,1,1),LeakyReLU(.2),Conv2d(16,32,5,1,0),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4)                         ]},
-                    "med7"      : {"type":"CNN","arch":[Conv2d(2,64,3,1,1),LeakyReLU(.2),Conv2d(64,64,7,1,0),LeakyReLU(.2),Flatten(),Linear(512,128),LeakyReLU(.2),Linear(128,4),                         ]},
-                    "lg"        : {"type":"CNN","arch":[Conv2d(2,16,3,1,1),LeakyReLU(.2),Conv2d(16,64,5,1,0),LeakyReLU(.2),Conv2d(64,64,5,1,0),LeakyReLU(.2),Flatten(),Linear(1,512),LeakyReLU(.2),Linear(512,64),LeakyReLU(.2) ,Linear(64,4)                       ]},
-                    "chatGPT"   : {"type":"CNN","arch":[Conv2d(2,32,3,1,2),BatchNorm2d(32) ,LeakyReLU(.2),MaxPool2d(2, 2),Conv2d(32,64,3,1,1),BatchNorm2d(64),LeakyReLU(.2),MaxPool2d(2,2),Conv2d(64, 128, 3, 1, 1),BatchNorm2d(128)   ,LeakyReLU(.2)     ,MaxPool2d(2, 2)    ,Flatten()  ,Linear(2048, 128)  ,LeakyReLU(.2) ,Linear(128, 4) ]},
-                    "new"       : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),LeakyReLU(.2),Conv2d(32,64,5,1,1),LeakyReLU(.2),Conv2d(64,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(16,4)]},
-                    "newsm"     : {"type":"CNN","arch":[Conv2d(2,32,3,1,1),LeakyReLU(.2),Conv2d(32,64,5,1,1),LeakyReLU(.2),Conv2d(64,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Conv2d(32,32,5,1,1),LeakyReLU(.2),Flatten(),Linear(8,4)]}
 
+                    "sm"        : networks.ConvNetSm,
+                    "med"       : networks.ConvNet,
+                    "Lg"        : networks.ConvNet20
 }#,Softmax(dim=0)]}}
 
 LOSSES      = { "Huber"     : torch.nn.HuberLoss,
@@ -85,18 +80,18 @@ DEFAULTS    = { "gameX"     : 10,
                 "ss"        : 2048,
                 "bs"        : 32,
                 "lr"        : .0001,
-                "hs"        : 2,
+                "hs"        : 3,
                 "kw"        : "{'weight_decay':1e-5}",
-                "ll"        : "[(i,.025*.5*.95**(j+24)) for j,i in enumerate([-1]+[128*k for k in range(100)] )]",
+                "ll"        : "[(i,.025*.5*.965**(j+24)) for j,i in enumerate([-1]+[256*k for k in range(100)] )]",
                 "ep"        : 1,
-                "mt"        : .15,
-                "mx"        : 100,
+                "mt"        : .05,
+                "mx"        : 300,
                 "sf"        : 1,
                 "arch"      : "",
                 "lo"        : "",
                 "op"        : "",
                 "ac"        : "",
-                "tr"        : 4,
+                "tr"        : 10,
                 "drop"      : .1,
                 "gam"       : .75,
                 "gpu"       : False,

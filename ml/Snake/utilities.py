@@ -98,7 +98,7 @@ def build_snake(snake_list,food_loc,arr_w,arr_h,history):
     
     repr[0][1][food_loc[1],food_loc[0]]     = 1 
     
-    return torch.from_numpy(repr) 
+    return torch.from_numpy(repr).to(DEV).float()
 
 def step_snake_img(game_vector:torch.Tensor,snake_list,food_loc,board_size,img_w=1280,img_h=720,dim_fact=.33,vect_init_type=torch.float32,min_thresh=.03,display_imgs=False):    
     global TIME_MULT,SNAKE_SQ,FOOD_SQ,TOP_L,BOT_R
@@ -133,18 +133,21 @@ def step_snake_img(game_vector:torch.Tensor,snake_list,food_loc,board_size,img_w
     return game_vector
 
 def step_snake(game_vector,snake_list,food_loc,arr_w,arr_h):
-
+    #input(f"og vect: {game_vector.shape}")
     #reduce 1 dimension of history 
-    game_vector     = game_vector[:-1][0]
-    new_vector     = torch.zeros(size=(2,arr_w,arr_h))
+    game_vector     = game_vector[:-1,:,:,:]
+    #print(f"game vect slice is {game_vector.shape}")
+    new_vector     = numpy.zeros(shape=(1,2,arr_w,arr_h))
 
     for seg in snake_list:
         x,y                     = seg[0],seg[1]
-        new_vector[0,y,x]   = 1
+        new_vector[0,0,y,x]   = 1
 
-    new_vector[1,food_loc[1],food_loc[0]]       = 1  
+    new_vector[0,1,food_loc[1],food_loc[0]]       = 1  
 
-    return torch.stack([new_vector,game_vector])
+    final_snake     = torch.cat([torch.from_numpy(new_vector).to(DEV),game_vector])
+    #input(f"snake dim: {final_snake.shape}")
+    return final_snake
     
 def reduce_arr(arr,newlen):
 

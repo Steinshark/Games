@@ -28,8 +28,34 @@ from steinpy.ml.rl import Chess, Tree,Node
 #Computation related
 import numpy
 #print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
+from torch import nn 
+from torch.nn import functional as F
+sys.path.append(f"C:/gitrepos/steinpy/ml")
+import ai 
+from ai import SelfTeachingChessAI
+class ChessNeuralNetwork(nn.Module):
+    def __init__(self):
+        super(ChessNeuralNetwork, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=6, out_channels=64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(128 * 8 * 8, 512)
+        
+        # Move probabilities head
+        self.move_probs = nn.Linear(512, 1968)  # Adjust the output dimension
+        
+        # Value head
+        self.value = nn.Linear(512, 1)
 
-
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)  # Flatten the feature maps
+        x = F.relu(self.fc1(x))
+        
+        move_probs = self.move_probs(x)
+        value = self.value(x)
+        
+        return F.softmax(move_probs, dim=1), torch.tanh(value)
 #Class responsible for playing the chess game and interfacing with TF 
 class ChessGame:
 	def __init__(self):
@@ -173,6 +199,7 @@ class ChessGame:
 class QLearning:
 
 	def __init__(self):
+		self.chesser 	= SelfTeachingChessAI()
 		self.pieces = {
 			"Bpawn":0,
 			"Brook":1,
@@ -225,14 +252,11 @@ class QLearning:
 
 	def build_model(self,gen=0):
 
-		if os.path.exists(f"C:/data/chess/models/gen{gen}"):
-			self.model       = ChessNetCompat(n_ch=13)
-			self.model.load_state_dict(torch.load(f"C:/data/chess/models/gen{gen}"))
-			self.model      = torch.jit.script(self.model,[torch.randn(1,13,8,8)])
-			return 
-		else:
-			print(f"no model found with gen {gen}")
-			self.model       = ChessNetCompat(n_ch=13)
+		self.model       = ChessNeuralNetwork().to(torch.device('cuda'))
+		self.model.load_state_dict(torch.load(f"C:/gitrepos/nn_1_dict"))
+		self.model      = torch.jit.script(self.model,[torch.randn(1,6,8,8)])
+		return 
+
 
 	def run_as_ui(self):
 		window = tk.Tk()
@@ -325,7 +349,6 @@ class QLearning:
 		return extmath.softmax(x)[0]
 
 	def play_move(self):
-		softmax             = torch.nn.Softmax(dim=0)
 		move_indices            = list(range(1968))
 		#My move
 		try:
@@ -347,22 +370,26 @@ class QLearning:
 
 
 		#Engine move 
-		tree 			= Tree(self.play_board,self.model,None,draw_thresh=250)
 
 		#Try using this, and predict also
-		t0 = time.time()
-		local_policy 	= tree.get_policy(search_iters=2000,abbrev=False)
-		print(f"built policy in {(time.time() - t0):.2f}s\n{[ (Chess.chess_moves[k],v.num_visited) for k,v in tree.root.children.items()]}")
-		local_softmax 	= QLearning.softmax(numpy.asarray(list(local_policy.values())))
-		for key,prob in zip(local_policy.keys(),local_softmax):
-			local_policy[key] = prob
-		pi              = numpy.zeros(1968)
-		for move_i,prob in local_policy.items():
-			pi[move_i]    = prob 
+		self.chesser.board 	= self.play_board
+		board 			= self.chesser.encode_board()
+		moves,v 		= self.model(board)
+		print(f"engine thinks position is {v}")
+		moves = moves[0]
+		
+		legal_moves 			= [self.chesser.chess_moves.index(m.uci()) for m in list(self.play_board.generate_legal_moves())]	 
+
+		_,best_ind 		= torch.topk(moves,1968)
+		best_ind 		= list(best_ind.detach().cpu().numpy())
+
+		best_overall 	= 0 
+		while not best_ind[best_overall] in legal_moves:
+			best_overall += 1
+		
 		
 		#sample move from policy 
-		next_move_i             = random.choices(move_indices,weights=pi,k=1)[0]
-		next_move               = Chess.index_to_move[next_move_i]
+		next_move               = Chess.index_to_move[best_ind[best_overall]]
 		self.play_board.push(next_move)
 
 		if not self.play_board.outcome() is None:

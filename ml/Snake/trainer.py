@@ -63,6 +63,7 @@ class Trainer:
 		self.loss_fn = loss_fn
 		self.optimizer_fn 		= optimizer_fn
 		self.activation 		= activation
+		self.in_ch 				= history * 2 
 
 		#Set runtime vars 
 		self.cancelled 			= False
@@ -90,17 +91,24 @@ class Trainer:
 		self.e_0 				= self.epsilon
 		self.kwargs				= kwargs
 		#Enable cuda acceleration if specified 
-		self.device 			= torch.device('cuda') if gpu_acceleration else torch.device('cpu')
+		self.device 			= torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
 
 
 		#Generate models for the learner agent 
-		self.learning_model 	= networks.ConvNet(lr=.0001,act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn)
-		self.target_model		= networks.ConvNet(lr=.0001,act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn)
+		# if self.w < 15:
+		# 	self.model_fn 			= networks.ConvNet 
+		# else:
+		# 	self.model_fn 			= networks.ConvNet20
+		self.model_fn 			= instance.settings["arch"]
 
+		self.learning_model 	= self.model_fn(in_ch=self.in_ch,lr=self.base_threshs[0][1],act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn,w=self.w,h=self.h)
+		self.target_model		= self.model_fn(in_ch=self.in_ch,lr=self.base_threshs[0][1],act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn,w=self.w,h=self.h)
+	
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
+		self.output.insert(tk.END,f"\tTraing with {self.device}\n")
 
 
 
@@ -268,7 +276,7 @@ class Trainer:
 		#Telemetry 
 		if verbose:
 			print(f"TRAINING:")
-			print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'lr'.ljust(12)}: {self.learning_model.optimizer.param_groups[0]['lr']:.8f}\n")
+			print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'lr'.ljust(12)}: {self.learning_model.optimizer.param_groups[0]['lr']:.8f}\n")
 
 		for epoch_i in range(epochs):
 			if self.gui and self.parent_instance.cancel_var:
@@ -360,7 +368,7 @@ class Trainer:
 				os.mkdir(self.PATH)
 			torch.save(self.learning_model.state_dict(),os.path.join(self.PATH,f"{self.fname}_lm_state_dict"))
 			#Load the learning model as the target model
-			self.target_model	= networks.ConvNet(lr=.001,act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn)
+			self.target_model	= self.model_fn(in_ch=self.in_ch,lr=self.base_threshs[0][1],act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn,w=self.w,h=self.h)
 			self.target_model.load_state_dict(torch.load(os.path.join(self.PATH,f"{self.fname}_lm_state_dict")))
 			self.target_model.to(self.device)
 
@@ -369,6 +377,7 @@ class Trainer:
 				self.target_model.eval()
 				self.target_model 	= torch.jit.trace(self.target_model,torch.randn(1,self.history*2,self.h,self.w))
 				self.target_model   = torch.jit.freeze(self.target_model)
+
 
 	def load_prev_models(self):
 		

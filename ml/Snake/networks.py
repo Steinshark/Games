@@ -148,41 +148,165 @@ class ConvolutionalNetwork(nn.Module):
 			#x = torch.reshape(x,self.input_shape)
 		return self.model(x)
 
-class ConvNet(nn.Module):
-	def __init__(self,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU):
-		super(ConvNet,self).__init__()
+class ConvNetSm(nn.Module):
+	def __init__(self,in_ch=4,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,kernel_size=5,w=0,h=0):
+		super(ConvNetSm,self).__init__()
 
+		flattened_size 		= (w-4) * (h-4) * 64 
+		if flattened_size > 1024:
+			lin_n 				= 1024 
+			lin_n2 				= 512
+		elif flattened_size > 256:
+			lin_n 				= 256 
+			lin_n2 				= 128
+		else:
+			lin_n 				= 128 
+			lin_n2 				= 53
 		self.model 	= torch.nn.Sequential(
-			torch.nn.Conv2d(4,16,5,1,2),
+			torch.nn.Conv2d(in_ch,16,kernel_size,1,2),
 			act_fn(),
 
-			torch.nn.Conv2d(16,32,5,1,2),
+			torch.nn.Conv2d(16,32,kernel_size,1,2),
 			act_fn(),
 
-			torch.nn.Conv2d(32,64,5,1,2),
+			torch.nn.Conv2d(32,64,kernel_size,1,2),
 			act_fn(),
 
-			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.Conv2d(64,64,kernel_size,1,1),
 			act_fn(),
 
-			torch.nn.Conv2d(64,64,5,1,1),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,5,1,1),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.Conv2d(64,64,kernel_size,1,1),
 			act_fn(),
 
 			torch.nn.Flatten(),
 
-			torch.nn.Linear(256,128),
+			torch.nn.Linear(flattened_size,lin_n),
 			act_fn(),
 
-			torch.nn.Linear(128,64),
+			torch.nn.Linear(lin_n,lin_n2),
 			act_fn(),
 
-			torch.nn.Linear(64,4)
+			torch.nn.Linear(lin_n2,4)
+		)
+
+		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
+		self.loss 		= loss_fn()
+
+	def forward(self,x):
+		y 		= self.model(x)
+		return y
+
+class ConvNet(nn.Module):
+	def __init__(self,in_ch=4,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,kernel_size=5,w=0,h=0):
+		super(ConvNet,self).__init__()
+		flattened_size 		= (w-8) * (h-8) * 64 
+		if flattened_size > 1024:
+			lin_n 				= 1024 
+			lin_n2 				= 512
+		elif flattened_size > 256:
+			lin_n 				= 256 
+			lin_n2 				= 128
+		else:
+			lin_n 				= 128 
+			lin_n2 				= 53
+		self.model 	= torch.nn.Sequential(
+			torch.nn.Conv2d(in_ch,16,kernel_size,1,2),
+			act_fn(),
+
+			torch.nn.Conv2d(16,32,kernel_size,1,2),
+			act_fn(),
+
+			torch.nn.Conv2d(32,64,kernel_size,1,2),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,kernel_size,1,1),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,kernel_size,1,1),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,kernel_size,1,1),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,kernel_size,1,1),
+			act_fn(),
+
+			torch.nn.Flatten(),
+
+			torch.nn.Linear(flattened_size,lin_n),
+			act_fn(),
+
+			torch.nn.Linear(lin_n,lin_n2),
+			act_fn(),
+
+			torch.nn.Linear(lin_n2,4)
+		)
+
+		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
+		self.loss 		= loss_fn()
+
+	def forward(self,x):
+		y 		= self.model(x)
+		return y
+
+class ConvNet20(nn.Module):
+	def __init__(self,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,in_ch=4,w=0,h=0):
+		super(ConvNet20,self).__init__()
+
+		self.model 	= torch.nn.Sequential(
+			torch.nn.Conv2d(in_ch,16,5,1,2),
+			torch.nn.BatchNorm2d(16),
+			act_fn(),
+
+			torch.nn.Conv2d(16,32,5,1,2),
+			torch.nn.BatchNorm2d(32),
+			act_fn(),
+
+			torch.nn.Conv2d(32,32,5,1,2),
+			torch.nn.BatchNorm2d(32),
+			act_fn(),
+
+			torch.nn.Conv2d(32,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.BatchNorm2d(64),
+			act_fn(),
+
+			torch.nn.Flatten(),
+
+			torch.nn.Linear(1024,512),
+			act_fn(),
+			
+			torch.nn.Linear(512,128),
+			act_fn(),
+
+			torch.nn.Linear(128,4)
 		)
 
 		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
