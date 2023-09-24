@@ -5,30 +5,70 @@ import torch
 import random 
 from  torch.utils.data import Dataset,DataLoader
 import os 
+from torch.nn.functional import interpolate 
+from torchvision import transforms
+save_loc  	= r"F:/images/converted_tensors/"
+MULT    = 2/255
 
-save_loc  	= r"//FILESERVER/S Drive/Data/images/all/"
-def online_grab():
-    dataset     = open("data0.tsv","r").readlines()
-    save_loc  	= r"//FILESERVER/S Drive/Data/images/all/"
+
+def crop_to_ar(img:torch.Tensor,ar=1):
+
+    
+    #Check img dims compatable 
+    if not len(img.shape) == 3:
+        raise ValueError(f"bad shape {img.shape} must be 2d img")
+    
+    img_x   = img.shape[2]
+    img_y   = img.shape[1]
+
+    #Fix AR
+    if not (img_x / img_y == 1.5):
+        ar          = img_x / img_y
+        removed_x   = 'l'
+        removed_y   = 't'
+        while not (ar == 1.5):
+            
+            #Remove a side 
+            if ar > 1.5:
+                if removed_x == 'l':
+                    img     = img[:,:,1:]
+                    removed_x  = 'r'
+                else:
+                    img     = img[:,:,:-1]
+                    removed_x  = 'l'
+            elif ar < 1.5:
+                if removed_y == 't':
+                    img     = img[:,:-1,:]
+                    removed_y   = 'b'
+                else:
+                    img     = img[:,1:,:]
+                    removed_y   = 't'
+            img_x   = img.shape[2]
+            img_y   = img.shape[1]
+            ar          = img_x / img_y 
+            #print(f"ar={ar}\t{img.shape}")
+    img     = img.unsqueeze_(dim=0).type(torch.float)
+    img     *= MULT
+    img     -= 1  
+    img     = interpolate(img,size=(512,768))[0]
+    return img
+
+
+
+def online_grab(source_file):
+    dataset     = open(source_file,"r").readlines()
     saved               = 1
     t_b                 = 0 
     t_saved_b           = 0
-    training_data       = []
-
-
-    false_negatives     = 0
-    correct_negatives   = 0 
-    totals              = 0  
-
-    effectiveness       = 0
-    danger              = 1
+   
     already             = set(save_loc + l for l in os.listdir(save_loc))
+
+    xfrms               = transforms.Compose([transforms.PILToTensor(),transforms.Lambda(lambd=crop_to_ar),transforms.Normalize(mean=0,std=1.4)])
 
     for i,line in enumerate(dataset[1:]):
 
         url         = line.split("\t")[0]
-        img_format  = url.split(".")[-1] 
-        img_path    = url.split("/")[-1]
+        img_path    = url.split("/")[-1].split(".")[0] + ".pytensor"
         bytes       = int(line.split("\t")[1])
         t_b         += bytes    
         img_name    = save_loc+img_path
@@ -43,16 +83,16 @@ def online_grab():
         except urllib.error.HTTPError:
             continue
 
-        was_saved   = False 
-        if abs((img.width / img.height)-1.5) < .2 and img.width > 700:
-            #print(f"saving {img_name}: {img.width}x{img.height}")
-            img.save(img_name)
+        if abs((img.width / img.height)-1.5) < .4 and img.width > 700:
+            tensor  = xfrms(img)
+            #print(f"saving {img_name}: {tensor.shape}")
+            torch.save(tensor,img_name)
+            #img.save(img_name)
             saved += 1 
             t_saved_b += bytes
-            was_saved   = True 
 
 
-        training_data.append((bytes,was_saved))
+        #training_data.append((bytes,was_saved))
 
 
         if (i % 1000 == 0):
@@ -60,19 +100,11 @@ def online_grab():
 
 
 def local_grab():
-    save_loc  	= r"//FILESERVER/S Drive/Data/images/all/"
     saved               = 1
     t_b                 = 0 
     t_saved_b           = 0
     training_data       = []
 
-
-    false_negatives     = 0
-    correct_negatives   = 0 
-    totals              = 0  
-
-    effectiveness       = 0
-    danger              = 1
     already             = set(save_loc + l for l in os.listdir(save_loc))
 
     for i,img_path in enumerate(os.listdir("C:/gitrepos/train/train2017")):
@@ -104,5 +136,5 @@ def local_grab():
             print(f"\tchecked {i} imgs, saved {saved}\tavg bytes: {t_b/i:.1f} avg saved bytes: {t_saved_b/saved:.1f}")
         
 
-
-online_grab()
+for file in ["F:/source/data0.tsv","F:/source/data1.tsv"]:
+    online_grab(file)

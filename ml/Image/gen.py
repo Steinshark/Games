@@ -14,18 +14,32 @@ import math
 MULT    = 2/255
 #a comment 
 
+def convert_to_0_1(input_tensor:torch.Tensor)->torch.Tensor:
+
+    tensor_range    = torch.max(input_tensor) - torch.min(input_tensor)
+    returner        = (input_tensor + abs(torch.min(input_tensor))) / tensor_range 
+    #print(f"range is ({torch.min(returner)},{torch.max(returner)})")
+    return returner
 
 class preload_ds(Dataset):
 
-    def __init__(self,fname_l):
-        self.data    = fname_l
+    def __init__(self,fname_l,processor):
+        self.data       = fname_l
+        self.processor  = processor
 
     #Return tensor, fname
     def __getitem__(self,i):
+        tensor  = self.processor(torch.load(self.data[i]))
+
+        if not tensor.shape == (3,512,512+256):
+            return torch.randn(size=(3,512,512+256),dtype=torch.float)
         try:
             return torch.load(self.data[i])
         except RuntimeError as e:
-            print(e)
+            try:
+                return torch.load(self.data[i])
+            except RuntimeError as e:
+                return torch.randn(size=(3,512,512+256),dtype=torch.float)
     def __len__(self):
         return len(self.data)
 
@@ -72,44 +86,56 @@ def crop_to_ar(img:torch.Tensor,ar=1):
     img     = interpolate(img,size=(500,750))[0]
     return img
 
-def load_dataset(bs=8,temp_limit=2000):
-    tensor_lib     = r"//FILESERVER/S Drive/Data/converted_tensor/"
-    local_lib      = "C:/data/images/converted_tensor/" 
-    #xfrms       = transforms.Compose([transforms.PILToTensor(),transforms.Lambda(lambd=crop_to_ar),transforms.Normalize(mean=0,std=1.4)]) 
+def load_dataset(bs=8,temp_limit=2000,tensor_lib="F:/images/converted_tensors"):
     tensors         = [] 
 
     #Build tensors locally or from network
     print(f"generating dataset")
-    files   = set(os.listdir(local_lib))
-    i = 0 
+    #files   = set(os.listdir(local_lib))
+    i       = 0 
     saved   = 0 
     for file in os.listdir(tensor_lib):
+        tensor  = torch.load(f"{tensor_lib}{file}")
 
-        #Check if not local 
-        if file not in files:
-            tensor  = torch.load(f"{tensor_lib}{file}")
-            torch.save(tensor,f"{local_lib}{file}")
-            saved += 1
-        
-        #Load locally if found
-        else:
-            #tensor  = torch.load(f"{local_lib}{file}")
-            pass
         #tensors.append(tensor)
         i += 1 
-        if i % 200 == 0:
+        if i % 1000 == 0:
             print(f"\tloaded {i} - saved {saved}")
         if i >= temp_limit:
             break
+    
     #Generate dataset
     dataset     = preload_ds(tensors)
     dataloader  = DataLoader(dataset,batch_size=bs)
     return dataloader
 
-def load_locals(bs=8):
-    dataset     = preload_ds(["C:/data/images/converted_tensor/"+f for f in os.listdir("C:/data/images/converted_tensor/")])
-    #dataset     = torchvision.datasets.ImageFolder("E:/data/images",transforms.Compose([]))
+def load_locals(bs=8,processor=lambda x: x):
+    dataset     = preload_ds(["F:/images/converted_tensors/"+f for f in os.listdir("F:/images/converted_tensors/")],processor=processor)
     return DataLoader(dataset,batch_size=bs,shuffle=True)
+
+def convert_locals(bs=8):
+    xfrms       = transforms.Compose([transforms.PILToTensor(),transforms.Lambda(lambd=crop_to_ar),transforms.Normalize(mean=0,std=1.4)]) 
+    root        = r"//FILESERVER/S Drive/Data/images/all/"
+    save        = "C:/data/images/converted_tensor/"
+    names       = set(os.listdir(save))
+
+    i       = 0 
+    saved   = 0
+    for img in os.listdir(root):
+        img_dir     = root+img
+        
+        img_name    = img.split('.')[0]
+        save_dir    = save+img_name
+
+        if not img_name in names:
+            tensor      = xfrms(Image.open(img_dir)) 
+            torch.save(tensor,save_dir)
+            saved += 1 
+        
+        i += 1 
+
+        if i % 200 == 0:
+            print(f"i={i}\nsaved {saved}")
 
 def fix():
     img_lib     = r"//FILESERVER/S Drive/Data/images/"
@@ -128,21 +154,27 @@ def fix():
     print(f"saved all tensors")
 
 
+
+
 #VARIABLES
-bs          = 8
-n_imgs      = 25 
-display_n   = 500
+bs              = 4
+update_batch    = 50
+n_imgs          = 25 
+display_n       = 50
 n_row       = int(math.sqrt(n_imgs))
 
 #MODELS 
 model       = torchvision.models.googlenet(weights=torchvision.models.GoogLeNet_Weights.IMAGENET1K_V1).to(DEV)
 model.eval()
-gen         = generator2().to(DEV)
-err_fn      = torch.nn.MSELoss()
-optimizer   = torch.optim.Adam(gen.parameters(),lr=.0002 ,betas=(.65,.99))
+gen         = generator_sm().to(DEV)
+#state_dict  = torch.load("C:/gitrepos/projects/ml/models/ep_9.model")
+#gen.load_state_dict(state_dict)
+#err_fn      = torch.nn.MSELoss()
+err_fn      = torch.nn.CrossEntropyLoss()
+optimizer   = torch.optim.Adam(gen.parameters(),lr=.0002,betas=(.5,.99))
 
 #DATA
-dataloader  = load_locals()
+dataloader  = load_locals(bs=bs,processor=convert_to_0_1)
 
 
 def fix_img(img:torch.Tensor):
@@ -150,7 +182,7 @@ def fix_img(img:torch.Tensor):
     img /= 2 
     return img  
 
-for ep in range(10):
+for ep in range(20):
     print(f"\n\nEpoch {ep}\tbegin training on {len(dataloader)*bs} images")
 
     prev_imgs   = []
@@ -159,11 +191,12 @@ for ep in range(10):
 
     for i,item in enumerate(dataloader):
         t0=time.time()
-        if img is None:
+        if item is None:
             continue
         img             = item.to(DEV).type(torch.float)
+
         #print(f"max: {torch.max(img)} min: {torch.min(img)}")
-        #input(f"img shape {img.shape}")
+        #print(f"img shape {img.shape}")
         optimizer.zero_grad()
         
         #Run through google filters
@@ -187,17 +220,23 @@ for ep in range(10):
         del generator_out
         del img
 
-        if i % 250 == 0:
+        if i % update_batch == 0:
             print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}")
 
         if i % display_n == 0 and i > 0:
+            root    = f"C:/gitrepos/projects/ml/image/tests/ep{ep}/"
+            if not os.path.exists(root):
+                os.mkdir(root)
+
             grid    = make_grid(prev_imgs[-25:],nrow=n_row)
             display:Image     = transforms.ToPILImage()(grid)
             #display.show()
-            display.save(f"tests/test{i}.jpg")
+            display.save(root+f"test{i}.jpg")
             prev_imgs = [] 
-    save_loc     = f"C:/gitrepos/projects/ml/image/models/ep_{ep}.model"
+
+    print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}")
+    save_loc     = f"C:/gitrepos/projects/ml/image/models/sm_ep_{ep}.model"
     torch.save(model.state_dict,save_loc)
     #Reload data
     del dataloader 
-    dataloader  = load_locals()
+    dataloader  = load_locals(bs=bs)
