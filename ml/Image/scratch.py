@@ -7,10 +7,14 @@ from  torch.utils.data import Dataset,DataLoader
 import os 
 from torch.nn.functional import interpolate 
 from torchvision import transforms
+
+
 save_loc  	= r"F:/images/converted_tensors/"
 MULT    = 2/255
 
 
+
+#This function is used to convert the tensor from 3*y*x tensor to 3*512*768 for use in our network training
 def crop_to_ar(img:torch.Tensor,ar=1):
 
     
@@ -54,7 +58,11 @@ def crop_to_ar(img:torch.Tensor,ar=1):
     return img
 
 
-
+#This function is used to create the dataset used for training. It loads "source_file" which is a file provided 
+#by Google with urls to images for download. There are 9 total, each containing 1 million URLS. 1 should suffice
+# Download here : https://storage.googleapis.com/cvdf-datasets/oid/open-images-dataset-train0.tsv 
+# Just pass the file path as "source_file" and it will download and pre-process the imgs
+# ***MAKE SURE TO SET "save_loc" (located at top of file) to your dataset path
 def online_grab(source_file):
     dataset     = open(source_file,"r").readlines()
     saved               = 1
@@ -136,5 +144,7 @@ def local_grab():
             print(f"\tchecked {i} imgs, saved {saved}\tavg bytes: {t_b/i:.1f} avg saved bytes: {t_saved_b/saved:.1f}")
         
 
+
+## EXAMPLE USAGE (i renamed the google source files to data0.tsv and data11.tsv)
 for file in ["F:/source/data0.tsv","F:/source/data1.tsv"]:
     online_grab(file)

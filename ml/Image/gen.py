@@ -109,8 +109,13 @@ def load_dataset(bs=8,temp_limit=2000,tensor_lib="F:/images/converted_tensors"):
     dataloader  = DataLoader(dataset,batch_size=bs)
     return dataloader
 
-def load_locals(bs=8,processor=lambda x: x):
-    dataset     = preload_ds(["F:/images/converted_tensors/"+f for f in os.listdir("F:/images/converted_tensors/")],processor=processor)
+
+#This method is used to load the dataset that was downloaded using the "scratch.py" program. see scratch.py for details 
+# To create and store the dataset
+# Pass the root of the image dataset you downloaded in scratch.py as the "local_dataset_path" arg and it will create a 
+# Dataset for you to use 
+def load_locals(bs=8,processor=lambda x: x,local_dataset_path="F:/images/converted_tensors/"):
+    dataset     = preload_ds([local_dataset_path+f for f in os.listdir(local_dataset_path)],processor=processor)
     return DataLoader(dataset,batch_size=bs,shuffle=True)
 
 def convert_locals(bs=8):
@@ -137,7 +142,23 @@ def convert_locals(bs=8):
         if i % 200 == 0:
             print(f"i={i}\nsaved {saved}")
 
-def fix():
+def fix_tanh():
+    img_lib     = r"//FILESERVER/S Drive/Data/images/"
+    sav_lib     = r"//FILESERVER/S Drive/Data/converted_tensor/"
+    xfrms       = transforms.Compose([transforms.PILToTensor(),transforms.Lambda(lambd=crop_to_ar),transforms.Normalize(mean=0,std=1.4)]) 
+    dataset     = torchvision.datasets.ImageFolder(img_lib,transform=xfrms)
+
+    i = 0 
+    for tensor,fname in zip(dataset,os.listdir(r"//FILESERVER/S Drive/Data/images/all")):
+        tensor = tensor[0]
+        for ind_tensor in tensor:
+            torch.save(tensor.type(torch.float16),f"{sav_lib}{fname.split('.')[0]}")
+        i += 1 
+        if i % 500 == 0:
+            print(f"saved {i}")
+    print(f"saved all tensors")
+
+def fix_sigmoid():
     img_lib     = r"//FILESERVER/S Drive/Data/images/"
     sav_lib     = r"//FILESERVER/S Drive/Data/converted_tensor/"
     xfrms       = transforms.Compose([transforms.PILToTensor(),transforms.Lambda(lambd=crop_to_ar),transforms.Normalize(mean=0,std=1.4)]) 
@@ -157,29 +178,31 @@ def fix():
 
 
 #VARIABLES
-bs              = 4
-update_batch    = 50
-n_imgs          = 25 
-display_n       = 50
-n_row       = int(math.sqrt(n_imgs))
+bs                  = 8
+update_batch        = 50
+n_imgs              = 25 
+display_n           = 50
+n_row               = int(math.sqrt(n_imgs))
 
 #MODELS 
-model       = torchvision.models.googlenet(weights=torchvision.models.GoogLeNet_Weights.IMAGENET1K_V1).to(DEV)
+model               = torchvision.models.googlenet(weights=torchvision.models.GoogLeNet_Weights.IMAGENET1K_V1).to(DEV)
 model.eval()
-gen         = generator_sm().to(DEV)
-#state_dict  = torch.load("C:/gitrepos/projects/ml/models/ep_9.model")
-#gen.load_state_dict(state_dict)
-#err_fn      = torch.nn.MSELoss()
-err_fn      = torch.nn.CrossEntropyLoss()
-optimizer   = torch.optim.Adam(gen.parameters(),lr=.0002,betas=(.5,.99))
+gen                 = generator_lg().to(DEV)
+err_fn              = torch.nn.MSELoss()
+optimizer           = torch.optim.Adam(gen.parameters(),lr=.0002,betas=(.5,.99))
 
 #DATA
-dataloader  = load_locals(bs=bs,processor=convert_to_0_1)
+dataloader          = load_locals(bs=bs,processor=convert_to_0_1)
 
+#STORAGE
+# - SET THESE VARIABLES TO STORE YOUR MODEL PROGRESS AND SAMPLE IMAGES
+model_save_root     = "C:/gitrepos/projects/ml/image/models/"
+img_save_root       = "C:/gitrepos/projects/ml/image/tests"
+def fix_img(img:torch.Tensor,mode="tanh"):
+    if mode == "tanh":
+        img += 1 
+        img /= 2 
 
-def fix_img(img:torch.Tensor):
-    img += 1 
-    img /= 2 
     return img  
 
 for ep in range(20):
@@ -207,7 +230,7 @@ for ep in range(20):
         generator_out   = gen.forward(model.pre_flatten)
         #input(f"out size is {generator_out.shape}")
         if i % int(display_n / n_imgs) == 0:
-            prev_imgs.append(fix_img(generator_out[0].to(torch.device('cpu'))))
+            prev_imgs.append(fix_img(generator_out[0].to(torch.device('cpu')),mode="tanh"))
 
         #Calc loss 
 
@@ -224,7 +247,7 @@ for ep in range(20):
             print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}")
 
         if i % display_n == 0 and i > 0:
-            root    = f"C:/gitrepos/projects/ml/image/tests/ep{ep}/"
+            root    = f"{img_save_root}/ep{ep}/"
             if not os.path.exists(root):
                 os.mkdir(root)
 
@@ -235,7 +258,7 @@ for ep in range(20):
             prev_imgs = [] 
 
     print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}")
-    save_loc     = f"C:/gitrepos/projects/ml/image/models/sm_ep_{ep}.model"
+    save_loc     = f"{model_save_root}sm_ep_{ep}.model"
     torch.save(model.state_dict,save_loc)
     #Reload data
     del dataloader 
