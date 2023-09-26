@@ -8,10 +8,8 @@ import time
 from models import * 
 from PIL import Image
 import os 
-DEV     = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"using device {DEV}")
 import math 
-MULT    = 2/255
+
 #a comment 
 
 def convert_to_0_1(input_tensor:torch.Tensor)->torch.Tensor:
@@ -29,17 +27,11 @@ class preload_ds(Dataset):
 
     #Return tensor, fname
     def __getitem__(self,i):
-        tensor  = self.processor(torch.load(self.data[i]))
-
-        if not tensor.shape == (3,512,512+256):
-            return torch.randn(size=(3,512,512+256),dtype=torch.float)
-        try:
-            return torch.load(self.data[i])
-        except RuntimeError as e:
-            try:
-                return torch.load(self.data[i])
-            except RuntimeError as e:
-                return torch.randn(size=(3,512,512+256),dtype=torch.float)
+        if not self.processor is None:
+            tensor  = self.processor(torch.load(self.data[i]))
+        else:
+            tensor  = torch.load(self.data[i])
+        return tensor
     def __len__(self):
         return len(self.data)
 
@@ -116,7 +108,7 @@ def load_dataset(bs=8,temp_limit=2000,tensor_lib="F:/images/converted_tensors"):
 # Dataset for you to use 
 def load_locals(bs=8,processor=lambda x: x,local_dataset_path="F:/images/converted_tensors/"):
     dataset     = preload_ds([local_dataset_path+f for f in os.listdir(local_dataset_path)],processor=processor)
-    return DataLoader(dataset,batch_size=bs,shuffle=True)
+    return DataLoader(dataset,batch_size=bs,shuffle=True,num_workers=3)
 
 def convert_locals(bs=8):
     xfrms       = transforms.Compose([transforms.PILToTensor(),transforms.Lambda(lambd=crop_to_ar),transforms.Normalize(mean=0,std=1.4)]) 
@@ -174,30 +166,18 @@ def fix_sigmoid():
             print(f"saved {i}")
     print(f"saved all tensors")
 
+def downsample(img:torch.Tensor,stage=0):
+    if stage == 0:
+        return interpolate(img,size=(32,48))
+    elif stage == 1:
+        return interpolate(img,size=(64,96))
+    elif stage == 2:
+        return interpolate(img,size=(128,192))
+    elif stage == 3:
+        return interpolate(img,size=(256,384))
+    elif stage >= 4:
+        return img
 
-
-
-#VARIABLES
-bs                  = 8
-update_batch        = 50
-n_imgs              = 25 
-display_n           = 50
-n_row               = int(math.sqrt(n_imgs))
-
-#MODELS 
-model               = torchvision.models.googlenet(weights=torchvision.models.GoogLeNet_Weights.IMAGENET1K_V1).to(DEV)
-model.eval()
-gen                 = generator_lg().to(DEV)
-err_fn              = torch.nn.MSELoss()
-optimizer           = torch.optim.Adam(gen.parameters(),lr=.0002,betas=(.5,.99))
-
-#DATA
-dataloader          = load_locals(bs=bs,processor=convert_to_0_1)
-
-#STORAGE
-# - SET THESE VARIABLES TO STORE YOUR MODEL PROGRESS AND SAMPLE IMAGES
-model_save_root     = "C:/gitrepos/projects/ml/image/models/"
-img_save_root       = "C:/gitrepos/projects/ml/image/tests"
 def fix_img(img:torch.Tensor,mode="tanh"):
     if mode == "tanh":
         img += 1 
@@ -205,61 +185,130 @@ def fix_img(img:torch.Tensor,mode="tanh"):
 
     return img  
 
-for ep in range(20):
-    print(f"\n\nEpoch {ep}\tbegin training on {len(dataloader)*bs} images")
+if __name__ == "__main__":
 
-    prev_imgs   = []
-    losses      = [] 
-    t_start     = time.time()
+    DEV                 = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"using device {DEV}")
+    MULT                = 2/255
+    CORRECTOR           = 0.7142857313156128
+    #VARIABLES
+    bs                  = 64
+    lr                  = .0005
+    update_batch        = 500
+    n_imgs              = 25
+    display_n           = 200
+    n_row               = int(math.sqrt(n_imgs))
 
-    for i,item in enumerate(dataloader):
-        t0=time.time()
-        if item is None:
-            continue
-        img             = item.to(DEV).type(torch.float)
+    #MODELS 
+    model               = torchvision.models.googlenet(weights=torchvision.models.GoogLeNet_Weights.IMAGENET1K_V1).to(DEV)
+    model.eval()
+    gen                 = generator_progressive(activation_fn=torch.nn.LeakyReLU).to(DEV)
+    #gen                 = auto_encoder(activation_fn=torch.nn.LeakyReLU).to(DEV)
+    err_fn              = torch.nn.MSELoss()
+    optimizer           = torch.optim.AdamW(gen.parameters(),lr=lr,betas=(.7,.99),weight_decay=lr/100)
 
-        #print(f"max: {torch.max(img)} min: {torch.min(img)}")
-        #print(f"img shape {img.shape}")
-        optimizer.zero_grad()
-        
-        #Run through google filters
-        with torch.no_grad():
-            model(img)
+    #DATA
+    dataloader          = load_locals(bs=bs,processor=None)
 
-        #Generate 
-        generator_out   = gen.forward(model.pre_flatten)
-        #input(f"out size is {generator_out.shape}")
-        if i % int(display_n / n_imgs) == 0:
-            prev_imgs.append(fix_img(generator_out[0].to(torch.device('cpu')),mode="tanh"))
+    #STORAGE
+    # - SET THESE VARIABLES TO STORE YOUR MODEL PROGRESS AND SAMPLE IMAGES
+    model_save_root     = "C:/gitrepos/projects/ml/image/models/"
+    img_save_root       = "C:/gitrepos/projects/ml/image/tests"
 
-        #Calc loss 
 
-        loss            = err_fn(generator_out,img)
-        loss.backward() 
-        losses.append(float(loss.mean().item()))
+    #TRAIN FOR LAYER 1
+    for ep in range(20):
+        ep          = 0
+        max_batch   = int(500*(ep+5)**2)
+        prev_imgs   = []
+        prev_reals  = [] 
+        losses      = [] 
+        t_start     = time.time()
+        print(f"\n\nEpoch {ep}\tbegin training on {len(dataloader)*bs}\timages")
+        for i,item in enumerate(dataloader):
+            
+            if i > max_batch:
+                break 
 
-        optimizer.step()
+            #TELEMETRY 
+            t0      = time.time() 
 
-        del generator_out
-        del img
+            #DATA CHECK 
+            if item is None:
+                continue
+            img             = item.to(DEV).type(torch.float)    
+            
+            #ZERO GRAD
+            optimizer.zero_grad()
+            
+            #CREATE LATENT VECTOR
+            with torch.no_grad():
+                model(img)
 
-        if i % update_batch == 0:
-            print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}")
 
-        if i % display_n == 0 and i > 0:
-            root    = f"{img_save_root}/ep{ep}/"
-            if not os.path.exists(root):
-                os.mkdir(root)
+            #DOWNSAMPLE 
+            img     = downsample(img,ep)
 
-            grid    = make_grid(prev_imgs[-25:],nrow=n_row)
-            display:Image     = transforms.ToPILImage()(grid)
-            #display.show()
-            display.save(root+f"test{i}.jpg")
-            prev_imgs = [] 
+            
+            #PREDICT 
+            generator_out   = gen.forward(model.pre_flatten,ep)
+            #generator_out   = gen.forward(img)
 
-    print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}")
-    save_loc     = f"{model_save_root}sm_ep_{ep}.model"
-    torch.save(model.state_dict,save_loc)
-    #Reload data
-    del dataloader 
-    dataloader  = load_locals(bs=bs)
+            #INFO
+            if i == 0:
+                print(f"\tINFO:")
+                print(f"\t\ttarget shape is\t{img.shape}")
+                print(f"\t\ttarget range is\t({torch.min(img)},{torch.max(img)})")
+                print(f"\t\tpred shape is\t{generator_out.shape}")
+                print(f"\t\tpred range is\t({torch.min(generator_out)},{torch.max(generator_out)})")
+                print(f"\t\ttraining bs is\t{bs}")
+                print(f"\t\tn_batches is\t{len(dataloader)}")
+                print(f"\t\tloss_fn is\t{str(err_fn)}")
+                print(f"\t\tmax batch is\t{max_batch}\n")
+
+            #INFO
+            if i % int(display_n / n_imgs) == 0:
+                prev_imgs.append(fix_img(generator_out[0].to(torch.device('cpu')),mode="tanh"))
+                prev_reals.append(fix_img(img[0].to(torch.device('cpu')),mode="tanh"))
+
+            #Calc loss 
+            loss            = err_fn(generator_out,img)
+            loss.backward() 
+            losses.append(float(loss.mean().item()))
+
+            optimizer.step()
+
+            del generator_out
+            del img
+
+            if i % display_n == 0 and i > 0:
+                root    = f"{img_save_root}/ep{ep}/"
+                if not os.path.exists(root):
+                    os.mkdir(root)
+
+                img_grid    = [] 
+                while prev_imgs and prev_reals:
+
+                    #Add 5 prev 
+                    img_grid    += prev_reals[:5] 
+                    img_grid    += prev_imgs[:5]
+
+                    prev_reals  = prev_reals[5:]
+                    prev_imgs   = prev_imgs[5:]
+
+                grid        = make_grid(img_grid,nrow=n_row)
+                display:Image     = transforms.ToPILImage()(grid)
+                #display.show()
+                display.save(root+f"test{i}.jpg")
+                img_grid = [] 
+
+            if i % update_batch == 0:
+                print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}")
+
+       #bs = max(4,int(bs/2))
+        print(f"\tbatch [{i}]\tloss={losses[-1]:.3f}\tavg loss={sum(losses)/len(losses):.3f}\tt={(time.time()-t0)/bs:.2f}s/img\tt tot={(time.time()-t_start):.2f}s\tn_imgs={int(bs*i)}\n")
+        save_loc     = f"{model_save_root}sm_ep_{ep}.model"
+        torch.save(model.state_dict,save_loc)
+        #Reload data
+        # del dataloader 
+        # dataloader          = load_locals(bs=bs)
