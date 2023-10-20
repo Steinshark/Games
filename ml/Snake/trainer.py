@@ -83,7 +83,7 @@ class Trainer:
 		self.game_tracker 		= game_tracker
 		self.gui 				= gui
 		self.base_threshs		= [(-1,.00003),(1024+256,.00001),(1024+512+256,3e-6),(2048,1e-6),(4096,5e-7),(4096+2048,2.5e-7),(8192,1e-7),(8192*2,1e-8)] if not lr_threshs else lr_threshs
-
+		self.errors 			= [0,0,0,0,0] 
 		#Set training vars 
 		self.gamma 				= gamma
 		self.history 			= history
@@ -105,6 +105,7 @@ class Trainer:
 
 		self.learning_model 	= self.model_fn(in_ch=self.in_ch,lr=self.base_threshs[0][1],act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn,w=self.w,h=self.h)
 		self.target_model		= self.model_fn(in_ch=self.in_ch,lr=self.base_threshs[0][1],act_fn=self.activation,optimizer=self.optimizer_fn,loss_fn=self.loss_fn,w=self.w,h=self.h)
+		print(f"Training with arch:\n{self.learning_model}")
 	
 		self.target_model.to(self.device)
 		self.learning_model.to(self.device)
@@ -116,18 +117,20 @@ class Trainer:
 		#REMOVE 
 		
 
-	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=1,transfer_models_every=2,verbose=False,rewards={"die":-3,"eat":5,"step":-.01},max_steps=100,random_pick=False,drop_rate=0):
+	def train_concurrent(self,iters=1000,train_every=1024,pool_size=32768,sample_size=128,batch_size=32,epochs=1,transfer_models_every=2,verbose=False,rewards={"die":-3,"eat":5,"step":-.01},max_steps=100,random_pick=True,drop_rate=0):
 		
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
 		#	upon overflow, simply replace the next window each time 
 
+		print(f"\tStart training with {random_pick}")
 		memory_pool 	= []
 		window_i 		= 0
 		threshs 		= copy.deepcopy(self.base_threshs)
 		stop_thresh  	= False 
 		#	Keep track of models progress throughout the training 
 		best_score 		= 0 
+		self.error 		= 0.0
 
 		#	Train 
 		i = 0 
@@ -139,14 +142,14 @@ class Trainer:
 			if not stop_thresh and i > threshs[0][0]:
 				new_lr 	= threshs[0][1]
 				self.learning_model.optimizer.param_groups[0]['lr']	= new_lr
-				self.learning_model.optimizer.param_groups[0]['weight_decay']	= new_lr/10
+				#self.learning_model.optimizer.param_groups[0]['weight_decay']	= new_lr/10
 				if not len(threshs) == 1:
 					threshs = threshs[1:] 
 				else:
 					stop_thresh	= True 
 				
 				if self.gui:
-					self.output.insert(tk.END,f"\tlr: {new_lr:.5f} - wd:{(new_lr/5):.6f}\n")
+					self.output.insert(tk.END,f"\tlr: {new_lr:.5f}\n")
 					
 
 			#	UPDATE EPSILON
@@ -200,6 +203,7 @@ class Trainer:
 			if self.gui:
 				self.parent_instance.var_step.set(f"{(sum(self.all_lived[-100:])/100):.2f}")
 				self.parent_instance.var_score.set(f"{(sum(self.all_scores[-100:])/100):.2f}")
+				self.parent_instance.var_error.set(f"{sum(self.errors)/len(self.errors):.2f}")
 			
 
 			
@@ -237,10 +241,9 @@ class Trainer:
 				bad_qual 	= f"{100*sum([int(t['r'] == rewards['die'] or t['r'] == rewards['eat']) for t in training_set]) / len(memory_pool):.2f}"
 
 				perc_str 	= f"{qual:.2f}%/{bad_qual}%".rjust(15)
-				
-				
-				if verbose:
-					print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if random_pick else 'on'}\t\t\t\t\t\t]\n")
+
+				if verbose:# or True:
+					print(f"[Quality\t{perc_str}  -  R_PICK: {'off' if not random_pick else 'on'}\t\t\t\t\t\t]\n")
 				self.train_on_experiences(training_set,epochs=epochs,batch_size=batch_size,early_stopping=False,verbose=verbose)
 
 				if self.gui and self.parent_instance.cancel_var:
@@ -333,7 +336,6 @@ class Trainer:
 				#Update init values 
 				for i,val in enumerate(best_predictions):
 					chosen_action						= action[i]
-					
 					final_target_values[i,chosen_action]= rewards[i] + (done[i] * self.gamma * val)
 					if done[i] != 1 and False:
 						print(f"\nfor init val:{initial_target_predictions[i].detach().numpy()} + a:{chosen_action} - > update to {rewards[i]:.3f} + {self.gamma:.3f}*{val:.3f}*[done:{done[i]:.3f}] = {rewards[i] + (done[i] * self.gamma * val):.3f}")
@@ -343,7 +345,7 @@ class Trainer:
 				#	Calculate Loss
 				t1 							= time.time()
 				batch_loss 					= self.learning_model.loss(initial_target_predictions,final_target_values)
-				total_loss 					+= batch_loss.item()
+				total_loss 					+= batch_loss.mean().item()
 
 				#Back Propogate
 				batch_loss.backward()
@@ -355,10 +357,13 @@ class Trainer:
 				print(f"]\ttime: {(time.time()-t0):.2f}s\tt_gpu:{(t_gpu):.2f}\tloss: {(total_loss/num_batches):.6f}")
 		if verbose:
 			print("\n\n")
+		self.error 		= total_loss/num_batches
+		self.errors 	= self.errors[1:] + [self.error]
 
 
 	def transfer_models(self,transfer=False,verbose=False,optimize=False):
 		if transfer:
+			self.output.insert(tk.END,f"\tTransferring Model\n")
 			if verbose:
 				print("\ntransferring models\n\n")
 			#Save the models

@@ -48,16 +48,18 @@ def plot_game(scores_list=[],steps_list=[],series_names="Empty",x_scales=[],grap
 #                  "CNN_3"    : {"type":"CNmedN","arch":[[3,8,11],[8,8,3],[6400,1024],[1024,4]]},
 #                  "CNN_4"    : {"type":"CNN","arch":[[3,32,3],[32,64,3],[128,64],[64,4]]}}
 
-ARCHITECTURES = {   
-
+ARCHITECTURES = {   "fcn_sm"    : networks.FCN,
+                    "fcn_md"    : networks.FCN2,
+                    "longnet"   : networks.FCN3,
+                    "long"      : networks.FullConvNet,
                     "sm"        : networks.ConvNetSm,
                     "med"       : networks.ConvNet,
                     "Lg"        : networks.ConvNet20
-}#,Softmax(dim=0)]}}
+}
 
-LOSSES      = { "Huber"     : torch.nn.HuberLoss,
-                "L1"        : torch.nn.L1Loss,
-                "MSE"       : torch.nn.MSELoss}
+LOSSES      = { "MSE"       : torch.nn.MSELoss,
+                "Huber"     : torch.nn.HuberLoss,
+                "L1"        : torch.nn.L1Loss}
 
 OPTIMIZERS  = { "Adam"      : torch.optim.Adam,
                 "AdamW"     : torch.optim.AdamW,
@@ -72,30 +74,29 @@ ACTIVATIONS = { "ReLU"      : torch.nn.ReLU,
                 "CELU"      : torch.nn.CELU,
                 "ELU"       : torch.nn.ELU}
 
-DEFAULTS    = { "gameX"     : 10,
-                "gameY"     : 10,
-                "iters"     : 1024*128,
-                "te"        : 32,
-                "ps"        : 1024*16,
-                "ss"        : 2048,
-                "bs"        : 32,
+DEFAULTS    = { "gameX"     : 14,
+                "gameY"     : 14,
+                "iters"     : 100*2000,
+                "te"        : 100,
+                "ps"        : 10000,
+                "ss"        : 1000,
+                "bs"        : 50,
                 "lr"        : .0001,
                 "hs"        : 3,
-                "kw"        : "{'weight_decay':1e-5}",
-                "ll"        : "[(i,.025*.5*.965**(j+24)) for j,i in enumerate([-1]+[256*k for k in range(100)] )]",
+                "kw"        : "{'weight_decay':0}",
+                "ll"        : "[(i,.025*.5*.965**(j+24)) for j,i in enumerate([-1]+[500*k for k in range(100)] )]",
                 "ep"        : 1,
                 "mt"        : .05,
-                "mx"        : 300,
-                "sf"        : 1,
+                "mx"        : 14*14,
                 "arch"      : "",
                 "lo"        : "",
                 "op"        : "",
                 "ac"        : "",
-                "tr"        : 10,
+                "tr"        : 5,
                 "drop"      : .1,
-                "gam"       : .75,
+                "gam"       : .9,
                 "gpu"       : False,
-                "rew"       : "{'die':-3,'eat':5,'step':-.01}",
+                "rew"       : "{'die':-10,'eat':12,'step':0}",
                 "rpick"     : .5
                 }
 
@@ -114,7 +115,6 @@ POTENTIAL   = { "gameX"     : 14,
                 "ep"        : 1,
                 "mt"        : .03,
                 "mx"        : 80,
-                "sf"        : 1,
                 "arch"      : "",
                 "lo"        : "",
                 "op"        : "",

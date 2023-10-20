@@ -149,10 +149,10 @@ class ConvolutionalNetwork(nn.Module):
 		return self.model(x)
 
 class ConvNetSm(nn.Module):
-	def __init__(self,in_ch=4,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,kernel_size=5,w=0,h=0):
+	def __init__(self,in_ch=4,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,kernel_size=3,w=0,h=0):
 		super(ConvNetSm,self).__init__()
 
-		flattened_size 		= (w-4) * (h-4) * 64 
+		flattened_size 		= w * h * 32 
 		if flattened_size > 1024:
 			lin_n 				= 1024 
 			lin_n2 				= 512
@@ -161,21 +161,16 @@ class ConvNetSm(nn.Module):
 			lin_n2 				= 128
 		else:
 			lin_n 				= 128 
-			lin_n2 				= 53
+			lin_n2 				= 64
+		
 		self.model 	= torch.nn.Sequential(
-			torch.nn.Conv2d(in_ch,16,kernel_size,1,2),
+			torch.nn.Conv2d(in_ch,8,kernel_size,1,1),
 			act_fn(),
 
-			torch.nn.Conv2d(16,32,kernel_size,1,2),
+			torch.nn.Conv2d(8,16,kernel_size,1,1),
 			act_fn(),
 
-			torch.nn.Conv2d(32,64,kernel_size,1,2),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,kernel_size,1,1),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,kernel_size,1,1),
+			torch.nn.Conv2d(16,32,kernel_size,1,1),
 			act_fn(),
 
 			torch.nn.Flatten(),
@@ -199,7 +194,7 @@ class ConvNetSm(nn.Module):
 class ConvNet(nn.Module):
 	def __init__(self,in_ch=4,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,kernel_size=5,w=0,h=0):
 		super(ConvNet,self).__init__()
-		flattened_size 		= (w-8) * (h-8) * 64 
+		flattened_size 		= (w-4) * (h-4) * 64 
 		if flattened_size > 1024:
 			lin_n 				= 1024 
 			lin_n2 				= 512
@@ -208,7 +203,7 @@ class ConvNet(nn.Module):
 			lin_n2 				= 128
 		else:
 			lin_n 				= 128 
-			lin_n2 				= 53
+			lin_n2 				= 64
 		self.model 	= torch.nn.Sequential(
 			torch.nn.Conv2d(in_ch,16,kernel_size,1,2),
 			act_fn(),
@@ -217,12 +212,6 @@ class ConvNet(nn.Module):
 			act_fn(),
 
 			torch.nn.Conv2d(32,64,kernel_size,1,2),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,kernel_size,1,1),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,kernel_size,1,1),
 			act_fn(),
 
 			torch.nn.Conv2d(64,64,kernel_size,1,1),
@@ -241,7 +230,6 @@ class ConvNet(nn.Module):
 
 			torch.nn.Linear(lin_n2,4)
 		)
-
 		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
 		self.loss 		= loss_fn()
 
@@ -254,59 +242,36 @@ class ConvNet20(nn.Module):
 		super(ConvNet20,self).__init__()
 
 		self.model 	= torch.nn.Sequential(
-			torch.nn.Conv2d(in_ch,16,5,1,2),
+			torch.nn.Conv2d(in_ch,16,3,1,1),
 			torch.nn.BatchNorm2d(16),
 			act_fn(),
 
-			torch.nn.Conv2d(16,32,5,1,2),
+			torch.nn.Conv2d(16,32,3,1,0),			#w-2 
 			torch.nn.BatchNorm2d(32),
 			act_fn(),
 
-			torch.nn.Conv2d(32,32,5,1,2),
-			torch.nn.BatchNorm2d(32),
-			act_fn(),
-
-			torch.nn.Conv2d(32,64,5,1,1),
+			torch.nn.Conv2d(32,64,3,1,0),			#w-4
 			torch.nn.BatchNorm2d(64),
 			act_fn(),
 
-			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.Conv2d(64,64,3,1,0),			#w-6
 			torch.nn.BatchNorm2d(64),
 			act_fn(),
 
-			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.Conv2d(64,64,3,1,0),			#w-8
 			torch.nn.BatchNorm2d(64),
 			act_fn(),
 
-			torch.nn.Conv2d(64,64,5,1,1),
-			torch.nn.BatchNorm2d(64),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,5,1,1),
-			torch.nn.BatchNorm2d(64),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,5,1,1),
-			torch.nn.BatchNorm2d(64),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,5,1,1),
-			torch.nn.BatchNorm2d(64),
-			act_fn(),
-
-			torch.nn.Conv2d(64,64,5,1,1),
+			torch.nn.Conv2d(64,64,3,1,0),			#w-10
 			torch.nn.BatchNorm2d(64),
 			act_fn(),
 
 			torch.nn.Flatten(),
 
-			torch.nn.Linear(1024,512),
+			torch.nn.Linear((w-10)*(h-10)*64,64),
 			act_fn(),
 			
-			torch.nn.Linear(512,128),
-			act_fn(),
-
-			torch.nn.Linear(128,4)
+			torch.nn.Linear(64,4),
 		)
 
 		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
@@ -316,6 +281,146 @@ class ConvNet20(nn.Module):
 		y 		= self.model(x)
 		return y
 
+
+class FullConvNet(nn.Module):
+	def __init__(self,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,in_ch=4,w=0,h=0):
+		super(FullConvNet,self).__init__()
+		final_layer 	= int(w/8) * int(h/8) * 128
+
+		self.model 	= torch.nn.Sequential(
+
+			torch.nn.Conv2d(in_ch,16,3,1,1),	# w * h 
+			torch.nn.MaxPool2d(2),
+			act_fn(),
+
+			torch.nn.Conv2d(16,32,3,1,1),		# (w/2) * (h/2)
+			torch.nn.MaxPool2d(2),
+			act_fn(),
+
+			torch.nn.Conv2d(32,64,3,1,1),		# (w/4) * (h/4)
+			torch.nn.MaxPool2d(2),
+			act_fn(),
+
+			torch.nn.Conv2d(64,128,3,1,1),		# (w/8) * (h/8)
+			act_fn(),
+
+			torch.nn.Flatten(),
+
+			torch.nn.Linear(final_layer,4)
+		)
+
+		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
+		self.loss 		= loss_fn()
+
+	def forward(self,x):
+		y 		= self.model(x)
+		return y
+
+class FCN(nn.Module):
+	def __init__(self,loss_fn=nn.MSELoss,optimizer:torch.optim=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,in_ch=4,w=0,h=0):
+		super(FCN,self).__init__()
+
+		in_layer 		= w*h*3*2
+
+		self.model 	= torch.nn.Sequential(
+			torch.nn.Flatten(),
+			torch.nn.Linear(in_layer,512),
+			torch.nn.Dropout(.5),
+			act_fn(),
+
+			torch.nn.Linear(512,256),
+			torch.nn.Dropout(.2),
+			act_fn(),
+
+			torch.nn.Linear(256,4)
+		)
+
+		if isinstance(optimizer,torch.optim.SGD):
+			self.optimizer	= optimizer(self.model.parameters(),lr=lr,momentum=.75)
+		else:	
+			self.optimizer	= optimizer(self.model.parameters(),lr=lr)
+		self.loss 		= loss_fn()
+
+	def forward(self,x):
+		y 		= self.model(x)
+		return y
+
+class FCN2(nn.Module):
+	def __init__(self,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,in_ch=4,w=0,h=0):
+		super(FCN2,self).__init__()
+
+		in_layer 		= w*h*3*2
+
+		self.model 	= torch.nn.Sequential(
+			torch.nn.Flatten(),
+			torch.nn.Linear(in_layer,256),
+			torch.nn.Dropout(.5),
+			act_fn(),
+
+			torch.nn.Linear(256,64),
+			torch.nn.Dropout(.1),
+			act_fn(),
+
+			torch.nn.Linear(64,32),
+			torch.nn.Dropout(.1),
+			act_fn(),
+
+			torch.nn.Linear(32,32),
+			torch.nn.Dropout(.05),
+			act_fn(),
+
+			torch.nn.Linear(32,4)
+		)
+
+		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
+		self.loss 		= loss_fn()
+
+	def forward(self,x):
+		y 		= self.model(x)
+		return y
+	
+class FCN3(nn.Module):
+	def __init__(self,loss_fn=nn.MSELoss,optimizer=torch.optim.Adam,lr=.0001,act_fn=torch.nn.LeakyReLU,in_ch=4,w=0,h=0):
+		super(FCN3,self).__init__()
+
+		in_layer 		= w*h*3*2
+
+		self.model 	= torch.nn.Sequential(
+			torch.nn.Flatten(),
+			torch.nn.Linear(in_layer,128),
+			torch.nn.Dropout(.5),
+			act_fn(),
+
+			torch.nn.Linear(128,32),
+			torch.nn.Dropout(.5),
+			act_fn(),
+
+			torch.nn.Linear(32,16),
+			#torch.nn.Dropout(.25),
+			act_fn(),
+
+			torch.nn.Linear(16,16),
+			#torch.nn.Dropout(.1),
+			act_fn(),
+
+			torch.nn.Linear(16,16),
+			#torch.nn.Dropout(.05),
+			act_fn(),
+
+			torch.nn.Linear(16,16),
+			#torch.nn.Dropout(),
+			act_fn(),
+
+			torch.nn.Linear(16,4)
+		)
+
+		self.optimizer	= optimizer(self.model.parameters(),lr=lr)
+		self.loss 		= loss_fn()
+
+	def forward(self,x):
+		y 		= self.model(x)
+		return y
+	
 
 class IMG_NET_OG(nn.Module):
 
@@ -544,7 +649,6 @@ class IMG_NET_COMPLEX(nn.Module):
 
 	def forward(self,x):
 		return self.model(x)
-
 
 class IMG_NET3(nn.Module):
 

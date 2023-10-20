@@ -16,7 +16,7 @@ from utilities import reduce_arr
 
 MODEL_FN 			= networks.IMG_NET_SIMPLE
 
-class Trainer:
+class TrainerIMG:
 
 	def __init__(	self,
 	      			game_w,
@@ -150,22 +150,14 @@ class Trainer:
 		#	Sliding window memory update 
 		#	Instead of copying a new memory_pool list 
 		#	upon overflow, simply replace the next window each time 
-		self.tstart 	= time.time()
-		self.x_scale 	= x_scale
-		memory_pool 	= []
-		window_i 		= 0
-		self.pending_graph	= False
-
-
-		threshs			= copy.deepcopy(self.base_threshs)
-		stop_thresh 	= False 
+		self.tstart,self.x_scale,memory_pool,window_i, 		= time.time(),x_scale,[],0,False
+		threshs,stop_thresh									= copy.deepcopy(self.base_threshs),False 
 
 		#	Train 
 		i = 0 
 		self.target_model	= self.target_model.eval()
 		self.target_model	= torch.jit.script(self.target_model,torch.randn(1,3,160,90))
 		self.target_model	= torch.jit.freeze(self.target_model)
-		#	Configure modl 
 
 		while i < iters and not self.cancelled:
 			
@@ -178,8 +170,8 @@ class Trainer:
 			
 			# 	LR Scheduler
 			if not stop_thresh and i > threshs[0][0]:
-				new_lr 	= threshs[0][1]
-				self.learning_model.optimizer.param_groups[0]['lr']	= new_lr
+				new_lr 															= threshs[0][1]
+				self.learning_model.optimizer.param_groups[0]['lr']				= new_lr
 				self.learning_model.optimizer.param_groups[0]['weight_decay']	= new_lr/10
 				if not len(threshs) == 1:
 					threshs = threshs[1:] 
@@ -316,27 +308,23 @@ class Trainer:
 			print(f"TRAINING:")
 			print(f"\tDataset:\n\t\t{'loss-fn'.ljust(12)}: {str(self.learning_model.loss).split('(')[0]}\n\t\t{'optimizer'.ljust(12)}: {str(self.learning_model.optimizer).split('(')[0]}\n\t\t{'size'.ljust(12)}: {len(big_set)}\n\t\t{'batch_size'.ljust(12)}: {batch_size}\n\t\t{'epochs'.ljust(12)}: {epochs}\n\t\t{'lr'.ljust(12)}: {self.learning_model.optimizer.param_groups[0]['lr']:.8f}\n")
 
+
+		#Run all traning epochs
 		for epoch_i in range(epochs):
 			if self.gui and self.instance.cancel_var:
 				return
-			#	Telemetry Vars 
-			t0 			= time.time()
-			t_gpu 		= 0
-			num_equals 	= 40 
-			printed 	= 0
-			total_loss	= 0
-			#	Telemetry
+			#	Telemetry Vars and print
+			t0,t_gpu,num_equals,printed,total_loss 		= time.time(),0,40,0,0
 			if verbose:
 				print(f"\tEPOCH: {epoch_i}\tPROGRESS- [",end='')
 	
 			#	Do one calc for all runs 
 			num_batches = int(len(big_set) / batch_size)
 
-			# Iterate through batches
+			# Run all batches batches
 			for batch_i in range(num_batches):
 
-				i_start 					= batch_i * batch_size
-				i_end   					= i_start + batch_size
+				i_start,i_end					= batch_i * batch_size, i_start + batch_size
 				
 				#	Telemetry
 				percent = batch_i / num_batches
@@ -345,13 +333,11 @@ class Trainer:
 						print("=",end='',flush=True)
 						printed+=1
 				
-
 				#BELLMAN UPDATE 
 				self.learning_model.optimizer.zero_grad()
 
 				#Gather batch experiences
 				batch_set 							= big_set[i_start:i_end]
-
 				init_states 						= torch.stack([exp['s'][0]  for exp in batch_set]).type(torch.float)
 				action 								= [exp['a'] for exp in batch_set]
 				next_states							= torch.stack([exp['s`'][0] for exp in batch_set]).type(torch.float)
@@ -369,14 +355,8 @@ class Trainer:
 
 				#Update init values 
 				for i,val in enumerate(best_predictions):
-					chosen_action						= action[i]
-					
-					final_target_values[i,chosen_action]= rewards[i] + (done[i] * self.gamma * val)
-					if done[i] != 1 and False:
-						print(f"\nfor init val:{initial_target_predictions[i].detach().numpy()} + a:{chosen_action} - > update to {rewards[i]:.3f} + {self.gamma:.3f}*{val:.3f}*[done:{done[i]:.3f}] = {rewards[i] + (done[i] * self.gamma * val):.3f}")
-						print(f"training with {final_target_values[i].detach().numpy()}\n\n")
-						plt.imshow(init_states[i].detach().numpy().transpose(1,2,0))
-						plt.savefig("fig1")
+					final_target_values[i,action[i]	]= rewards[i] + (done[i] * self.gamma * val)
+
 				#	Calculate Loss
 				t1 							= time.time()
 				batch_loss 					= self.learning_model.loss(initial_target_predictions,final_target_values)

@@ -1,22 +1,22 @@
 import tkinter as tk 
-from tkinter import ttk, DoubleVar, Canvas, BooleanVar, Scale
-from tkinter import Button, Entry, Frame, Label,StringVar, Checkbutton
+from tkinter        import ttk, DoubleVar, Canvas, BooleanVar, Scale
+from tkinter        import Button, Entry, Frame, Label,StringVar, Checkbutton
 from tkinter.scrolledtext import ScrolledText
-from tkinter.ttk import Combobox, Progressbar
-from PIL import Image,ImageTk
+from tkinter.ttk    import Combobox, Progressbar
+from PIL            import Image,ImageTk
 import os 
 if "win" in os.name:
-    from ctypes import windll
+    from ctypes     import windll
 import random
-from matplotlib import pyplot as plt 
+from matplotlib     import pyplot       as plt 
 import random 
 #from trainer import Trainer
-from trainer import Trainer as trainer 
-from trainerIMG import Trainer as trainerIMG
+from trainer        import Trainer      as trainer 
+from trainerIMG     import TrainerIMG   as trainerIMG
 from PIL import Image
-from telemetry import ARCHITECTURES, LOSSES ,OPTIMIZERS, DEFAULTS, ACTIVATIONS
+from telemetry      import ARCHITECTURES, LOSSES ,OPTIMIZERS, DEFAULTS, ACTIVATIONS
 import copy 
-from threading import Thread
+from threading      import Thread
 import numpy 
 import time 
 import utilities
@@ -73,22 +73,16 @@ class TrainerApp:
                             "kw"            : None,
                             "ll"            : None,
                             "ep"            : None,
-                            "mt"            : None,
                             "mx"            : None,
-                            "sf"            : None,
                             "lo"            : None,
                             "op"            : None,
                             "ac"            : None,
                             "tr"            : None,
                             "drop"          : None,
                             "gam"           : None,
-                            "gpu"           : BooleanVar(),
-                            "dspl"          : BooleanVar(),
                             "rew"           : None,
                             "rpick"         : None,
         }
-        self.settings['gpu'].set(True)
-        self.settings['dspl'].set(False)
 
         self.setting_frames = {
 
@@ -103,9 +97,7 @@ class TrainerApp:
                         "kw"    : Frame(self.control_frame,padx=1,pady=1),
                         "ll"    : Frame(self.control_frame,padx=1,pady=1),
                         "ep"    : Frame(self.control_frame,padx=1,pady=1),
-                        "mt"    : Frame(self.control_frame,padx=1,pady=1),
                         "mx"    : Frame(self.control_frame,padx=1,pady=1),
-                        "sf"    : Frame(self.control_frame,padx=1,pady=1),
                         "arch"  : Frame(self.control_frame,padx=1,pady=1),
                         "lo"    : Frame(self.control_frame,padx=1,pady=1),
                         "op"    : Frame(self.control_frame,padx=1,pady=1),
@@ -113,8 +105,6 @@ class TrainerApp:
                         "tr"    : Frame(self.control_frame,padx=1,pady=1),
                         "drop"  : Frame(self.control_frame,padx=1,pady=1),
                         "gam"   : Frame(self.control_frame,padx=1,pady=1),
-                        "gpu"   : Frame(self.control_frame,padx=1,pady=1),
-                        "dspl"  : Frame(self.control_frame,padx=1,pady=1),
                         "rew"   : Frame(self.control_frame,padx=1,pady=1),
                         "rpick" : Frame(self.control_frame,padx=1,pady=1)
         }
@@ -148,12 +138,8 @@ class TrainerApp:
                                                     text="lr progression"),
                                 "ep"        :   Label( self.setting_frames["ep"],
                                                     text="Epochs"),
-                                "mt"        :   Label( self.setting_frames["mt"],
-                                                    text="Minimum Threshold"),
                                 "mx"        :   Label( self.setting_frames["mx"],
                                                     text="Max Steps"),
-                                "sf"        :   Label( self.setting_frames["sf"],
-                                                    text="Smooth Factor"),
                                 "arch"      :   Label( self.setting_frames["arch"],
                                                     text="Arch"),
                                 "lo"        :   Label( self.setting_frames["lo"],
@@ -168,10 +154,6 @@ class TrainerApp:
                                                     text="Droput Rate"),
                                 "gam"        :   Label( self.setting_frames["gam"],
                                                     text="Gamma γ"),
-                                "gpu"       :   Label( self.setting_frames['gpu'],
-                                                    text="GPU Acceleration"),
-                                "dspl"      :   Label( self.setting_frames['dspl'],
-                                                    text="Display Frames"),
                                 "rew"       :   Label( self.setting_frames['rew'],
                                                     text="Reward"),
                                 "rpick"     :   Label( self.setting_frames['rpick'],
@@ -201,9 +183,7 @@ class TrainerApp:
                                 "kw"        :   Entry(self.setting_frames["kw"],width=entry_w+30),
                                 "ll"        :   Entry(self.setting_frames["ll"],width=entry_w+30),
                                 "ep"        :   Entry(self.setting_frames["ep"],width=entry_w),
-                                "mt"        :   Entry(self.setting_frames["mt"],width=entry_w),
                                 "mx"        :   Entry(self.setting_frames["mx"],width=entry_w),
-                                "sf"        :   Entry(self.setting_frames["sf"],width=entry_w),
                                 "arch"      :   Combobox(self.setting_frames["arch"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "lo"        :   Combobox(self.setting_frames["lo"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "op"        :   Combobox(self.setting_frames["op"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
@@ -211,8 +191,6 @@ class TrainerApp:
                                 "tr"        :   Entry(self.setting_frames["tr"],width=entry_w),
                                 "drop"      :   Entry(self.setting_frames["drop"],width=entry_w),
                                 "gam"       :   Entry(self.setting_frames['gam'],width=entry_w),
-                                "gpu"       :   Checkbutton(self.setting_frames["gpu"],variable=self.settings['gpu'],onvalue=True,offvalue=False),
-                                "dspl"      :   Checkbutton(self.setting_frames["dspl"],variable=self.settings['dspl'],onvalue=True,offvalue=False),
                                 "rew"       :   Entry(self.setting_frames['rew'],width=entry_w*3),
                                 "rpick"     :   Entry(self.setting_frames['rpick'],width=entry_w*3)
         }
@@ -234,8 +212,7 @@ class TrainerApp:
                 self.fields[b].insert(0,str(DEFAULTS[b]))
             except AttributeError:
                 pass
-            if f == "gpu":
-                print("packing gpu")
+
             self.setting_frames[frame].grid(row=i+1,column=0,pady=1,padx=0,sticky=tk.NSEW)
         
         
@@ -372,8 +349,6 @@ class TrainerApp:
             elif s_key == 'ac':
                 self.settings[s_key] = ACTIVATIONS[self.fields[s_key].get()]
             
-            elif s_key in ['gpu','dspl']:
-                #print(f"value of gpu is {self.settings['gpu'].get()}")
                 self.settings[s_key]    = bool(self.fields[s_key].get())
             elif s_key in ['kw','rew','ll']:
                 self.settings[s_key] = eval(self.fields[s_key].get())
@@ -396,12 +371,11 @@ class TrainerApp:
                                 int(self.settings["gameY"]),
                                 visible         = False,
                                 loading         = False,
-                                min_thresh      = int(self.settings['mt']),
                                 loss_fn         = self.settings['lo'],
                                 optimizer_fn    = self.settings['op'],
                                 kwargs          = dict(self.settings['kw'],**{'lr':self.settings['lr']}),
                                 architecture    = self.settings['arch']['arch'],
-                                gpu_acceleration= self.settings['gpu'].get(),
+                                gpu_acceleration= False,
                                 m_type          = self.settings['arch']['type'],
                                 progress_var    = self.progress_var,
                                 output          = self.telemetry_box,
@@ -432,7 +406,7 @@ class TrainerApp:
                                                     "transfer_models_every":int(self.settings['tr']),
                                                     "rewards":self.settings['rew'],
                                                     "verbose":True,
-                                                    "random_pick":False,
+                                                    "random_pick":True,
                                                     "drop_rate":self.settings['rpick'],
                                                     "max_steps":self.settings['mx']
                                             },
@@ -633,6 +607,7 @@ class TrainerAppNoImg:
         self.best_score = 0
         #Build window 
         self.window         = tk.Tk()
+        self.window.title("Yung Charles")
         self.window         .geometry(str(width)+ "x" +str(height))
         self.window.resizable()
         self.window.columnconfigure(0,weight=1)
@@ -649,12 +624,13 @@ class TrainerAppNoImg:
         
         #Assemble General Frames
         self.control_frame.columnconfigure(0,weight=1)
+
         self.top_frame.grid(row=0,column=0,columnspan=2,sticky=tk.NSEW)
         self.control_frame.grid(row=1,column=0,sticky=tk.NSEW)
 
         self.view_frame.grid(row=1,column=1,sticky=tk.NSEW)
-        self.view_frame.rowconfigure(0,weight=1)
-        self.view_frame.rowconfigure(1,weight=2)
+        self.view_frame.rowconfigure(0,weight=4)
+        self.view_frame.rowconfigure(1,weight=5)
         self.view_frame.columnconfigure(0,weight=2)
         self.view_frame.columnconfigure(1,weight=1)
         self.view_frame.columnconfigure(2,weight=2)
@@ -667,51 +643,43 @@ class TrainerAppNoImg:
         #Keep track of settings
         self.settings = {   "gameX"         : None,
                             "gameY"         : None,
+                            "ps"            : None,
+                            "ss"            : None,
                             "iters"         : None,
                             "arch"          : None,
                             "te"            : None,
-                            "ps"            : None,
-                            "ss"            : None,
                             "bs"            : None,
                             "lr"            : None,
                             "hs"            : None,
                             "kw"            : None,
                             "ll"            : None,
                             "ep"            : None,
-                            "mt"            : None,
                             "mx"            : None,
-                            "sf"            : None,
                             "lo"            : None,
                             "op"            : None,
                             "ac"            : None,
                             "tr"            : None,
                             "drop"          : None,
                             "gam"           : None,
-                            "gpu"           : BooleanVar(),
-                            "dspl"          : BooleanVar(),
                             "rew"           : None,
                             "rpick"         : None,
         }
-        self.settings['gpu'].set(True)
-        self.settings['dspl'].set(False)
 
         self.setting_frames = {
 
-                        "gameX" : Frame(self.control_frame,padx=1,pady=1),
-                        "gameY" : Frame(self.control_frame,padx=1,pady=1),
+                        "game_dim" : Frame(self.control_frame,padx=1,pady=1),
+                        "samp"    : Frame(self.control_frame,padx=1,pady=1),
+                        #"gameY" : Frame(self.control_frame,padx=1,pady=1),
                         "iters" : Frame(self.control_frame,padx=1,pady=1),
                         "te"    : Frame(self.control_frame,padx=1,pady=1),
-                        "ps"    : Frame(self.control_frame,padx=1,pady=1),
-                        "ss"    : Frame(self.control_frame,padx=1,pady=1),
+                        #"ss"    : Frame(self.control_frame,padx=1,pady=1),
                         "bs"    : Frame(self.control_frame,padx=1,pady=1),
                         "lr"    : Frame(self.control_frame,padx=1,pady=1),
                         "hs"    : Frame(self.control_frame,padx=1,pady=1),
                         "kw"    : Frame(self.control_frame,padx=1,pady=1),
                         "ll"    : Frame(self.control_frame,padx=1,pady=1),
                         "ep"    : Frame(self.control_frame,padx=1,pady=1),
-                        "mt"    : Frame(self.control_frame,padx=1,pady=1),
                         "mx"    : Frame(self.control_frame,padx=1,pady=1),
-                        "sf"    : Frame(self.control_frame,padx=1,pady=1),
                         "arch"  : Frame(self.control_frame,padx=1,pady=1),
                         "lo"    : Frame(self.control_frame,padx=1,pady=1),
                         "op"    : Frame(self.control_frame,padx=1,pady=1),
@@ -719,31 +687,34 @@ class TrainerAppNoImg:
                         "tr"    : Frame(self.control_frame,padx=1,pady=1),
                         "drop"  : Frame(self.control_frame,padx=1,pady=1),
                         "gam"   : Frame(self.control_frame,padx=1,pady=1),
-                        "gpu"   : Frame(self.control_frame,padx=1,pady=1),
-                        "dspl"  : Frame(self.control_frame,padx=1,pady=1),
                         "rew"   : Frame(self.control_frame,padx=1,pady=1),
                         "rpick" : Frame(self.control_frame,padx=1,pady=1)
         }
         
         for sf in self.setting_frames:
+            self.setting_frames[sf].rowconfigure(0,weight=1)
             self.setting_frames[sf].columnconfigure(0,weight=1)
             self.setting_frames[sf].columnconfigure(1,weight=1)
+
+            if sf == "game_dim" or sf == "samp":
+                self.setting_frames[sf].columnconfigure(2,weight=1)
+                self.setting_frames[sf].columnconfigure(3,weight=1)
+
+        
         
         #Build control Frame 
-        label_w         =   15
-        label_h         =   1
-        self.labels    = {      "gameX"     :   Label( self.setting_frames["gameX"],
+        self.labels    = {      "gameX"     :   Label( self.setting_frames["game_dim"],
                                                     text="Game X"),
-                                "gameY"     :   Label( self.setting_frames["gameY"],
+                                "gameY"     :   Label( self.setting_frames["game_dim"],
                                                     text="Game Y"),
+                                "ps"        :   Label( self.setting_frames["samp"],
+                                                    text="Pool Size"),
+                                "ss"        :   Label( self.setting_frames["samp"],
+                                                    text="Sample Size"),
                                 "iters"     :   Label( self.setting_frames["iters"],
                                                     text="Iters"),
                                 "te"        :   Label( self.setting_frames["te"],
                                                     text="Train Rate"),
-                                "ps"        :   Label( self.setting_frames["ps"],
-                                                    text="Pool Size"),
-                                "ss"        :   Label( self.setting_frames["ss"],
-                                                    text="Sample Size"),
                                 "bs"        :   Label( self.setting_frames["bs"],
                                                     text="Batch Size"),
                                 "lr"        :   Label( self.setting_frames['lr'],
@@ -756,12 +727,8 @@ class TrainerAppNoImg:
                                                     text="lr progression"),
                                 "ep"        :   Label( self.setting_frames["ep"],
                                                     text="Epochs"),
-                                "mt"        :   Label( self.setting_frames["mt"],
-                                                    text="Minimum Threshold"),
                                 "mx"        :   Label( self.setting_frames["mx"],
                                                     text="Max Steps"),
-                                "sf"        :   Label( self.setting_frames["sf"],
-                                                    text="Smooth Factor"),
                                 "arch"      :   Label( self.setting_frames["arch"],
                                                     text="Arch"),
                                 "lo"        :   Label( self.setting_frames["lo"],
@@ -776,16 +743,14 @@ class TrainerAppNoImg:
                                                     text="Droput Rate"),
                                 "gam"        :   Label( self.setting_frames["gam"],
                                                     text="Gamma γ"),
-                                "gpu"       :   Label( self.setting_frames['gpu'],
-                                                    text="GPU Acceleration"),
-                                "dspl"      :   Label( self.setting_frames['dspl'],
-                                                    text="Display Frames"),
                                 "rew"       :   Label( self.setting_frames['rew'],
                                                     text="Reward"),
                                 "rpick"     :   Label( self.setting_frames['rpick'],
                                                     text="Rand Pick Drop")
                                         
         }
+
+        
         self.game_tracker = []
         self.training_epoch_finished        = False 
 
@@ -795,24 +760,19 @@ class TrainerAppNoImg:
         optim_options   = list(OPTIMIZERS.keys())
         acti_options    = list(ACTIVATIONS.keys())
         entry_w = 10
-        self.fields     = {     "gameX"     :   Entry(self.setting_frames["gameX"],width=entry_w),
-                                "gameY"     :   Entry(self.setting_frames["gameY"],width=entry_w),
+        self.fields     = {     "gameX"     :   Entry(self.setting_frames["game_dim"],width=entry_w),
+                                "gameY"     :   Entry(self.setting_frames["game_dim"],width=entry_w),
+                                "ps"        :   Entry(self.setting_frames["samp"],width=entry_w),
+                                "ss"        :   Entry(self.setting_frames["samp"],width=entry_w),
                                 "iters"     :   Entry(self.setting_frames["iters"],width=entry_w),
                                 "te"        :   Entry(self.setting_frames["te"],width=entry_w),
-                                "gameY"     :   Entry(self.setting_frames["gameY"],width=entry_w),
-                                "iters"     :   Entry(self.setting_frames["iters"],width=entry_w),
-                                "te"        :   Entry(self.setting_frames["te"],width=entry_w),
-                                "ps"        :   Entry(self.setting_frames["ps"],width=entry_w),
-                                "ss"        :   Entry(self.setting_frames["ss"],width=entry_w),
                                 "bs"        :   Entry(self.setting_frames["bs"],width=entry_w),
                                 "lr"        :   Entry(self.setting_frames["lr"],width=entry_w),
                                 "hs"        :   Entry(self.setting_frames["hs"],width=entry_w),
                                 "kw"        :   Entry(self.setting_frames["kw"],width=entry_w+30),
                                 "ll"        :   Entry(self.setting_frames["ll"],width=entry_w+30),
                                 "ep"        :   Entry(self.setting_frames["ep"],width=entry_w),
-                                "mt"        :   Entry(self.setting_frames["mt"],width=entry_w),
                                 "mx"        :   Entry(self.setting_frames["mx"],width=entry_w),
-                                "sf"        :   Entry(self.setting_frames["sf"],width=entry_w),
                                 "arch"      :   Combobox(self.setting_frames["arch"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "lo"        :   Combobox(self.setting_frames["lo"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
                                 "op"        :   Combobox(self.setting_frames["op"],width=entry_w+2,textvariable=self.settings['arch'],state="readonly"),
@@ -820,8 +780,6 @@ class TrainerAppNoImg:
                                 "tr"        :   Entry(self.setting_frames["tr"],width=entry_w),
                                 "drop"      :   Entry(self.setting_frames["drop"],width=entry_w),
                                 "gam"       :   Entry(self.setting_frames['gam'],width=entry_w),
-                                "gpu"       :   Checkbutton(self.setting_frames["gpu"],variable=self.settings['gpu'],onvalue=True,offvalue=False),
-                                "dspl"      :   Checkbutton(self.setting_frames["dspl"],variable=self.settings['dspl'],onvalue=True,offvalue=False),
                                 "rew"       :   Entry(self.setting_frames['rew'],width=entry_w*3),
                                 "rpick"     :   Entry(self.setting_frames['rpick'],width=entry_w*3)
         }
@@ -836,19 +794,31 @@ class TrainerAppNoImg:
         self.fields['op'].current(0)
         self.fields['ac'].current(0)
 
-        for i,(frame,b,f) in enumerate(zip(self.setting_frames,self.labels,self.fields)):
-            self.labels[f].grid(row=0,column=0,sticky=tk.W)#(side=tk.LEFT,anchor=tk.E,padx=0,pady=0)
-            self.fields[b].grid(row=0,column=1,sticky=tk.E)#pack(side=tk.RIGHT,anchor=tk.W,padx=0,pady=0)
+        
+        for i,(b,f) in enumerate(zip(self.labels,self.fields)):
+            frame = b
+            if f == "gameX" or f == "ps":
+                frame   = "game_dim" if f == "gameX" else "samp"
+                self.labels[f].grid(row=0,column=0,sticky=tk.W)
+                self.fields[b].grid(row=0,column=1,sticky=tk.W)
+
+            if f == "gameY" or f == "ss":
+                frame   = "game_dim" if f == "gameY" else "samp"
+                self.labels[f].grid(row=0,column=2,sticky=tk.E)
+                self.fields[b].grid(row=0,column=3,sticky=tk.E)
+            else:
+                self.labels[f].grid(row=0,column=0,sticky=tk.W)#(side=tk.LEFT,anchor=tk.E,padx=0,pady=0)
+                self.fields[b].grid(row=0,column=1,sticky=tk.E)#pack(side=tk.RIGHT,anchor=tk.W,padx=0,pady=0)
             try:
                 self.fields[b].insert(0,str(DEFAULTS[b]))
             except AttributeError:
                 pass
-            if f == "gpu":
-                print("packing gpu")
+            print(f"packing {(b,f)}]")
             self.setting_frames[frame].grid(row=i+1,column=0,pady=1,padx=0,sticky=tk.NSEW)
         
+        #self.setting_frames["samp"].grid(row=i+1,column=0,sticky=tk.NSEW)
         
-
+        i += 1
         #Runing Items
         self.run_frame      = Frame(self.control_frame)
         self.run_frame.columnconfigure(0,weight=2)
@@ -859,19 +829,19 @@ class TrainerAppNoImg:
 
         self.cancel_button.grid(row=0,column=0)
         self.train_button.grid(row=0,column=1,sticky=tk.NSEW)
-        self.run_frame.grid(row=i+2,column=0,sticky=tk.NSEW)
+        self.run_frame.grid(row=i+1,column=0,sticky=tk.NSEW)
         
         #Telemetry items
         self.telemetry_frame        = Frame(self.control_frame)
         self.telemetry_frame.columnconfigure(0,weight=1)
-        self.telemetry_frame.rowconfigure(0,weight=8)
+        self.telemetry_frame.rowconfigure(0,weight=1)
         self.telemetry_frame.rowconfigure(1,weight=1)
         self.telemetry_frame_title  = Label(self.control_frame,text="TELEMETRY",height=self.train_button.winfo_height()+1)
-        self.telemetry_frame_title.grid(row=i+3,column=0,sticky=tk.NSEW,pady=0)
+        self.telemetry_frame_title.grid(row=i+3,column=0,sticky=tk.EW,pady=0)
 
-        self.telemetry_box      = ScrolledText(self.telemetry_frame,width=self.run_frame.winfo_width())
-        self.telemetry_box.grid(row=0,column=0,sticky=tk.NSEW)
-        self.telemetry_frame.grid(row=i+4,column=0,sticky=tk.NSEW)
+        self.telemetry_box      = ScrolledText(self.telemetry_frame,width=self.run_frame.winfo_width(),height=8)
+        self.telemetry_box.grid(row=0,column=0,sticky=tk.EW)
+        self.telemetry_frame.grid(row=i+4,column=0,sticky=tk.EW)
         
         self.progress_var       = DoubleVar()
         self.progress_var.set(0)
@@ -886,25 +856,36 @@ class TrainerAppNoImg:
         self.stats_frame.columnconfigure(1,weight=1)
         self.stats_frame.columnconfigure(2,weight=1)
         self.stats_frame.columnconfigure(3,weight=1)
+        self.stats_frame.columnconfigure(4,weight=1)
+        self.stats_frame.columnconfigure(5,weight=1)
 
 
         self.gui_var_step       = None 
         self.gui_var_score      = None 
+        self.gui_var_error      = None 
         self.var_step           = StringVar()
         self.var_score          = StringVar()
+        self.var_error          = StringVar()
         self.var_step.set("0")
         self.var_score.set("0") 
+        self.var_error.set("0") 
         self.steps_avg_label    = Label(self.stats_frame,text="Steps:",width=5)
         self.steps_output       = Entry(self.stats_frame,state="readonly",width=5,textvariable=self.var_step)
         self.scored_avg_label   = Label(self.stats_frame,text="Score:",width=5)
         self.scored_output      = Entry(self.stats_frame,state="readonly",width=5,textvariable=self.var_score)
+        self.error_avg_label    = Label(self.stats_frame,text="Error:",width=5)
+        self.error_output       = Entry(self.stats_frame,state="readonly",width=8,textvariable=self.var_error)
 
         self.steps_avg_label.grid(row=0,column=0)
         self.steps_output.grid(row=0,column=1)
         self.scored_avg_label.grid(row=0,column=2)
         self.scored_output.grid(row=0,column=3)
+        self.error_avg_label.grid(row=0,column=4)
+        self.error_output.grid(row=0,column=5)
+
         self.steps_output.insert(0,"0")
         self.scored_output.insert(0,"0")
+        self.error_output.insert(0,"0")
 
         self.stats_frame.grid(row=i+5,column=0,sticky=tk.NSEW)
 
@@ -956,8 +937,8 @@ class TrainerAppNoImg:
         print(f"score {self.score_canvas.winfo_width()},{self.score_canvas.winfo_height()}")
 
         #Game View Items 
-        self.IMG_W                      = 800
-        self.IMG_H                      = 800
+        self.IMG_W                      = 550
+        self.IMG_H                      = 550
         self.game_canvas                = Canvas(self.view_frame,background="gray",width=self.IMG_W,height=self.IMG_H)
         self.game_canvas                .grid(row=1,column=0,sticky=tk.NSEW,columnspan=3)
         self.game_image                 = None
@@ -981,9 +962,6 @@ class TrainerAppNoImg:
             elif s_key == 'ac':
                 self.settings[s_key] = ACTIVATIONS[self.fields[s_key].get()]
             
-            elif s_key in ['gpu','dspl']:
-                #print(f"value of gpu is {self.settings['gpu'].get()}")
-                pass
             elif s_key in ['kw','rew','ll']:
                 self.settings[s_key] = eval(self.fields[s_key].get())
             elif s_key  in ['hs']:
@@ -1039,8 +1017,8 @@ class TrainerAppNoImg:
                                                     "epochs":int(self.settings['ep']),
                                                     "transfer_models_every":int(self.settings['tr']),
                                                     "rewards":self.settings['rew'],
-                                                    "verbose":True,
-                                                    "random_pick":False,
+                                                    "verbose":False,
+                                                    "random_pick":True,
                                                     "drop_rate":self.settings['rpick'],
                                                     "max_steps":self.settings['mx']
                                             },
@@ -1071,7 +1049,7 @@ class TrainerAppNoImg:
         self.score_telemetry.update()
 
         steps       = copy.deepcopy(self.cur_game_steps)
-        steps       = utilities.reduce_arr(steps,200)
+        steps       = utilities.reduce_arr(steps,100)
 
 
         plt.rcParams["figure.figsize"] = (self.step_canvas.winfo_width()/self.window.winfo_fpixels('1i'),self.step_canvas.winfo_height()/self.window.winfo_fpixels('1i'))
@@ -1090,7 +1068,7 @@ class TrainerAppNoImg:
         self.score_telemetry.update()
 
         scores      = copy.deepcopy(self.cur_game_scores)
-        scores      = utilities.reduce_arr(scores,200)
+        scores      = utilities.reduce_arr(scores,100)
 
         plt.rcParams["figure.figsize"] = (self.score_canvas.winfo_width()/self.window.winfo_fpixels('1i'),self.score_canvas.winfo_height()/self.window.winfo_fpixels('1i'))
         plt.plot(scores,color='cyan')

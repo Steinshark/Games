@@ -9,8 +9,8 @@ states 		= []
 actions 	= [] 
 eaten 		= [] 
 def snake():
-	screen_w        = 1000
-	screen_h        = 1000
+	screen_w        = 800
+	screen_h        = 800
 	tile_width      = 20
 	tile_height     = 20
 	red             = (255,0,0)
@@ -86,6 +86,7 @@ def snake():
 i = 0 
 import os
 maxn 	= 0  
+
 for file in [f for f in os.listdir('exps') if 'eaten' in f]:
 	cur 	= int(file.replace('eaten',""))
 	if cur > maxn:
