@@ -15,6 +15,9 @@ import time
 from http.client import IncompleteRead
 import math 
 import random 
+import torchaudio 
+import torch 
+
 
 #Inizialize directories properly
 if "linux" in sys.platform:
@@ -427,9 +430,35 @@ def reduce_arr(arr,newlen):
 
     return [sum(list(new_arr[n*div_fact:(n+1)*div_fact]))/div_fact for n in range(newlen)]
 
+def upscale(tensor):
+    upsampler           = torchaudio.transforms.Resample(1024,44100)
+    new_tensor          = upsampler(tensor)
+
+    torchaudio.save("AudioOut.wav",torch.stack([new_tensor,new_tensor]),44100)
+
+def build_dataset(path_to_wav,path_to_save):
+
+    downsampler         = torchaudio.transforms.Resample(44100,1024)
+
+    for fname in os.listdir(path_to_wav):
+        filename            = path_to_wav + fname 
+        
+        dual_channel_audio  = downsampler(torchaudio.load(filename)[0])
+        single_channel      = dual_channel_audio[0]
 
 
-if __name__ == "__main__" and True:
+        window              = 16384
+        cur_i               = 0 
+        length              = single_channel.shape[0]
+        #Create chunks 
+        while cur_i+window < length:
+            save_path           = path_to_save + fname.replace(".wav","") + f"{cur_i}.tsr"
+            torch.save(single_channel[cur_i:cur_i+window],save_path)
+
+            cur_i += random.randint(2,200)
+
+
+if __name__ == "__main__" and False:
     mode = sys.argv[1]
 
     category    = "LOFI_32s"
@@ -484,9 +513,11 @@ if __name__ == "__main__" and True:
         print("chose from -d (download), -c (chunk), or -r (read)")
     
 
+if __name__ == "__main__" and True:
 
-
-if __name__ == "__main__" and False:
+    #build_dataset("C:/data/music/wavs/","C:/data/music/dt2/")
+    upscale(torch.load("C:/data/music/dt2/alittlelonely1093.tsr"))
+    exit()
     load_root           = f"{DATASET_PATH}/LOFI_sf5_t20_peak1_thrsh.95"
     stor_root           = f"{DATASET_PATH}/LOFI_sf35_t20_peak1_thrsh.95"
     if not os.path.exists(stor_root):

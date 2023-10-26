@@ -50,51 +50,51 @@ def build_gen(ncz=512,leak=.02,kernel_ver=0,fact_ver=0,ch_ver=1,device=torch.dev
     return Gen.to(device)
 
 def build_upsamp(ncz=512,out_ch=1,kernel_ver=0,factor_ver=0,leak=.2,device=torch.device('cuda'),verbose=False):
-
+    biased  = True
  
-    Gen     = Sequential(   ConvTranspose1d(ncz,1024,kernel_size=4,stride=1),               # 4 
-                            Conv1d(1024,1024,kernel_size=31,stride=1,padding=15,bias=False),
+    Gen     = Sequential(   ConvTranspose1d(ncz,2048,kernel_size=4,stride=1,bias=False),               # 4 
+                            torch.nn.BatchNorm1d(2048),
+                            ReLU(inplace=True), 
+                            Conv1d(2048,2048,kernel_size=3,stride=1,padding=1,bias=biased),
                             ReLU(inplace=True),    
 
-                            ConvTranspose1d(1024,1024,kernel_size=4,stride=4),              # 16 
-                            Conv1d(1024,1024,kernel_size=31,stride=1,padding=15,bias=False),
+                            ConvTranspose1d(2048,2048,kernel_size=4,stride=4,bias=False),              # 16
+                            torch.nn.BatchNorm1d(2048),
+                            ReLU(inplace=True), 
+                            Conv1d(2048,1024,kernel_size=5,stride=1,padding=2,bias=biased),
                             ReLU(inplace=True),  
 
-                            ConvTranspose1d(1024,1024,kernel_size=4,stride=4),              # 64 
-                            Conv1d(1024,512,kernel_size=31,stride=1,padding=15,bias=False),
+                            ConvTranspose1d(1024,1024,kernel_size=8,stride=8,bias=False),              # 128
+                            torch.nn.BatchNorm1d(1024),
+                            LeakyReLU(inplace=True), 
+                            Conv1d(1024,1024,kernel_size=17,stride=1,padding=8,bias=biased),
                             ReLU(inplace=True),  
 
-                            ConvTranspose1d(512,256,kernel_size=4,stride=4),              # 256    
-                            Conv1d(256,256,kernel_size=31,stride=1,padding=15,bias=False),
+                            ConvTranspose1d(1024,256,kernel_size=8,stride=8,bias=False),              # 1024
+                            torch.nn.BatchNorm1d(256),
                             ReLU(inplace=True), 
+                            Conv1d(256,128,kernel_size=33,stride=1,padding=16,bias=biased),
+                            ReLU(inplace=True),  
 
-                            ConvTranspose1d(256,128,kernel_size=4,stride=4),              # 1024 
-                            Conv1d(128,128,kernel_size=31,stride=1,padding=15,bias=False),
-                            BatchNorm1d(128),
-                            ReLU(inplace=True),
-
-                            ConvTranspose1d(128,64,kernel_size=4,stride=4),              # 4096 
-                            Conv1d(64,64,kernel_size=65,stride=1,padding=31,bias=False),
-                            BatchNorm1d(64),
-                            ReLU(inplace=True),
-
-                            ConvTranspose1d(64,64,kernel_size=4,stride=4),              # 16384
-                            Conv1d(64,64,kernel_size=127,stride=1,padding=65,bias=False),
+                            ConvTranspose1d(128,128,kernel_size=8,stride=8,bias=False),              # 8192
+                            torch.nn.BatchNorm1d(128),
                             ReLU(inplace=True), 
+                            Conv1d(128,64,kernel_size=65,stride=1,padding=32,bias=biased),
+                            ReLU(inplace=True),  
 
-                            ConvTranspose1d(64,32,kernel_size=2,stride=2),               # 32768
-                            Tanh(),
-                            Conv1d(32,16,kernel_size=255,stride=1,padding=127,bias=True),
-                            Tanh(),
-                            Conv1d(16,32,kernel_size=63,stride=1,padding=31,bias=True),
-                            Tanh(),
-                            Conv1d(32,48,kernel_size=31,stride=1,padding=15,bias=True),
-                            Tanh(),
-                            Conv1d(48,64,kernel_size=7,stride=1,padding=3,bias=True),
-                            Tanh(),
-                            Conv1d(64,1,kernel_size=7,stride=1,padding=3,bias=True),
-                            Tanh(),
+                            ConvTranspose1d(64,64,kernel_size=4,stride=4,bias=False),               # 32768
+                            torch.nn.BatchNorm1d(64),
+                            ReLU(inplace=True), 
+                            Conv1d(64,32,kernel_size=129,stride=1,padding=64,bias=biased),
+                            ReLU(inplace=True), 
+                            #LeakyReLU(inplace=True),  
 
+
+                            # Conv1d(32,16,kernel_size=257,stride=1,padding=128,bias=biased),
+                            # torch.nn.LeakyReLU(inplace=True),
+
+                            Conv1d(32,1,kernel_size=513,stride=1,padding=256,bias=biased),
+                            torch.nn.Tanh()
                             )
 
        
@@ -111,7 +111,7 @@ def build_low_hi(ncz=512,out_ch=1,kernel_ver=0,factor_ver=0,leak=.2,device=torch
                             ReLU(inplace=True),  
 
                             ConvTranspose1d(1024,1024,kernel_size=4,stride=4),              # 64 
-                            Conv1d(1024,512,kernel_size=31,stride=1,padding=15,bias=False),
+                            Conv1d(1024,512,kernel_size=31,stride=1,padding=16,bias=False),
                             ReLU(inplace=True),  
 
                             ConvTranspose1d(512,256,kernel_size=4,stride=4),              # 256    

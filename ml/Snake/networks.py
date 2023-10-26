@@ -358,7 +358,7 @@ class FCN2(nn.Module):
 			act_fn(),
 
 			torch.nn.Linear(256,64),
-			torch.nn.Dropout(.1),
+			torch.nn.Dropout(.25),
 			act_fn(),
 
 			torch.nn.Linear(64,32),
@@ -391,27 +391,28 @@ class FCN3(nn.Module):
 			torch.nn.Dropout(.5),
 			act_fn(),
 
-			torch.nn.Linear(128,32),
+			torch.nn.Linear(128,64),
 			torch.nn.Dropout(.5),
 			act_fn(),
 
-			torch.nn.Linear(32,16),
+			torch.nn.Linear(64,32),
 			#torch.nn.Dropout(.25),
 			act_fn(),
 
-			torch.nn.Linear(16,16),
+			torch.nn.Linear(32,32),
 			#torch.nn.Dropout(.1),
 			act_fn(),
 
-			torch.nn.Linear(16,16),
+			torch.nn.Linear(32,32),
 			#torch.nn.Dropout(.05),
 			act_fn(),
 
-			torch.nn.Linear(16,16),
+			torch.nn.Linear(32,32),
 			#torch.nn.Dropout(),
 			act_fn(),
 
-			torch.nn.Linear(16,4)
+			torch.nn.Linear(32,4),
+			torch.nn.Tanh()
 		)
 
 		self.optimizer	= optimizer(self.model.parameters(),lr=lr)

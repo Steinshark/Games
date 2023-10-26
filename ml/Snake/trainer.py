@@ -138,20 +138,6 @@ class Trainer:
 			#	Keep some performance variables 
 			t0 				= time.time() 
 
-			# 	LR Scheduler
-			if not stop_thresh and i > threshs[0][0]:
-				new_lr 	= threshs[0][1]
-				self.learning_model.optimizer.param_groups[0]['lr']	= new_lr
-				#self.learning_model.optimizer.param_groups[0]['weight_decay']	= new_lr/10
-				if not len(threshs) == 1:
-					threshs = threshs[1:] 
-				else:
-					stop_thresh	= True 
-				
-				if self.gui:
-					self.output.insert(tk.END,f"\tlr: {new_lr:.5f}\n")
-					
-
 			#	UPDATE EPSILON
 			e 				= self.update_epsilon(i/(iters))	
 
@@ -186,6 +172,7 @@ class Trainer:
 			round_top_game 		= new_games[scores.index(round_top_score)]
 			self.game_tracker.append(round_top_game)
 
+
 			#	Update local and possibly gui games
 			if round_top_score >= self.best_score:
 				self.best_score 	= round_top_score
@@ -196,18 +183,19 @@ class Trainer:
 						self.parent_instance.best_score	= round_top_score
 						self.output.insert(tk.END,f"\tnew hs: {self.best_score}\n")
 			
+
 			#	UPDATE VERBOSE 
 			if verbose:
 				print(f"[Episode {str(i).rjust(15)}/{int(iters)} -  {(100*i/iters):.2f}% complete\t{(time.time()-t0):.2f}s\te: {e:.2f}\thigh_score: {self.best_score}\t] lived_avg: {(sum(self.all_lived[-100:])/len(self.all_lived[-100:])):.2f} score_avg: {(sum(self.all_scores[-100:])/len(self.all_scores[-100:])):.2f}")
 			
+
+			#	UPDATE GUI
 			if self.gui:
 				self.parent_instance.var_step.set(f"{(sum(self.all_lived[-100:])/100):.2f}")
 				self.parent_instance.var_score.set(f"{(sum(self.all_scores[-100:])/100):.2f}")
 				self.parent_instance.var_error.set(f"{sum(self.errors)/len(self.errors):.2f}")
 			
-
-			
-		
+	
 			# 	GET TRAINING SAMPLES
 			#	AND TRAIN MODEL 
 			if window_i > sample_size:
@@ -290,10 +278,13 @@ class Trainer:
 			num_equals 	= 40 
 			printed 	= 0
 			total_loss	= 0
+
+
 			#	Telemetry
 			if verbose:
 				print(f"\tEPOCH: {epoch_i}\tPROGRESS- [",end='')
 	
+
 			#	Do one calc for all runs 
 			num_batches = int(len(big_set) / batch_size)
 
@@ -313,11 +304,12 @@ class Trainer:
 				
 
 				#BELLMAN UPDATE 
-				self.learning_model.optimizer.zero_grad()
+				for param in self.learning_model.parameters():
+					param.grad 	= None
+
 
 				#Gather batch experiences
 				batch_set 							= big_set[i_start:i_end]
-
 				init_states 						= torch.stack([exp['s']  for exp in batch_set]).type(torch.float)
 				action 								= [exp['a'] for exp in batch_set]
 				next_states							= torch.stack([exp['s`'] for exp in batch_set]).type(torch.float)
@@ -332,16 +324,16 @@ class Trainer:
 				with torch.no_grad():
 					stepped_target_predictions 		= self.target_model.forward(next_states)
 					best_predictions 				= torch.max(stepped_target_predictions,dim=1)[0]
+					#print(f"presented with\n{stepped_target_predictions}\n\npicked\n{best_predictions}")
 
 				#Update init values 
 				for i,val in enumerate(best_predictions):
 					chosen_action						= action[i]
 					final_target_values[i,chosen_action]= rewards[i] + (done[i] * self.gamma * val)
-					if done[i] != 1 and False:
-						print(f"\nfor init val:{initial_target_predictions[i].detach().numpy()} + a:{chosen_action} - > update to {rewards[i]:.3f} + {self.gamma:.3f}*{val:.3f}*[done:{done[i]:.3f}] = {rewards[i] + (done[i] * self.gamma * val):.3f}")
-						print(f"training with {final_target_values[i].detach().numpy()}\n\n")
-						plt.imshow(init_states[i].detach().numpy().transpose(1,2,0))
-						plt.savefig("fig1")
+					if rewards[i] > .5z`` and random.random() < .01:
+						print(f"maxs {best_predictions}")
+						print(f"\nfor init val:{initial_target_predictions[i].cpu().detach().numpy()} + a:{chosen_action} - > update to {rewards[i]:.3f} + {self.gamma:.3f}*{val:.3f}*[done:{done[i]:.3f}] = {rewards[i] + (done[i] * self.gamma * val):.3f}")
+						print(f"training with {final_target_values[i].cpu().detach().numpy()}\n\n")
 				#	Calculate Loss
 				t1 							= time.time()
 				batch_loss 					= self.learning_model.loss(initial_target_predictions,final_target_values)
@@ -350,6 +342,7 @@ class Trainer:
 				#Back Propogate
 				batch_loss.backward()
 				self.learning_model.optimizer.step()
+				#print(f"optimizing with loss: {self.learning_model.loss} and optim {self.learning_model.optimizer}\n\n\n")
 				t_gpu += time.time() - t1
 			
 			#	Telemetry

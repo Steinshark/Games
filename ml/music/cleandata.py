@@ -401,6 +401,16 @@ def get_spectrogram(path,n_fft=400):
     #plt.show()
 
 
+def build_dataset(path_to_wav):
+
+    downsampler         = torchaudio.transforms.Resample(44100,1024)
+
+    for fname in os.listdir(path_to_wav):
+        filename            = path_to_wav + fname 
+
+        dual_channel_audio  = downsampler(torchaudio.load(filename))
+        single_channel      = (dual_channel_audio[0] + dual_channel_audio[1]) / 2
+
 
 if __name__ == "__main__":
     import sys 

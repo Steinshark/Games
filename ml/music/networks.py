@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import random
-from finder import total_size_c
 
 class FullyConnectedNetwork(nn.Module):
     def __init__(self,input_size,output_size,loss_fn=None,optimizer_fn=None,lr=1e-6,wd=1e-6,architecture=[512,32,16]):
@@ -992,6 +991,150 @@ class AudioDiscriminator7(nn.Module):
 
     def forward(self, input):
         return self.model(input)
+
+class AudioDiscriminator8(nn.Module):
+    def __init__(self,activation_fn=nn.ReLU,dropout_p=.5,activation_kwargs={"inplace":True},device=torch.device("cuda"),verbose=False,final_layer="sigmoid"):
+        super(AudioDiscriminator8, self).__init__()
+
+        self.final_layer                = final_layer
+
+        model = OrderedDict()
+
+        activation_fn                   = activation_fn
+        activation_kwargs               = activation_kwargs
+        dropout_p                       = dropout_p 
+        biased                          = True
+
+
+        #LAYER 1    -> 25200
+        i                               = 0
+        kernel                          = 63
+        n_ch_prev                       = 1
+        n_ch                            = 64
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                   = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 2,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                   = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                   = activation_fn(**activation_kwargs)
+
+
+        #LAYER 2    -> 8400
+        i                               = 4
+        kernel                          = 31
+        n_ch_prev                       = n_ch
+        n_ch                            = 64
+        mp_reduction                    = 2 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 4,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+
+
+        #LAYER 3    -> 2800
+        i                               = 8
+        kernel                          = 15
+        n_ch_prev                       = n_ch
+        n_ch                            = 128
+        mp_reduction                    = 2 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 4,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+
+
+        #LAYER 4    -> 560
+        i                               = 12
+        kernel                          = 11
+        n_ch_prev                       = n_ch
+        n_ch                            = 256
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 4,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+
+
+        #LAYER 5    -> 140
+        i                               = 16
+        kernel                          = 11
+        n_ch_prev                       = n_ch
+        n_ch                            = 512
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 4,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+
+
+        #LAYER 6    -> 16
+        i                               = 20
+        kernel                          = 7
+        n_ch_prev                       = n_ch
+        n_ch                            = 512
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 4,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+
+
+        #LAYER 7    -> 8
+        i                               = 24
+        kernel                          = 5
+        n_ch_prev                       = n_ch
+        n_ch                            = 1024
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 2,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        #model[str(i+3)]                 = nn.MaxPool1d(mp_reduction)
+
+        #LAYER 8    -> 4
+        i                               = 28
+        kernel                          = 3
+        n_ch_prev                       = n_ch
+        n_ch                            = 1024
+        mp_reduction                    = 3 
+
+        model[str(i+0)]                 = nn.Conv1d(n_ch_prev,    n_ch,   kernel, 2,  int(kernel/2),   bias=biased)
+        #model[str(i+1)]                 = nn.BatchNorm1d(n_ch)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = torch.nn.AvgPool1d(4)
+
+
+        #LAYER 8    -> 8192
+        i                               = 32
+        model[str(i)]                   = nn.Flatten()
+        model[str(i+1)]                 = nn.Linear(1024,1000)
+        model[str(i+2)]                 = activation_fn(**activation_kwargs)
+        model[str(i+3)]                 = nn.Dropout(p=.36)
+
+
+        #LAYER 9    -> 2048
+        i                               = 36
+        model[str(i)]                   = nn.Linear(1000,1)
+        #model[str(i+1)]                 = activation_fn(**activation_kwargs) 
+        #model[str(i+2)]                 = nn.Dropout(p=.2)
+
+
+        #LAYER 10    -> 1024
+        #i                               = 40
+        #model[str(i)]                   = nn.Linear(128,1)
+        model[str(i+1)]                 = nn.Sigmoid()
+
+
+               
+
+        self.model = nn.Sequential(model).to(device)
+
+        if verbose:
+            print(self.model)
+        self.model.to(device)
+
+    def forward(self, input):
+        return self.model(input)
+
 
 
 if __name__ == "__main__":
