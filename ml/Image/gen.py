@@ -5,7 +5,6 @@ from torchvision.utils import make_grid
 from torch.nn.functional import interpolate 
 from torch.utils.data import Dataset,DataLoader
 import time 
-from models import * 
 from PIL import Image
 import os 
 import math 
@@ -34,6 +33,7 @@ class preload_ds(Dataset):
         return tensor
     def __len__(self):
         return len(self.data)
+
 
 #Crop everything to 1.5
 def crop_to_ar(img:torch.Tensor,ar=1):
@@ -78,6 +78,7 @@ def crop_to_ar(img:torch.Tensor,ar=1):
     img     = interpolate(img,size=(500,750))[0]
     return img
 
+
 def load_dataset(bs=8,temp_limit=2000,tensor_lib="F:/images/converted_tensors"):
     tensors         = [] 
 
@@ -106,8 +107,8 @@ def load_dataset(bs=8,temp_limit=2000,tensor_lib="F:/images/converted_tensors"):
 # To create and store the dataset
 # Pass the root of the image dataset you downloaded in scratch.py as the "local_dataset_path" arg and it will create a 
 # Dataset for you to use 
-def load_locals(bs=8,processor=lambda x: x,local_dataset_path="F:/images/converted_tensors/"):
-    dataset     = preload_ds([local_dataset_path+f for f in os.listdir(local_dataset_path)],processor=processor)
+def load_locals(bs=8,processor=lambda x: x,local_dataset_path="C:/data/images/converted_tensors/",max_n:int=1_000_000):
+    dataset     = preload_ds([local_dataset_path+f for f in os.listdir(local_dataset_path)[:max_n]],processor=processor)
     return DataLoader(dataset,batch_size=bs,shuffle=True,num_workers=3)
 
 def convert_locals(bs=8):
